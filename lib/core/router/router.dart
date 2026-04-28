@@ -158,8 +158,14 @@ StreamSubscription<Uri>? _emailAuthLinkSubscription;
 StreamSubscription<AuthState>? _emailAuthStateSubscription;
 
 /// メール内の認証リンク（カスタムスキーム）でアプリが開いたあと、
-/// セッションが入ったタイミングでホームへ遷移する（パスワード再設定時は /reset-password）。
-void attachEmailLinkAccountNavigation() {
+/// **メールアドレス確認が済んだ非匿名セッション**になったらホーム（`/`）へ寄せる。
+/// パスワード再設定フロー中は [sessionRequiresNewPasswordAfterRecovery] に従い `/reset-password`。
+///
+/// [scheduleHomeAfterColdStartEmailLink]: `main` で既に `getSessionFromUrl` 済みのとき、
+/// ここでは `signedIn` が飛ばないことがあるため初回フレーム後にホーム遷移を予約する。
+void attachEmailLinkAccountNavigation({
+  bool scheduleHomeAfterColdStartEmailLink = false,
+}) {
   _emailAuthLinkSubscription?.cancel();
   _emailAuthStateSubscription?.cancel();
 
@@ -200,21 +206,27 @@ void attachEmailLinkAccountNavigation() {
     unawaited(goPostEmailAuthDestinationAsync());
   }
 
-  void onAuthCallbackUri(Uri? uri) {
-    if (!isEmailAuthCallbackDeepLink(uri)) return;
-    pendingAuthDeepLink = true;
-    // PKCE の #code=... は Supabase の Deeplink だけでは query に載らず交換されないことがある。
-    unawaited(exchangeSessionFromEmailAuthDeepLink(uri!));
+  Future<void> handleEmailAuthCallbackUri(Uri uri) async {
+    await exchangeSessionFromEmailAuthDeepLink(uri);
     final s = Supabase.instance.client.auth.currentSession;
     if (s != null && !s.user.isAnonymous) {
       pendingAuthDeepLink = false;
       goPostEmailAuthDestination();
+    } else {
+      pendingAuthDeepLink = false;
     }
+  }
+
+  void onAuthCallbackUri(Uri? uri) {
+    if (!isEmailAuthCallbackDeepLink(uri)) return;
+    pendingAuthDeepLink = true;
+    // 交換完了まで待つ（冷起動は main.dart の getInitialLink で先に処理済みのため、
+    // ここで再度 getInitialLink すると PKCE code の二重消費になりやすい）。
+    unawaited(handleEmailAuthCallbackUri(uri!));
   }
 
   _emailAuthLinkSubscription =
       AppLinks().uriLinkStream.listen(onAuthCallbackUri);
-  unawaited(AppLinks().getInitialLink().then(onAuthCallbackUri));
 
   Session? previousSession = Supabase.instance.client.auth.currentSession;
   _emailAuthStateSubscription =
@@ -232,17 +244,33 @@ void attachEmailLinkAccountNavigation() {
         goPostEmailAuthDestination();
         return;
       }
-      if (data.event == AuthChangeEvent.signedIn &&
-          session != null &&
-          !session.user.isAnonymous) {
+      // PKCE やメール確認のタイミングで signedIn 以外（tokenRefreshed / userUpdated）だけ
+      // 来ることがあるため、リンク経路または匿名→本登録の遷移ならまとめてホームへ誘導する。
+      if (session != null &&
+          !session.user.isAnonymous &&
+          !sessionRequiresNewPasswordAfterRecovery(session)) {
         final wasAnonymous = previousSession?.user.isAnonymous ?? false;
-        if (pendingAuthDeepLink || wasAnonymous) {
-          pendingAuthDeepLink = false;
-          goPostEmailAuthDestination();
+        final fromEmailDeepLink = pendingAuthDeepLink;
+        if (fromEmailDeepLink || wasAnonymous) {
+          switch (data.event) {
+            case AuthChangeEvent.signedIn:
+            case AuthChangeEvent.tokenRefreshed:
+            case AuthChangeEvent.userUpdated:
+              pendingAuthDeepLink = false;
+              goPostEmailAuthDestination();
+            default:
+              break;
+          }
         }
       }
     } finally {
       previousSession = session;
     }
   });
+
+  if (scheduleHomeAfterColdStartEmailLink) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      goPostEmailAuthDestination();
+    });
+  }
 }

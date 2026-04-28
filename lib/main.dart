@@ -10,13 +10,19 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// App Store: メール等の未登録でも使えるよう、起動直後に匿名セッションを保証する。
 /// Supabase ダッシュボードで「Anonymous sign-ins」が有効なこと。
-Future<void> _exchangeEmailAuthDeepLinkFromInitialLink() async {
+///
+/// メール内の認証リンクで冷起動した場合は `true`。
+/// このとき [attachEmailLinkAccountNavigation] 側で初回フレーム後にホームへ寄せる
+/// （`onAuthStateChange` が既に確定済みのセッションでイベントを送らないことがあるため）。
+Future<bool> _exchangeEmailAuthDeepLinkFromInitialLink() async {
   Uri? uri;
   try {
     uri = await AppLinks().getInitialLink();
   } catch (_) {}
-  if (!isEmailAuthCallbackDeepLink(uri)) return;
+  if (!isEmailAuthCallbackDeepLink(uri)) return false;
   await exchangeSessionFromEmailAuthDeepLink(uri!);
+  final s = Supabase.instance.client.auth.currentSession;
+  return s != null && !s.user.isAnonymous;
 }
 
 Future<void> _ensureAnonymousSession() async {
@@ -53,17 +59,23 @@ void main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
+      // 既定 true のディープリンク監視は PKCE 時に query の code のみ判定するため、
+      // #access_token=... のメール確認 URL を取りこぼす。メール戻りは自前で処理する。
+      detectSessionInUri: false,
     ),
   );
 
   // メール認証リンクで冷起動したときは、匿名ログインより先に code を交換してログイン状態にする。
-  await _exchangeEmailAuthDeepLinkFromInitialLink();
+  final coldStartFromEmailAuthLink =
+      await _exchangeEmailAuthDeepLinkFromInitialLink();
 
   // セッションがない場合は匿名サインインを試みる
   await _ensureAnonymousSession();
 
-  // メール認証コールバックの処理を追加
-  attachEmailLinkAccountNavigation();
+  // メール認証コールバックの処理を追加（新規登録→メール確認後はホームを表示する）
+  attachEmailLinkAccountNavigation(
+    scheduleHomeAfterColdStartEmailLink: coldStartFromEmailAuthLink,
+  );
 
   // 1. ProviderScope: Riverpodの状態管理をアプリ全体で使えるようにする
   runApp(const ProviderScope(child: MyApp()));
