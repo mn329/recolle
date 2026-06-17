@@ -1,0 +1,49 @@
+# Supabase 無料プランは約 7 日間の非アクティブで一時停止するため、
+# 3 日ごとに軽量な API リクエストでアクティビティを記録する。
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # 3 日ごと 03:00 UTC（日本時間 12:00）
+    - cron: "0 3 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Supabase
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::GitHub Secrets に SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。"
+            exit 1
+          fi
+
+          base_url="${SUPABASE_URL%/}"
+
+          ping() {
+            local name="$1"
+            local url="$2"
+            local status
+            status=$(curl -sS -o /dev/null -w "%{http_code}" \
+              -H "apikey: ${SUPABASE_ANON_KEY}" \
+              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+              "${url}")
+            echo "${name}: HTTP ${status}"
+            if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+              echo "::error::${name} が失敗しました (HTTP ${status})"
+              exit 1
+            fi
+          }
+
+          ping "Auth health" "${base_url}/auth/v1/health"
+          ping "REST API" "${base_url}/rest/v1/"
+
+          echo "Supabase keep-alive ping succeeded."

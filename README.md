@@ -66,6 +66,19 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 バックエンドを自プロジェクトにデプロイする場合、`supabase/functions/` に Resend 経由の認証メール送信（`resend-auth`）やアカウント削除用（`delete-account`）などの関数があります。必要なシークレット（例: `SUPABASE_SERVICE_ROLE_KEY`、`RESEND_API_KEY`）は各関数のソース内の `Deno.env.get(...)` を参照してください。
 
+## Supabase 無停止（GitHub Actions）
+
+無料プランは約 7 日間の非アクティブでプロジェクトが一時停止します。`.github/workflows/supabase-keep-alive.yml` が 3 日ごとに Supabase API へ ping し、停止を防ぎます。
+
+GitHub リポジトリの **Settings → Secrets and variables → Actions** に、`.env` と同じ値で次を登録してください。
+
+| Secret 名 | 値 |
+|-----------|-----|
+| `SUPABASE_URL` | Supabase プロジェクト URL |
+| `SUPABASE_ANON_KEY` | Supabase anon（公開）キー |
+
+登録後、**Actions** タブから `Supabase Keep Alive` を手動実行して動作確認できます。
+
 ## 参考リンク
 
 - [Flutter ドキュメント](https://docs.flutter.dev/)
