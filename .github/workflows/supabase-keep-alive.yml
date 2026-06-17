@@ -43,7 +43,8 @@ jobs:
             fi
           }
 
+          # /auth/v1/health は anon キーで 200 を返し、無停止 ping として十分。
+          # /rest/v1/ はプロジェクト設定によって 401 になるため使わない。
           ping "Auth health" "${base_url}/auth/v1/health"
-          ping "REST API" "${base_url}/rest/v1/"
 
           echo "Supabase keep-alive ping succeeded."
