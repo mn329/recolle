@@ -74,8 +74,17 @@ GitHub リポジトリの **Settings → Secrets and variables → Actions** に
 
 | Secret 名 | 値 |
 |-----------|-----|
-| `SUPABASE_URL` | Supabase プロジェクト URL |
+| `SUPABASE_URL` | Supabase プロジェクト URL（例: `https://abcdefghijklmno.supabase.co`） |
 | `SUPABASE_ANON_KEY` | Supabase anon（公開）キー |
+
+`SUPABASE_URL` の代わりに `SUPABASE_PROJECT_REF`（例: `abcdefghijklmno`）だけを設定しても動作します。
+
+**よくある設定ミス**
+
+- `<project-ref>` のようなプレースホルダーをそのまま入れている
+- `https://` を付けずに `abcdefghijklmno.supabase.co` だけ入れている（`SUPABASE_URL` では `https://` 必須）
+- `SUPABASE_PROJECT_REF` にフル URL を入れている（project ref のみを入れる）
+- 引用符で囲んでいる（`"https://..."` は不要）
 
 登録後、**Actions** タブから `Supabase Keep Alive` を手動実行して動作確認できます。
 

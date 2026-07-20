@@ -17,34 +17,122 @@ jobs:
       - name: Ping Supabase
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          set -euo pipefail
+          python3 <<'PY'
+          import os
+          import re
+          import socket
+          import sys
+          import urllib.error
+          import urllib.request
+          from urllib.parse import urlparse
 
-          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
-            echo "::error::GitHub Secrets に SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。"
-            exit 1
-          fi
+          PROJECT_REF_PATTERN = re.compile(r"^[a-z0-9]{10,32}$")
+          HOST_PATTERN = re.compile(r"^([a-z0-9]{10,32})\.supabase\.co$")
 
-          base_url="${SUPABASE_URL%/}"
 
-          ping() {
-            local name="$1"
-            local url="$2"
-            local status
-            status=$(curl -sS -o /dev/null -w "%{http_code}" \
-              -H "apikey: ${SUPABASE_ANON_KEY}" \
-              -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-              "${url}")
-            echo "${name}: HTTP ${status}"
-            if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
-              echo "::error::${name} が失敗しました (HTTP ${status})"
-              exit 1
-            fi
-          }
+          def clean(value: str) -> str:
+              return (
+                  value.strip()
+                  .strip('"')
+                  .strip("'")
+                  .replace("\r", "")
+                  .replace("\n", "")
+              )
 
-          # /auth/v1/health は anon キーで 200 を返し、無停止 ping として十分。
-          # /rest/v1/ はプロジェクト設定によって 401 になるため使わない。
-          ping "Auth health" "${base_url}/auth/v1/health"
 
-          echo "Supabase keep-alive ping succeeded."
+          def fail(message: str) -> None:
+              print(f"::error::{message}")
+              sys.exit(1)
+
+
+          def extract_project_ref(raw_value: str) -> str | None:
+              value = clean(raw_value)
+              if not value:
+                  return None
+
+              if "<" in value or ">" in value:
+                  fail(
+                      "Secret にプレースホルダー (<project-ref> など) が含まれています。"
+                      " Supabase ダッシュボードの実際の Project URL を設定してください。"
+                  )
+
+              if "://" in value:
+                  parsed = urlparse(value if "://" in value else f"https://{value}")
+                  host = (parsed.hostname or "").lower()
+                  match = HOST_PATTERN.match(host)
+                  if match:
+                      return match.group(1)
+                  fail(
+                      "SUPABASE_URL のホスト名が不正です。"
+                      " https://<project-ref>.supabase.co 形式で設定してください。"
+                  )
+
+              lowered = value.lower()
+              host_match = HOST_PATTERN.match(lowered.rstrip("/"))
+              if host_match:
+                  return host_match.group(1)
+
+              if PROJECT_REF_PATTERN.match(lowered):
+                  return lowered
+
+              return None
+
+
+          anon_key = clean(os.environ.get("SUPABASE_ANON_KEY", ""))
+          if not anon_key:
+              fail("GitHub Secrets に SUPABASE_ANON_KEY を設定してください。")
+
+          project_ref = extract_project_ref(
+              os.environ.get("SUPABASE_URL", "")
+          ) or extract_project_ref(os.environ.get("SUPABASE_PROJECT_REF", ""))
+
+          if not project_ref:
+              fail(
+                  "GitHub Secrets に SUPABASE_URL または SUPABASE_PROJECT_REF を設定してください。"
+                  " 例: SUPABASE_URL=https://abcdefghijklmno.supabase.co"
+                  " または SUPABASE_PROJECT_REF=abcdefghijklmno"
+              )
+
+          if not PROJECT_REF_PATTERN.match(project_ref):
+              fail(
+                  f"project ref が不正です: {project_ref!r}。"
+                  " Supabase ダッシュボードの Project Settings → API から取得した値を設定してください。"
+              )
+
+          base_url = f"https://{project_ref}.supabase.co"
+          host = f"{project_ref}.supabase.co"
+
+          try:
+              socket.getaddrinfo(host, 443)
+          except socket.gaierror:
+              fail(
+                  f"ホスト名を解決できません: {host}。"
+                  " プロジェクトが削除・一時停止されていないか、Secret の project ref が正しいか確認してください。"
+              )
+
+          request = urllib.request.Request(
+              f"{base_url}/auth/v1/health",
+              headers={
+                  "apikey": anon_key,
+                  "Authorization": f"Bearer {anon_key}",
+              },
+              method="GET",
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  status = response.status
+          except urllib.error.HTTPError as error:
+              status = error.code
+          except urllib.error.URLError as error:
+              fail(f"Auth health への接続に失敗しました: {error.reason}")
+
+          print(f"Auth health: HTTP {status}")
+          if status < 200 or status >= 300:
+              fail(f"Auth health が失敗しました (HTTP {status})")
+
+          print("Supabase keep-alive ping succeeded.")
+          PY
