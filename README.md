@@ -68,7 +68,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 ## Supabase 無停止（GitHub Actions）
 
-無料プランは約 7 日間の非アクティブでプロジェクトが一時停止します。`.github/workflows/supabase-keep-alive.yml` が 3 日ごとに Supabase API へ ping し、停止を防ぎます。
+無料プランは約 7 日間「DB へのユーザークエリ」が少ないと一時停止します。`.github/workflows/supabase-keep-alive.yml` が週 3 回 `records` へ軽量な SELECT を送り、停止を防ぎます（Auth health だけでは足りないことがあります）。すでに一時停止したプロジェクトはダッシュボードで Resume が必要です。
 
 GitHub リポジトリの **Settings → Secrets and variables → Actions** に、`.env` と同じ値で次を登録してください。
 

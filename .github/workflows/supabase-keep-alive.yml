@@ -1,11 +1,12 @@
-# Supabase 無料プランは約 7 日間の非アクティブで一時停止するため、
-# 3 日ごとに軽量な API リクエストでアクティビティを記録する。
+# Supabase 無料プランは「DB へのユーザークエリ」が少ないと約 7 日で一時停止する。
+# Auth health だけでは不足なため、REST で records を SELECT する。
+# GitHub の schedule は遅延・スキップがあり得るので、週 3 回実行する。
 name: Supabase Keep Alive
 
 on:
   schedule:
-    # 3 日ごと 03:00 UTC（日本時間 12:00）
-    - cron: "0 3 */3 * *"
+    # 月・水・金 03:00 UTC（日本時間 12:00）
+    - cron: "0 3 * * 1,3,5"
   workflow_dispatch:
 
 jobs:
@@ -14,7 +15,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Ping Supabase
+      - name: Ping Supabase database
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
@@ -60,7 +61,7 @@ jobs:
                   )
 
               if "://" in value:
-                  parsed = urlparse(value if "://" in value else f"https://{value}")
+                  parsed = urlparse(value)
                   host = (parsed.hostname or "").lower()
                   match = HOST_PATTERN.match(host)
                   if match:
@@ -70,8 +71,8 @@ jobs:
                       " https://<project-ref>.supabase.co 形式で設定してください。"
                   )
 
-              lowered = value.lower()
-              host_match = HOST_PATTERN.match(lowered.rstrip("/"))
+              lowered = value.lower().rstrip("/")
+              host_match = HOST_PATTERN.match(lowered)
               if host_match:
                   return host_match.group(1)
 
@@ -79,6 +80,17 @@ jobs:
                   return lowered
 
               return None
+
+
+          def request_status(url: str, headers: dict[str, str]) -> int:
+              request = urllib.request.Request(url, headers=headers, method="GET")
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      return response.status
+              except urllib.error.HTTPError as error:
+                  return error.code
+              except urllib.error.URLError as error:
+                  fail(f"接続に失敗しました ({url}): {error.reason}")
 
 
           anon_key = clean(os.environ.get("SUPABASE_ANON_KEY", ""))
@@ -93,13 +105,12 @@ jobs:
               fail(
                   "GitHub Secrets に SUPABASE_URL または SUPABASE_PROJECT_REF を設定してください。"
                   " 例: SUPABASE_URL=https://abcdefghijklmno.supabase.co"
-                  " または SUPABASE_PROJECT_REF=abcdefghijklmno"
               )
 
           if not PROJECT_REF_PATTERN.match(project_ref):
               fail(
                   f"project ref が不正です: {project_ref!r}。"
-                  " Supabase ダッシュボードの Project Settings → API から取得した値を設定してください。"
+                  " Project Settings → API の Project URL を設定してください。"
               )
 
           base_url = f"https://{project_ref}.supabase.co"
@@ -110,29 +121,27 @@ jobs:
           except socket.gaierror:
               fail(
                   f"ホスト名を解決できません: {host}。"
-                  " プロジェクトが削除・一時停止されていないか、Secret の project ref が正しいか確認してください。"
+                  " プロジェクトが削除・一時停止されていないか確認し、"
+                  " ダッシュボードで Resume してから再実行してください。"
+                  " keep-alive は停止前の予防のみで、停止後の復旧はできません。"
               )
 
-          request = urllib.request.Request(
-              f"{base_url}/auth/v1/health",
-              headers={
-                  "apikey": anon_key,
-                  "Authorization": f"Bearer {anon_key}",
-              },
-              method="GET",
-          )
+          headers = {
+              "apikey": anon_key,
+              "Authorization": f"Bearer {anon_key}",
+              "Accept": "application/json",
+          }
 
-          try:
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  status = response.status
-          except urllib.error.HTTPError as error:
-              status = error.code
-          except urllib.error.URLError as error:
-              fail(f"Auth health への接続に失敗しました: {error.reason}")
+          # DB への SELECT が「ユーザークエリ」としてカウントされる（公式ドキュメント準拠）
+          db_url = f"{base_url}/rest/v1/records?select=id&limit=1"
+          db_status = request_status(db_url, headers)
+          print(f"Database query (records): HTTP {db_status}")
 
-          print(f"Auth health: HTTP {status}")
-          if status < 200 or status >= 300:
-              fail(f"Auth health が失敗しました (HTTP {status})")
+          if db_status < 200 or db_status >= 300:
+              fail(
+                  f"DB クエリが失敗しました (HTTP {db_status})。"
+                  " anon key と records テーブルの RLS（SELECT）を確認してください。"
+              )
 
           print("Supabase keep-alive ping succeeded.")
           PY
