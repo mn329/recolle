@@ -14,6 +14,7 @@ import 'package:recolle/core/utils/ticket_image_compress.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/records/concert_candidates.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
@@ -126,6 +127,11 @@ class CreateRecordScreen extends HookConsumerWidget {
     useListenable(artistFocusNode);
     // 候補から選んだ直後は同じ候補を出し直さない
     final artistTypedSincePick = useState(false);
+    final titleFocusNode = useFocusNode();
+    useListenable(titleFocusNode);
+    final concertPicked = useState(false);
+    // 候補から取り込んだセトリを反映するため、セトリ欄を作り直す
+    final setlistEditorGeneration = useState(0);
 
     final title = titleController.text.trim();
     final artist = artistController.text.trim();
@@ -164,6 +170,53 @@ class CreateRecordScreen extends HookConsumerWidget {
       );
       artistTypedSincePick.value = false;
       artistFocusNode.unfocus();
+    }
+
+    void pickConcert(ConcertCandidate c) {
+      final title = c.title.length > RecordFieldLimits.title
+          ? c.title.substring(0, RecordFieldLimits.title)
+          : c.title;
+      titleController.value = TextEditingValue(
+        text: title,
+        selection: TextSelection.collapsed(offset: title.length),
+      );
+      concertPicked.value = true;
+      titleFocusNode.unfocus();
+
+      final filled = [kind.titleFieldLabel];
+      if (c.fillsDetails) {
+        if (c.date case final d?) {
+          date.value = d;
+          filled.add('公演日');
+        }
+        if (c.venue case final v? when hasVenue) {
+          venueController.text = v.length > RecordFieldLimits.venue
+              ? v.substring(0, RecordFieldLimits.venue)
+              : v;
+          filled.add(kind.venueLabel!);
+        }
+        if (c.openTime case final t? when kind.hasOpenTime) {
+          openTime.value = t;
+          filled.add('開場');
+        }
+        if (c.startTime case final t? when kind.hasSchedule) {
+          startTime.value = t;
+          filled.add(kind.startTimeLabel);
+        }
+        // 入力済みのセトリは上書きしない
+        final setlistFits =
+            c.songs.join('\n').length <= RecordFieldLimits.setlistTotal;
+        if (songs.value.isEmpty && c.songs.isNotEmpty && setlistFits) {
+          songs.value = c.songs;
+          setlistEditorGeneration.value++;
+          filled.add('セットリスト');
+        }
+      }
+      HapticFeedback.selectionClick();
+      AppToast.show(
+        '${filled.join('・')}を入力しました',
+        icon: CupertinoIcons.checkmark_circle_fill,
+      );
     }
 
     Future<void> pickImage() async {
@@ -347,11 +400,30 @@ class CreateRecordScreen extends HookConsumerWidget {
           ),
       ],
     );
-    final titleRow = FormTextRow(
-      controller: titleController,
-      placeholder: type.value.titleFieldLabel,
-      maxLength: RecordFieldLimits.title,
-      scrollPadding: _fieldScrollPadding,
+    final titleRow = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FormTextRow(
+          controller: titleController,
+          focusNode: titleFocusNode,
+          placeholder: type.value.titleFieldLabel,
+          maxLength: RecordFieldLimits.title,
+          scrollPadding: _fieldScrollPadding,
+          onChanged: (_) => concertPicked.value = false,
+        ),
+        if (isLive &&
+            artist.isNotEmpty &&
+            titleFocusNode.hasFocus &&
+            !concertPicked.value)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: ConcertSuggestions(
+              artist: artist,
+              query: titleController.text,
+              onPick: pickConcert,
+            ),
+          ),
+      ],
     );
 
     final sourceRow = FormTextRow(
@@ -549,6 +621,7 @@ class CreateRecordScreen extends HookConsumerWidget {
                   wrapInCard: false,
                   children: [
                     SetlistEditor(
+                      key: ValueKey(setlistEditorGeneration.value),
                       initialSongs: songs.value,
                       artistName: artist,
                       date: date.value,

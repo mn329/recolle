@@ -26,6 +26,16 @@ final concertDiscoveryProvider =
       retry: (_, _) => null,
     );
 
+/// setlist.fm に登録されたアーティストの直近の公演（新しい順に最大 10 件）。
+///
+/// setlist.fm は呼び出し回数の制限が厳しいため、失敗しても自動では再試行しない。
+final recentSetlistsProvider =
+    FutureProvider.family<List<SetlistSummary>, String>(
+      (ref, artistName) =>
+          ref.read(setlistFmClientProvider).search(artistName: artistName),
+      retry: (_, _) => null,
+    );
+
 /// 試聴プレイヤー。見ている画面がなくなると破棄され、再生も止まる。
 final previewPlayerProvider = ChangeNotifierProvider.autoDispose<PreviewPlayer>(
   (ref) => PreviewPlayer(),

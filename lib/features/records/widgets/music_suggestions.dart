@@ -1,9 +1,11 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/hooks/use_debounced_search.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
@@ -11,6 +13,9 @@ import 'package:recolle/features/favorites/providers/favorite_artists_provider.d
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/models/record.dart';
+import 'package:recolle/features/records/providers/records_provider.dart';
 
 /// お気に入りアーティストをワンタップで入力するチップ列。未登録なら何も出さない。
 class FavoriteArtistQuickPick extends ConsumerWidget {
@@ -190,11 +195,23 @@ class _SuggestionPanel extends StatelessWidget {
       content = null;
     }
 
+    return _SuggestionCard(child: content);
+  }
+}
+
+/// 候補リストの枠。[child] が null なら何も出さない（出し入れはアニメーションする）。
+class _SuggestionCard extends StatelessWidget {
+  const _SuggestionCard({required this.child});
+
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
     return AnimatedSize(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       alignment: Alignment.topCenter,
-      child: content == null
+      child: child == null
           ? const SizedBox(width: double.infinity)
           : Container(
               width: double.infinity,
@@ -204,9 +221,107 @@ class _SuggestionPanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
-              child: content,
+              child: child,
             ),
     );
+  }
+}
+
+/// 公演名欄の候補。今後の公演（公演検索）・setlist.fm の直近の公演・自分の過去の記録から出す。
+///
+/// 公演検索は Gemini の無料枠を使うので、この画面か他の画面で検索済みのときだけ自動で出し、
+/// それ以外は「これからの公演を探す」を押してから読む。
+class ConcertSuggestions extends HookConsumerWidget {
+  const ConcertSuggestions({
+    super.key,
+    required this.artist,
+    required this.query,
+    required this.onPick,
+  });
+
+  final String artist;
+  final String query;
+  final ValueChanged<ConcertCandidate> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final discovery = concertDiscoveryProvider(artist);
+    final discoveryRequested = useState(ref.exists(discovery));
+    final upcoming = discoveryRequested.value ? ref.watch(discovery) : null;
+    final setlists = ref.watch(recentSetlistsProvider(artist));
+    final records =
+        ref.watch(recordsProvider).asData?.value ?? const <Record>[];
+
+    final candidates = buildConcertCandidates(
+      query: query,
+      artist: artist,
+      upcoming: upcoming?.asData?.value.concerts ?? const [],
+      setlists: setlists.asData?.value ?? const [],
+      records: records,
+    );
+    final errors = [
+      if (upcoming?.error case final e?) toUserFriendlyMessage(e),
+      if (setlists.error case final e?) toUserFriendlyMessage(e),
+    ];
+    final isLoading = setlists.isLoading || (upcoming?.isLoading ?? false);
+
+    final rows = <Widget>[
+      for (final c in candidates)
+        _SuggestionRow(
+          icon: switch (c.source) {
+            ConcertCandidateSource.upcoming => CupertinoIcons.sparkles,
+            ConcertCandidateSource.setlistFm => CupertinoIcons.music_note_list,
+            ConcertCandidateSource.record => CupertinoIcons.clock,
+          },
+          title: c.title,
+          subtitle: _subtitle(c),
+          onTap: () => onPick(c),
+        ),
+      if (isLoading)
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: CupertinoActivityIndicator(),
+        )
+      else if (!discoveryRequested.value)
+        _SuggestionRow(
+          icon: CupertinoIcons.search,
+          title: 'これからの公演を探す',
+          subtitle: '生成 AI が公式サイトなどから今後の公演を集めます',
+          onTap: () => discoveryRequested.value = true,
+        ),
+      for (final message in errors)
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            message,
+            style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
+          ),
+        ),
+    ];
+
+    return _SuggestionCard(
+      child: rows.isEmpty
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, row) in rows.indexed) ...[
+                  if (i > 0) const FormDivider(indent: 56),
+                  row,
+                ],
+              ],
+            ),
+    );
+  }
+
+  static String _subtitle(ConcertCandidate c) {
+    final date = c.date;
+    return [
+      if (c.source == ConcertCandidateSource.record) '過去の記録',
+      if (date != null) formatJapaneseDate(date, includeWeekday: true),
+      ?c.venue,
+      ?c.city,
+    ].join(' · ');
   }
 }
 

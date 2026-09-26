@@ -5,19 +5,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/setlistfm_client.dart';
+import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/models/record.dart';
+import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _NoFavorites extends FavoriteArtistsNotifier {
   @override
   Future<List<FavoriteArtist>> build() async => const [];
 }
 
+class _FakeDiscoveryClient extends ConcertDiscoveryClient {
+  _FakeDiscoveryClient(this.concerts)
+    : super(FunctionsClient('http://localhost', {}));
+
+  final List<DiscoveredConcert> concerts;
+  int calls = 0;
+
+  @override
+  Future<ConcertDiscoveryResult> discover(String artistName) async {
+    calls++;
+    return ConcertDiscoveryResult(
+      concerts: concerts,
+      sources: const [],
+      fetchedAt: DateTime(2026, 9, 27),
+    );
+  }
+}
+
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Record? recordToEdit,
   TicketMailInfo? prefill,
+  List<SetlistSummary> setlists = const [],
+  List<Record> records = const [],
+  ConcertDiscoveryClient? discoveryClient,
 }) async {
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
@@ -25,7 +51,14 @@ Future<void> _pumpScreen(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [favoriteArtistsProvider.overrideWith(_NoFavorites.new)],
+      overrides: [
+        favoriteArtistsProvider.overrideWith(_NoFavorites.new),
+        recentSetlistsProvider.overrideWith((ref, _) async => setlists),
+        recordsProvider.overrideWith((ref) => Stream.value(records)),
+        concertDiscoveryClientProvider.overrideWithValue(
+          discoveryClient ?? _FakeDiscoveryClient(const []),
+        ),
+      ],
       child: MaterialApp(
         home: Builder(
           builder: (context) => Scaffold(
@@ -229,5 +262,119 @@ void main() {
     expect(find.text('17:00'), findsOneWidget);
     expect(find.text('18:00'), findsOneWidget);
     expect(_navButton(tester, '追加').onPressed, isNotNull);
+  });
+
+  group('公演名の候補', () {
+    final setlist = SetlistSummary(
+      id: 's1',
+      eventDate: DateTime(2025, 5, 3),
+      artistName: 'King Gnu',
+      venueName: '東京ドーム',
+      cityName: 'Tokyo',
+      tourName: 'ARENA TOUR 2025',
+      songs: const ['飛行艇', '白日'],
+    );
+
+    List<String?> fieldTexts(WidgetTester tester) => [
+      for (final field in tester.widgetList<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      ))
+        field.controller?.text,
+    ];
+
+    testWidgets('setlist.fm の公演を選ぶと公演名・日付・会場・セトリを入れる', (tester) async {
+      await _pumpScreen(tester, setlists: [setlist]);
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.showKeyboard(_field('公演名・ツアー名'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('ARENA TOUR 2025'), findsOneWidget);
+      await tester.tap(find.text('ARENA TOUR 2025'));
+      await tester.pumpAndSettle();
+
+      expect(fieldTexts(tester), containsAll(['ARENA TOUR 2025', '東京ドーム']));
+      expect(find.text('2曲'), findsOneWidget);
+      expect(find.text('2025年05月03日 (土)'), findsOneWidget);
+      expect(find.text('これからの公演を探す'), findsNothing);
+    });
+
+    testWidgets('入力した文字で候補を絞り込む', (tester) async {
+      await _pumpScreen(
+        tester,
+        setlists: [
+          setlist,
+          SetlistSummary(
+            id: 's2',
+            eventDate: DateTime(2024, 8, 1),
+            artistName: 'King Gnu',
+            venueName: 'Zepp Haneda',
+            cityName: 'Tokyo',
+            tourName: 'CEREMONY',
+            songs: const [],
+          ),
+        ],
+      );
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.enterText(_field('公演名・ツアー名'), 'zepp');
+      await tester.pumpAndSettle();
+
+      expect(find.text('CEREMONY'), findsOneWidget);
+      expect(find.text('ARENA TOUR 2025'), findsNothing);
+    });
+
+    testWidgets('これからの公演は押したときだけ探し、選ぶと開演時刻まで入れる', (tester) async {
+      final client = _FakeDiscoveryClient([
+        DiscoveredConcert(
+          title: 'DOME TOUR 2026',
+          date: DateTime(2026, 11, 3),
+          venue: '京セラドーム大阪',
+          openTime: const ClockTime(16, 30),
+          startTime: const ClockTime(18, 0),
+        ),
+      ]);
+      await _pumpScreen(tester, discoveryClient: client);
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.showKeyboard(_field('公演名・ツアー名'));
+      await tester.pumpAndSettle();
+      expect(client.calls, 0);
+
+      await tester.tap(find.text('これからの公演を探す'));
+      await tester.pumpAndSettle();
+      expect(client.calls, 1);
+
+      await tester.tap(find.text('DOME TOUR 2026'));
+      await tester.pumpAndSettle();
+
+      expect(fieldTexts(tester), containsAll(['DOME TOUR 2026', '京セラドーム大阪']));
+      expect(find.text('16:30'), findsOneWidget);
+      expect(find.text('18:00'), findsOneWidget);
+    });
+
+    testWidgets('過去の記録からは公演名だけを入れる', (tester) async {
+      await _pumpScreen(
+        tester,
+        records: [
+          Record(
+            id: 'r1',
+            type: RecordType.live,
+            title: 'HALL TOUR',
+            artistOrAuthor: 'King Gnu',
+            date: DateTime(2025, 1, 10),
+            ticketImageUrl: '',
+            venue: '日本武道館',
+          ),
+        ],
+      );
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.showKeyboard(_field('公演名・ツアー名'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('HALL TOUR'));
+      await tester.pumpAndSettle();
+
+      final texts = fieldTexts(tester);
+      expect(texts, contains('HALL TOUR'));
+      expect(texts, isNot(contains('日本武道館')));
+    });
   });
 }
