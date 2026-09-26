@@ -8,6 +8,7 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/screens/detail_screen.dart';
+import 'package:recolle/features/records/ticket_mail_parser.dart';
 
 void openRecordDetail(BuildContext context, Record record) {
   Navigator.push(
@@ -24,6 +25,7 @@ Future<Record?> openRecordEditor(
   Record? recordToEdit,
   String? initialArtist,
   RecordType? initialType,
+  TicketMailInfo? prefill,
 }) async {
   final navigator = Navigator.of(context);
   final saved = await showCupertinoSheet<Record>(
@@ -34,6 +36,7 @@ Future<Record?> openRecordEditor(
       recordToEdit: recordToEdit,
       initialArtist: initialArtist,
       initialType: initialType,
+      prefill: prefill,
     ),
   );
   if (saved != null && recordToEdit == null) {

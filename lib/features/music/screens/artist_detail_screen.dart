@@ -17,6 +17,7 @@ import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/music/widgets/streaming_links.dart';
+import 'package:recolle/features/music/widgets/upcoming_concerts_section.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
@@ -139,6 +140,15 @@ class ArtistDetailScreen extends HookConsumerWidget {
               child: StreamingLinks(
                 query: artistName,
                 appleMusicUrl: artist?.appleMusicUrl,
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 28),
+              child: UpcomingConcertsSection(
+                artistName: artistName,
+                records: records,
               ),
             ),
           ),

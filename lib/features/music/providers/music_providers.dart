@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:recolle/features/music/data/concert_discovery_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/preview_player.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
@@ -10,6 +11,20 @@ final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
 final setlistFmClientProvider = Provider<SetlistFmClient>(
   (ref) => SetlistFmClient(Supabase.instance.client.functions),
 );
+
+final concertDiscoveryClientProvider = Provider<ConcertDiscoveryClient>(
+  (ref) => ConcertDiscoveryClient(Supabase.instance.client.functions),
+);
+
+/// アーティストの今後の公演。無料枠を使うので、ユーザーが「探す」を押してから読む。
+///
+/// 失敗しても自動では再試行しない（1 回ごとに Gemini の無料枠を消費するため）。
+final concertDiscoveryProvider =
+    FutureProvider.family<ConcertDiscoveryResult, String>(
+      (ref, artistName) =>
+          ref.read(concertDiscoveryClientProvider).discover(artistName),
+      retry: (_, _) => null,
+    );
 
 /// 試聴プレイヤー。見ている画面がなくなると破棄され、再生も止まる。
 final previewPlayerProvider = ChangeNotifierProvider.autoDispose<PreviewPlayer>(

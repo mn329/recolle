@@ -7,13 +7,18 @@ import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
+import 'package:recolle/features/records/ticket_mail_parser.dart';
 
 class _NoFavorites extends FavoriteArtistsNotifier {
   @override
   Future<List<FavoriteArtist>> build() async => const [];
 }
 
-Future<void> _pumpScreen(WidgetTester tester, {Record? recordToEdit}) async {
+Future<void> _pumpScreen(
+  WidgetTester tester, {
+  Record? recordToEdit,
+  TicketMailInfo? prefill,
+}) async {
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -29,8 +34,10 @@ Future<void> _pumpScreen(WidgetTester tester, {Record? recordToEdit}) async {
                 onPressed: () => Navigator.push(
                   context,
                   CupertinoPageRoute<void>(
-                    builder: (_) =>
-                        CreateRecordScreen(recordToEdit: recordToEdit),
+                    builder: (_) => CreateRecordScreen(
+                      recordToEdit: recordToEdit,
+                      prefill: prefill,
+                    ),
                   ),
                 ),
                 child: const Text('open'),
@@ -197,5 +204,30 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('読み取れませんでした'), findsOneWidget);
+  });
+
+  testWidgets('公演検索の結果を渡すと、公演名・日時・会場を入れた状態で開く', (tester) async {
+    await _pumpScreen(
+      tester,
+      prefill: TicketMailInfo(
+        title: 'ARENA TOUR 2026',
+        artist: 'King Gnu',
+        date: DateTime(2026, 11, 3),
+        venue: '東京ドーム',
+        openTime: const ClockTime(17, 0),
+        startTime: const ClockTime(18, 0),
+      ),
+    );
+
+    final filledTexts = [
+      for (final field in tester.widgetList<CupertinoTextField>(
+        find.byType(CupertinoTextField),
+      ))
+        field.controller?.text,
+    ];
+    expect(filledTexts, containsAll(['ARENA TOUR 2026', 'King Gnu', '東京ドーム']));
+    expect(find.text('17:00'), findsOneWidget);
+    expect(find.text('18:00'), findsOneWidget);
+    expect(_navButton(tester, '追加').onPressed, isNotNull);
   });
 }

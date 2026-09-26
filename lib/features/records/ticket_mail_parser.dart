@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:recolle/features/records/models/record.dart';
 
 /// チケットの購入・当選メールから読み取れた項目。読み取れなかった項目は null。
+///
+/// 公演検索の結果から作成画面へ初期値を渡すときにも使う。
 @immutable
 class TicketMailInfo {
   const TicketMailInfo({

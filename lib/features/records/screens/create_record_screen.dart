@@ -24,6 +24,7 @@ import 'package:recolle/features/records/widgets/record_form/record_date_row.dar
 import 'package:recolle/features/records/widgets/record_form/record_time_row.dart';
 import 'package:recolle/features/records/widgets/record_form/setlist_editor.dart';
 import 'package:recolle/features/records/widgets/record_form/ticket_preview_picker.dart';
+import 'package:recolle/features/records/ticket_mail_parser.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// 記録の作成・編集フォーム。保存したら [Record] を返して閉じる。
@@ -35,6 +36,7 @@ class CreateRecordScreen extends HookConsumerWidget {
     this.recordToEdit,
     this.initialArtist,
     this.initialType,
+    this.prefill,
   });
 
   /// 指定時は編集モード。
@@ -46,6 +48,9 @@ class CreateRecordScreen extends HookConsumerWidget {
   /// 新規作成時の種別。省略時はライブ。
   final RecordType? initialType;
 
+  /// 新規作成時にあらかじめ入れておく公演の情報（公演検索の結果など）。
+  final TicketMailInfo? prefill;
+
   /// キーボード表示中でも、入力欄の下に出る候補リストまで見えるようにする余白。
   static const _fieldScrollPadding = EdgeInsets.fromLTRB(20, 24, 20, 160);
 
@@ -53,10 +58,11 @@ class CreateRecordScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final editingRecord = recordToEdit;
     final isEditMode = editingRecord != null;
+    final draft = isEditMode ? null : prefill;
 
     final startType = editingRecord?.type ?? initialType ?? RecordType.live;
     final initialDate = useMemoized(
-      () => editingRecord?.date ?? DateTime.now(),
+      () => editingRecord?.date ?? draft?.date ?? DateTime.now(),
     );
     final initialSongs = useMemoized(
       () => (editingRecord?.setlist ?? '')
@@ -68,25 +74,28 @@ class CreateRecordScreen extends HookConsumerWidget {
 
     final type = useState(startType);
     final date = useState(initialDate);
-    final openTime = useState(editingRecord?.openTime);
-    final startTime = useState(editingRecord?.startTime);
-    final endTime = useState(editingRecord?.endTime);
+    final initialOpenTime = editingRecord?.openTime ?? draft?.openTime;
+    final initialStartTime = editingRecord?.startTime ?? draft?.startTime;
+    final initialEndTime = editingRecord?.endTime ?? draft?.endTime;
+    final openTime = useState(initialOpenTime);
+    final startTime = useState(initialStartTime);
+    final endTime = useState(initialEndTime);
     final songs = useState(initialSongs);
     final selectedImage = useState<File?>(null);
     final removeSavedImage = useState(false);
     final isSaving = useState(false);
 
     final titleController = useTextEditingController(
-      text: editingRecord?.title,
+      text: editingRecord?.title ?? draft?.title,
     );
     final artistController = useTextEditingController(
-      text: editingRecord?.artistOrAuthor ?? initialArtist,
+      text: editingRecord?.artistOrAuthor ?? draft?.artist ?? initialArtist,
     );
     final sourceController = useTextEditingController(
-      text: editingRecord?.ticketSource,
+      text: editingRecord?.ticketSource ?? draft?.ticketSource,
     );
     final venueController = useTextEditingController(
-      text: editingRecord?.venue,
+      text: editingRecord?.venue ?? draft?.venue,
     );
     final seatController = useTextEditingController(text: editingRecord?.seat);
     final priceController = useTextEditingController(
@@ -131,9 +140,9 @@ class CreateRecordScreen extends HookConsumerWidget {
     final isDirty =
         type.value != startType ||
         date.value != initialDate ||
-        openTime.value != editingRecord?.openTime ||
-        startTime.value != editingRecord?.startTime ||
-        endTime.value != editingRecord?.endTime ||
+        openTime.value != initialOpenTime ||
+        startTime.value != initialStartTime ||
+        endTime.value != initialEndTime ||
         selectedImage.value != null ||
         removeSavedImage.value ||
         !_sameList(songs.value, initialSongs) ||
