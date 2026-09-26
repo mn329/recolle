@@ -78,6 +78,76 @@ void main() {
     );
   });
 
+  group('searchArtists の日本語名', () {
+    ItunesClient clientWith({
+      required List<Map<String, Object>> artists,
+      List<Map<String, Object>> songs = const [],
+      bool songSearchFails = false,
+    }) {
+      return ItunesClient(
+        httpClient: MockClient((req) async {
+          if (req.url.queryParameters['entity'] == 'musicArtist') {
+            return _json({'results': artists});
+          }
+          if (songSearchFails) return http.Response('', 500);
+          return _json({'results': songs});
+        }),
+      );
+    }
+
+    test('日本語で探すと、曲の検索結果にある日本語名で返す', () async {
+      final client = clientWith(
+        artists: [
+          {'artistId': 1, 'artistName': 'sakanaction'},
+          {'artistId': 2, 'artistName': 'Ami Kusakari'},
+        ],
+        songs: [
+          {'artistId': 1, 'artistName': 'サカナクション'},
+          {'artistId': 1, 'artistName': 'サカナクション & 誰か'},
+          {'artistId': 1, 'artistName': 'サカナクション'},
+          {'artistId': 3, 'artistName': '別の人'},
+        ],
+      );
+
+      final artists = await client.searchArtists('サカナクション');
+
+      expect(artists.map((a) => a.name), ['サカナクション', 'Ami Kusakari']);
+      expect(artists.first.id, 1);
+    });
+
+    test('英字で探したときは曲の検索をしない', () async {
+      final entities = <String?>[];
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          entities.add(req.url.queryParameters['entity']);
+          return _json({
+            'results': [
+              {'artistId': 1, 'artistName': 'sakanaction'},
+            ],
+          });
+        }),
+      );
+
+      final artists = await client.searchArtists('sakanaction');
+
+      expect(artists.single.name, 'sakanaction');
+      expect(entities, ['musicArtist']);
+    });
+
+    test('日本語名の検索に失敗しても、英字名のまま返す', () async {
+      final client = clientWith(
+        artists: [
+          {'artistId': 1, 'artistName': 'sakanaction'},
+        ],
+        songSearchFails: true,
+      );
+
+      final artists = await client.searchArtists('サカナクション');
+
+      expect(artists.single.name, 'sakanaction');
+    });
+  });
+
   group('localizeSongTitles', () {
     ItunesClient clientWith({
       required List<Map<String, Object>> jp,

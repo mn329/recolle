@@ -31,6 +31,13 @@ class ItunesArtist {
   final String name;
   final String? genre;
   final Uri? appleMusicUrl;
+
+  ItunesArtist withName(String name) => ItunesArtist(
+    id: id,
+    name: name,
+    genre: genre,
+    appleMusicUrl: appleMusicUrl,
+  );
 }
 
 class ItunesSong {
@@ -108,18 +115,60 @@ class ItunesClient {
   Future<List<ItunesArtist>> searchArtists(String term, {int limit = 8}) async {
     final trimmed = term.trim();
     if (trimmed.isEmpty) return const [];
+    // 並行して引く。_japaneseArtistNames は失敗しても例外を投げない
+    final japaneseNamesFuture = _containsJapanese(trimmed)
+        ? _japaneseArtistNames(trimmed)
+        : Future.value(const <int, String>{});
     final results = await _search({
       'term': trimmed,
       'entity': 'musicArtist',
       'limit': '$limit',
     });
+    final japaneseNames = await japaneseNamesFuture;
     final seen = <int>{};
     return [
       for (final r in results)
         if (ItunesArtist.tryParse(r) case final artist?
             when seen.add(artist.id))
-          artist,
+          switch (japaneseNames[artist.id]) {
+            final ja? when !_containsJapanese(artist.name) => artist.withName(
+              ja,
+            ),
+            _ => artist,
+          },
     ];
+  }
+
+  /// アーティスト検索は日本のストアでも英字の正式名（例: "sakanaction"）を返すが、
+  /// 曲の検索結果のアーティスト名は日本語表記（"サカナクション"）になる。
+  /// 日本語で探した人には日本語名で見せたいので、曲の検索から artistId ごとの日本語名を拾う。
+  /// 補助的な情報なので、失敗しても英字名のまま出せるよう空で返す。
+  Future<Map<int, String>> _japaneseArtistNames(String term) async {
+    try {
+      final songs = await _search({
+        'term': term,
+        'entity': 'song',
+        'attribute': 'artistTerm',
+        'limit': '50',
+      });
+      // コラボ曲は "A & B" のような表記になるので、ID ごとに最も多い表記を採る
+      final counts = <int, Map<String, int>>{};
+      for (final r in songs) {
+        final id = r['artistId'];
+        final name = r['artistName'];
+        if (id is int && name is String && _containsJapanese(name)) {
+          final byName = counts.putIfAbsent(id, () => {});
+          byName[name] = (byName[name] ?? 0) + 1;
+        }
+      }
+      return {
+        for (final MapEntry(key: id, value: byName) in counts.entries)
+          id: byName.entries.reduce((a, b) => b.value > a.value ? b : a).key,
+      };
+    } catch (e) {
+      debugPrint('Japanese artist name lookup failed for $term: $e');
+      return const {};
+    }
   }
 
   /// 名前に一致するアーティスト。[artistId] が分かっていればそれで引く。
