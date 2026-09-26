@@ -316,6 +316,35 @@ void main() {
     expect(_navButton(tester, '追加').onPressed, isNotNull);
   });
 
+  testWidgets('時刻のホイールを開いたまま会場をタップすると、ホイールを閉じて会場を入力できる', (
+    tester,
+  ) async {
+    await _pumpScreen(tester);
+    await tester.tap(find.text('終演'));
+    await tester.pumpAndSettle();
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
+
+    await Scrollable.ensureVisible(tester.element(_field('会場')), alignment: 0.5);
+    await tester.pumpAndSettle();
+    await tester.tap(_field('会場'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoDatePicker), findsNothing);
+    expect(tester.testTextInput.isVisible, isTrue);
+    final focused = FocusManager.instance.primaryFocus?.context;
+    expect(
+      focused != null &&
+          find
+              .descendant(
+                of: _field('会場'),
+                matching: find.byWidget(focused.widget),
+              )
+              .evaluate()
+              .isNotEmpty,
+      isTrue,
+    );
+  });
+
   group('公演名の候補', () {
     final setlist = SetlistSummary(
       id: 's1',
