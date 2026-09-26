@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/components/record_ticket_card.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -22,14 +23,12 @@ class HomeScreen extends ConsumerWidget {
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: const Text(
-            'Recolle',
-            style: TextStyle(
-              fontFamily: 'Serif',
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.bold,
+          title: Text(
+            'RECOLLE',
+            style: AppFonts.displayStyle(
+              fontSize: 30,
               color: AppColors.gold,
-              fontSize: 22,
+              letterSpacing: 3,
             ),
           ),
           actions: [

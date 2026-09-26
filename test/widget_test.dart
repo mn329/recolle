@@ -19,7 +19,7 @@ void main() {
 
     await tester.pumpAndSettle();
 
-    expect(find.text('Recolle'), findsOneWidget);
+    expect(find.text('RECOLLE'), findsOneWidget);
     expect(find.byIcon(Icons.add), findsOneWidget);
   });
 }

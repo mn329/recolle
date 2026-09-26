@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:recolle/core/constants/field_limits.dart';
 import 'package:recolle/core/constants/ticket_image_settings.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/utils/ticket_image_compress.dart';
@@ -579,11 +580,9 @@ class CreateRecordScreen extends HookConsumerWidget {
                         includeWeekday: true,
                         padMonthDay: true,
                       ),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
+                      style: AppFonts.monoStyle(
                         fontSize: 16,
-                        fontFamily: 'Courier',
-                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                   ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/features/records/models/record.dart';
 
@@ -130,12 +131,10 @@ class _RecordTicketCardState extends State<RecordTicketCard>
                               // Title (Main)
                               Text(
                                 widget.record.title,
-                                style: const TextStyle(
+                                style: AppFonts.displayStyle(
+                                  fontSize: 24,
                                   color: AppColors.gold,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                  shadows: [
+                                  shadows: const [
                                     Shadow(
                                       color: Colors.black,
                                       offset: Offset(1, 1),
@@ -187,19 +186,16 @@ class _RecordTicketCardState extends State<RecordTicketCard>
                           children: [
                             Text(
                               widget.record.date.year.toString(),
-                              style: TextStyle(
-                                color: AppColors.gold.withValues(alpha: 0.8),
+                              style: AppFonts.monoStyle(
                                 fontSize: 12,
-                                fontWeight: FontWeight.bold,
+                                color: AppColors.gold.withValues(alpha: 0.8),
                               ),
                             ),
                             Text(
                               '${widget.record.date.month.toString().padLeft(2, '0')}.${widget.record.date.day.toString().padLeft(2, '0')}',
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: AppFonts.monoStyle(
                                 fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Courier',
+                                color: Colors.white,
                               ),
                             ),
                           ],

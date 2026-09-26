@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
 import 'package:recolle/core/utils/error_messages.dart';
@@ -232,15 +233,15 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
             // 4. Reports
             if (record.type == RecordType.live) ...[
-              _buildSectionTitle('セトリ'),
+              _buildSectionTitle('SETLIST', 'セトリ'),
               _buildSetlistContent(record.setlist),
               const SizedBox(height: 24),
-              _buildSectionTitle('MCメモ'),
+              _buildSectionTitle('MC MEMO', 'MCメモ'),
               _buildSectionContent(record.mcMemo),
               const SizedBox(height: 24),
             ],
 
-            _buildSectionTitle('感想'),
+            _buildSectionTitle('IMPRESSIONS', '感想'),
             _buildSectionContent(record.impressions),
           ],
         ),
@@ -248,17 +249,31 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  /// 英字の印字風見出しに、和文の小さなラベルを添える。
+  Widget _buildSectionTitle(String title, String japaneseLabel) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Text(
-        title,
-        style: const TextStyle(
-          color: AppColors.gold,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.2,
-        ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            title,
+            style: AppFonts.displayStyle(
+              fontSize: 24,
+              color: AppColors.gold,
+              letterSpacing: 1.4,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            japaneseLabel,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppColors.textSecondary.withValues(alpha: 0.7),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -302,13 +317,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '${i + 1}.',
-                  style: const TextStyle(
-                    color: AppColors.gold,
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    height: 1.6,
+                SizedBox(
+                  width: 28,
+                  child: Text(
+                    (i + 1).toString().padLeft(2, '0'),
+                    style: AppFonts.monoStyle(
+                      fontSize: 14,
+                      color: AppColors.gold,
+                    ).copyWith(height: 1.75),
                   ),
                 ),
                 const SizedBox(width: 8),

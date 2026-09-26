@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
+import 'app_fonts.dart';
 
 class AppTheme {
   const AppTheme._();
@@ -14,7 +15,7 @@ class AppTheme {
         onSurface: AppColors.textPrimary,
       ),
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      fontFamily: AppFonts.body,
 
       // AppBar: 全画面で surface 帯＋ゴールドタイトル＋控えめなアイコンに統一（個別画面は title のみ差し替え可）
       appBarTheme: const AppBarTheme(
@@ -24,9 +25,12 @@ class AppTheme {
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
+          fontFamily: AppFonts.display,
+          fontFamilyFallback: [AppFonts.body],
           color: AppColors.gold,
-          fontSize: 18,
+          fontSize: 24,
           fontWeight: FontWeight.bold,
+          letterSpacing: 1.2,
         ),
         iconTheme: IconThemeData(color: AppColors.textSecondary),
         actionsIconTheme: IconThemeData(color: AppColors.textSecondary),
