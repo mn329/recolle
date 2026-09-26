@@ -85,6 +85,17 @@ extension RecordTypeUi on RecordType {
   /// [Record.ticketSource] の呼び方。
   String get sourceLabel => this == RecordType.book ? '購入先' : 'チケット取得元';
 
+  /// 入力行の上に添える、チケット風の英字の項目名。
+  String get creatorFieldEnLabel => switch (this) {
+    RecordType.live => 'ARTIST',
+    RecordType.book => 'AUTHOR',
+    RecordType.movie || RecordType.other => 'CAST',
+  };
+
+  String get venueEnLabel => this == RecordType.movie ? 'THEATER' : 'VENUE';
+
+  String get sourceEnLabel => this == RecordType.book ? 'STORE' : 'TICKET';
+
   String get sourcePlaceholder => switch (this) {
     RecordType.live => 'チケット取得元（e+、ローチケ など）',
     RecordType.movie => 'チケット取得元（劇場窓口、アプリ など）',

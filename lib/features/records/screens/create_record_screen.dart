@@ -392,6 +392,12 @@ class CreateRecordScreen extends HookConsumerWidget {
           controller: artistController,
           focusNode: artistFocusNode,
           placeholder: type.value.creatorFieldLabel,
+          icon: switch (type.value) {
+            RecordType.live => CupertinoIcons.music_mic,
+            RecordType.book => CupertinoIcons.pencil,
+            RecordType.movie || RecordType.other => CupertinoIcons.person_2,
+          },
+          enLabel: type.value.creatorFieldEnLabel,
           maxLength: RecordFieldLimits.artistOrAuthor,
           scrollPadding: _fieldScrollPadding,
           onChanged: (_) => artistTypedSincePick.value = true,
@@ -419,6 +425,13 @@ class CreateRecordScreen extends HookConsumerWidget {
           controller: titleController,
           focusNode: titleFocusNode,
           placeholder: type.value.titleFieldLabel,
+          icon: switch (type.value) {
+            RecordType.live => CupertinoIcons.music_note_2,
+            RecordType.movie => CupertinoIcons.film,
+            RecordType.book => CupertinoIcons.book,
+            RecordType.other => CupertinoIcons.star,
+          },
+          enLabel: 'TITLE',
           maxLength: RecordFieldLimits.title,
           scrollPadding: _fieldScrollPadding,
           onChanged: (_) => concertPicked.value = false,
@@ -441,6 +454,11 @@ class CreateRecordScreen extends HookConsumerWidget {
     final sourceRow = FormTextRow(
       controller: sourceController,
       placeholder: kind.sourcePlaceholder,
+      icon: kind == RecordType.book
+          ? CupertinoIcons.bag
+          : CupertinoIcons.tickets,
+      enLabel: kind.sourceEnLabel,
+      label: kind.sourceLabel,
       maxLength: RecordFieldLimits.ticketSource,
       scrollPadding: _fieldScrollPadding,
     );
@@ -554,6 +572,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                   ...isLive ? [artistBlock, titleRow] : [titleRow, artistBlock],
                   RecordDateRow(
                     label: isLive ? '公演日' : '日付',
+                    icon: CupertinoIcons.calendar,
+                    enLabel: 'DATE',
                     date: date.value,
                     onChanged: (d) => date.value = d,
                   ),
@@ -565,6 +585,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                   if (kind.hasOpenTime)
                     RecordTimeRow(
                       label: '開場',
+                      icon: CupertinoIcons.clock,
+                      enLabel: 'OPEN',
                       time: openTime.value,
                       defaultTime:
                           _shift(startTime.value, -60) ??
@@ -574,6 +596,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                   if (kind.hasSchedule) ...[
                     RecordTimeRow(
                       label: kind.startTimeLabel,
+                      icon: CupertinoIcons.play_circle,
+                      enLabel: 'START',
                       time: startTime.value,
                       defaultTime:
                           _shift(openTime.value, 60) ?? const ClockTime(18, 0),
@@ -581,6 +605,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                     ),
                     RecordTimeRow(
                       label: kind.endTimeLabel,
+                      icon: CupertinoIcons.stop_circle,
+                      enLabel: 'END',
                       time: endTime.value,
                       defaultTime:
                           _shift(startTime.value, 120) ??
@@ -592,6 +618,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                     FormTextRow(
                       controller: venueController,
                       placeholder: kind.venueLabel!,
+                      icon: CupertinoIcons.location,
+                      enLabel: kind.venueEnLabel,
                       maxLength: RecordFieldLimits.venue,
                       scrollPadding: _fieldScrollPadding,
                     ),
@@ -599,12 +627,17 @@ class CreateRecordScreen extends HookConsumerWidget {
                     FormTextRow(
                       controller: seatController,
                       placeholder: kind.seatPlaceholder!,
+                      icon: CupertinoIcons.square_grid_2x2,
+                      enLabel: 'SEAT',
+                      label: '座席',
                       maxLength: RecordFieldLimits.seat,
                       scrollPadding: _fieldScrollPadding,
                     ),
                   FormTextRow(
                     controller: priceController,
                     placeholder: kind.priceLabel,
+                    icon: CupertinoIcons.money_yen,
+                    enLabel: 'PRICE',
                     keyboardType: TextInputType.number,
                     inputFormatters: [
                       FilteringTextInputFormatter.digitsOnly,

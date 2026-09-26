@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/features/records/widgets/record_form/form_row_parts.dart';
 import 'package:recolle/features/records/widgets/record_form/inline_picker_panel.dart';
 
 /// 日付の行。タップするとカレンダーアプリと同じく、行の下にホイールが開く。
@@ -11,9 +12,13 @@ class RecordDateRow extends StatefulWidget {
     required this.label,
     required this.date,
     required this.onChanged,
+    this.icon,
+    this.enLabel,
   });
 
   final String label;
+  final IconData? icon;
+  final String? enLabel;
   final DateTime date;
   final ValueChanged<DateTime> onChanged;
 
@@ -28,7 +33,10 @@ class _RecordDateRowState extends State<RecordDateRow>
 
   @override
   Widget build(BuildContext context) {
-    return Focus(focusNode: pickerFocusNode, child: _buildRow(context));
+    return Focus(
+      focusNode: pickerFocusNode,
+      child: FormRowHighlight(active: expanded, child: _buildRow(context)),
+    );
   }
 
   Widget _buildRow(BuildContext context) {
@@ -43,12 +51,11 @@ class _RecordDateRowState extends State<RecordDateRow>
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: context.colors.textPrimary,
-                  ),
+                child: FormRowTitle(
+                  label: widget.label,
+                  icon: widget.icon,
+                  enLabel: widget.enLabel,
+                  active: expanded,
                 ),
               ),
               AnimatedContainer(

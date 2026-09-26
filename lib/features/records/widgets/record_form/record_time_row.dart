@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/features/records/models/record.dart';
+import 'package:recolle/features/records/widgets/record_form/form_row_parts.dart';
 import 'package:recolle/features/records/widgets/record_form/inline_picker_panel.dart';
 
 /// 開演時刻などの任意の時刻の行。未設定なら「未設定」と出し、タップで行の下にホイールを開く。
@@ -12,9 +13,13 @@ class RecordTimeRow extends StatefulWidget {
     required this.time,
     required this.onChanged,
     this.defaultTime = const ClockTime(18, 0),
+    this.icon,
+    this.enLabel,
   });
 
   final String label;
+  final IconData? icon;
+  final String? enLabel;
   final ClockTime? time;
   final ValueChanged<ClockTime?> onChanged;
 
@@ -39,7 +44,10 @@ class _RecordTimeRowState extends State<RecordTimeRow>
 
   @override
   Widget build(BuildContext context) {
-    return Focus(focusNode: pickerFocusNode, child: _buildRow(context));
+    return Focus(
+      focusNode: pickerFocusNode,
+      child: FormRowHighlight(active: expanded, child: _buildRow(context)),
+    );
   }
 
   Widget _buildRow(BuildContext context) {
@@ -55,12 +63,11 @@ class _RecordTimeRowState extends State<RecordTimeRow>
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  widget.label,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: context.colors.textPrimary,
-                  ),
+                child: FormRowTitle(
+                  label: widget.label,
+                  icon: widget.icon,
+                  enLabel: widget.enLabel,
+                  active: expanded,
                 ),
               ),
               if (time != null)
