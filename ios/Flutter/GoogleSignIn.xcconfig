@@ -1,4 +1,4 @@
 // Google Sign-In（iOS）の戻り先 URL スキーム。Info.plist の CFBundleURLSchemes から参照する。
 // Google Cloud の iOS クライアント ID「xxxx.apps.googleusercontent.com」を逆順にした値
 // （com.googleusercontent.apps.xxxx）に置き換える。値は公開情報なのでコミットしてよい。
-GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.REPLACE_WITH_IOS_CLIENT_ID
+GOOGLE_REVERSED_CLIENT_ID = com.googleusercontent.apps.727070733636-3mjckqjhu2sstetfbk195olvv0hngbtc
