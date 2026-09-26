@@ -379,6 +379,27 @@ void main() {
       expect(find.text('ARENA TOUR 2025'), findsNothing);
     });
 
+    testWidgets('一致する候補がなくなっても候補欄を閉じず、検索中と結果を案内する', (tester) async {
+      await _pumpScreen(tester, setlists: [setlist]);
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.enterText(_field('公演名・ツアー名'), 'ar');
+      await tester.pumpAndSettle();
+      expect(find.text('ARENA TOUR 2025'), findsOneWidget);
+
+      await tester.enterText(_field('公演名・ツアー名'), 'xy');
+      await tester.pumpAndSettle();
+      expect(find.textContaining('一致する公演はありません'), findsOneWidget);
+
+      await tester.enterText(_field('公演名・ツアー名'), 'xyz');
+      await tester.pump();
+      // 入力が止まるのを待っている間も、候補欄は読み込み中として残る
+      expect(find.byType(CupertinoActivityIndicator), findsOneWidget);
+
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('見つかりませんでした'), findsOneWidget);
+    });
+
     testWidgets('候補が多いときは一覧の高さを抑えてスクロールできる', (tester) async {
       await _pumpScreen(
         tester,

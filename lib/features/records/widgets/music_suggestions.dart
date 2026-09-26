@@ -269,24 +269,43 @@ class ConcertSuggestions extends HookConsumerWidget {
     // setlist.fm の上限は全ユーザー共有なので、手元の候補に見つからないときだけ
     // 入力した名前で直近にないツアーを探す
     final local = build();
+    final trimmedQuery = query.trim();
     final needsSearch = local.isEmpty && !setlists.isLoading;
+    final willSearch =
+        needsSearch && trimmedQuery.length >= _minTourSearchLength;
+    // 検索が終わった入力。前の入力の結果やエラーを、新しい入力の結果として出さないために使う
+    final completedQuery = useRef<String?>(null);
     final searched = useDebouncedSearch<SetlistSummary>(
       needsSearch ? query : '',
-      (q) =>
-          setlistFm.search(artistName: artist, tourName: q, includeEmpty: true),
+      (q) async {
+        try {
+          return await setlistFm.search(
+            artistName: artist,
+            tourName: q,
+            includeEmpty: true,
+          );
+        } finally {
+          completedQuery.value = q;
+        }
+      },
       delay: const Duration(milliseconds: 800),
-      minLength: 3,
+      minLength: _minTourSearchLength,
     );
-    final candidates = searched.hasData ? build(searched.data!) : local;
+    final searchedCurrent = willSearch && completedQuery.value == trimmedQuery;
+    final candidates = searchedCurrent && searched.hasData
+        ? build(searched.data!)
+        : local;
     final errors = {
       if (upcoming?.error case final e?) toUserFriendlyMessage(e),
       if (setlists.error case final e?) toUserFriendlyMessage(e),
-      if (searched.error case final e?) toUserFriendlyMessage(e),
+      if (searchedCurrent && searched.hasError)
+        toUserFriendlyMessage(searched.error!),
     };
+    // 入力が止まるのを待っている間も読み込み中として見せ、候補欄が一度消えてから出直さないようにする
     final isLoading =
         setlists.isLoading ||
         (upcoming?.isLoading ?? false) ||
-        searched.connectionState == ConnectionState.waiting;
+        (willSearch && !searchedCurrent);
 
     final footer = <Widget>[
       if (isLoading)
@@ -294,7 +313,18 @@ class ConcertSuggestions extends HookConsumerWidget {
           padding: EdgeInsets.all(12),
           child: CupertinoActivityIndicator(),
         )
-      else if (!discoveryRequested.value)
+      else if (candidates.isEmpty && trimmedQuery.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Text(
+            needsSearch && !willSearch
+                ? '「$trimmedQuery」に一致する公演はありません。'
+                      '$_minTourSearchLength 文字以上入力すると setlist.fm からも探します。'
+                : '「$trimmedQuery」に一致する公演は見つかりませんでした。',
+            style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
+          ),
+        ),
+      if (!isLoading && !discoveryRequested.value)
         _SuggestionRow(
           icon: CupertinoIcons.search,
           title: 'これからの公演を探す',
@@ -360,6 +390,9 @@ class ConcertSuggestions extends HookConsumerWidget {
       ),
     );
   }
+
+  /// setlist.fm をツアー名で探す最小の文字数。短い語で上限を使わないようにする。
+  static const _minTourSearchLength = 3;
 
   /// 候補がおよそ 4 件半見える高さ。途中で切れて見えることで、スクロールできると分かる。
   static const _maxListHeight = 260.0;
