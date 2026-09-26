@@ -31,10 +31,12 @@ class HomeScreen extends HookConsumerWidget {
     final selectedType = useState(RecordType.live);
     final selectedArtistName = useState<String?>(null);
 
+    // お気に入りはアーティストなので、ライブ以外では出さず絞り込みもしない
+    final isLive = selectedType.value == RecordType.live;
     // 選択中のお気に入りが削除されたら絞り込みを解除する
-    final selectedFavorite = favorites
-        .where((f) => f.name == selectedArtistName.value)
-        .firstOrNull;
+    final selectedFavorite = isLive
+        ? favorites.where((f) => f.name == selectedArtistName.value).firstOrNull
+        : null;
 
     void openEditor() => openRecordEditor(
       context,
@@ -68,7 +70,7 @@ class HomeScreen extends HookConsumerWidget {
         bottom: _HomeFilterBar(
           selectedType: selectedType.value,
           onTypeChanged: (t) => selectedType.value = t,
-          favorites: favorites,
+          favorites: isLive ? favorites : const [],
           selectedArtistName: selectedFavorite?.name,
           onArtistSelected: (name) => selectedArtistName.value = name,
         ),
