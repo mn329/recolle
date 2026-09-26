@@ -53,6 +53,7 @@ class _FakeSetlistFmClient extends SetlistFmClient {
     String? tourName,
     bool includeEmpty = false,
   }) async {
+    int pages = 1,
     if (tourName != null) tourQueries.add(tourName);
     return byTourName[tourName] ?? const [];
   }

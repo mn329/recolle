@@ -14,10 +14,22 @@ const SETLISTFM_ENDPOINT = "https://api.setlist.fm/rest/1.0/search/setlists"
 const REQUEST_TIMEOUT_MS = 8000
 const MAX_ARTIST_NAME_LENGTH = 100
 const MAX_TOUR_NAME_LENGTH = 200
-const MAX_RESULTS = 20
+// setlist.fm の 1 ページの件数
+const PAGE_SIZE = 20
+// 1 回の呼び出しで取るページ数の上限。キャッシュ外では 1 アーティストにつき setlist.fm をこの回数呼ぶ
+const MAX_PAGES = 5
+// setlist.fm の上限は公称 1 秒 2 回だが、600ms 間隔でも 429 が返ったので余裕を持たせる
+const PAGE_INTERVAL_MS = 1100
+// 429 のときの再試行。待ち時間は回数に比例して延ばす
+const MAX_RATE_LIMIT_RETRIES = 2
+const RATE_LIMIT_BACKOFF_MS = 1500
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 // 上限は API キー単位で全ユーザー共有のため、同じ検索は 1 日 1 回までにする
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 /**
  * キャッシュのキー用。全角半角・大文字小文字・連続した空白の違いをまとめる。
@@ -101,11 +113,17 @@ Deno.serve(async (req) => {
     return json({ error: "invalid_tour_name" }, 400)
   }
 
+  // 直近の公演を多めに取り、アプリ側でツアー名の部分一致に使う。setlist.fm は単語単位の
+  // 一致しかできないため。ツアー名・日付の検索は 1 ページで足りる
+  const requestedPages = Number.isInteger(payload?.pages) ? payload.pages : 1
+  const pages =
+    tourName || date ? 1 : Math.min(Math.max(requestedPages, 1), MAX_PAGES)
+
   const respond = (all: any[]) =>
     json({
       setlists: all
         .filter((s: any) => includeEmpty || s.songs.length > 0)
-        .slice(0, MAX_RESULTS),
+        .slice(0, PAGE_SIZE * pages),
     })
 
   const admin = createClient(
@@ -116,6 +134,7 @@ Deno.serve(async (req) => {
     normalizeKey(artistName),
     date,
     normalizeKey(tourName),
+    `p${pages}`,
   ].join("|")
   const { data: cached, error: cacheError } = await admin
     .from("setlistfm_cache")
@@ -148,7 +167,7 @@ Deno.serve(async (req) => {
     if (purgeError) console.error("setlistfm cache purge failed", purgeError)
   }
 
-  const params = new URLSearchParams({ artistName, p: "1" })
+  const params = new URLSearchParams({ artistName })
   if (tourName) params.set("tourName", tourName)
   if (date) {
     // setlist.fm は dd-MM-yyyy 形式
@@ -156,43 +175,64 @@ Deno.serve(async (req) => {
     params.set("date", `${d}-${m}-${y}`)
   }
 
+  async function fetchPage(page: number): Promise<Response> {
+    params.set("p", String(page))
+    for (let attempt = 0; ; attempt++) {
+      const res = await fetch(`${SETLISTFM_ENDPOINT}?${params}`, {
+        headers: {
+          "x-api-key": apiKey,
+          Accept: "application/json",
+          // ja は非対応で 406 になる（対応: en, es, fr, de, pt, tr, it, pl）
+          "Accept-Language": "en",
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      })
+      if (res.status !== 429 || attempt >= MAX_RATE_LIMIT_RETRIES) return res
+      await res.body?.cancel()
+      await sleep(RATE_LIMIT_BACKOFF_MS * (attempt + 1))
+    }
+  }
+
   try {
-    const res = await fetch(`${SETLISTFM_ENDPOINT}?${params}`, {
-      headers: {
-        "x-api-key": apiKey,
-        Accept: "application/json",
-        // ja は非対応で 406 になる（対応: en, es, fr, de, pt, tr, it, pl）
-        "Accept-Language": "en",
-      },
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    })
+    const setlists: any[] = []
+    for (let page = 1; page <= pages; page++) {
+      if (page > 1) await sleep(PAGE_INTERVAL_MS)
+      const res = await fetchPage(page)
 
-    // 該当なしは 404 で返ってくる
-    if (res.status === 404) {
-      await saveCache([])
-      return respond([])
-    }
-    if (res.status === 429) {
-      return json({ error: "setlistfm_rate_limited" }, 429)
-    }
-    if (!res.ok) {
-      console.error("setlist.fm error", res.status, await res.text())
-      return json({ error: "setlistfm_upstream_error" }, 502)
-    }
+      // 該当なし（最後のページの先も含む）は 404 で返ってくる
+      if (res.status === 404) break
+      if (!res.ok) {
+        if (page > 1) {
+          // 途中まで取れた分は返すが、欠けた結果をキャッシュして 1 日使い続けないよう保存しない
+          console.error("setlist.fm page failed", page, res.status)
+          return respond(setlists)
+        }
+        if (res.status === 429) {
+          return json({ error: "setlistfm_rate_limited" }, 429)
+        }
+        console.error("setlist.fm error", res.status, await res.text())
+        return json({ error: "setlistfm_upstream_error" }, 502)
+      }
 
-    const data = await res.json()
-    const setlists = (data?.setlist ?? [])
-      .map((s: any) => ({
-        id: String(s?.id ?? ""),
-        eventDate: String(s?.eventDate ?? ""),
-        artistName: String(s?.artist?.name ?? ""),
-        venueName: String(s?.venue?.name ?? ""),
-        cityName: String(s?.venue?.city?.name ?? ""),
-        tourName: s?.tour?.name ? String(s.tour.name) : null,
-        url: s?.url ? String(s.url) : null,
-        songs: flattenSongs(s),
-      }))
-      .filter((s: any) => s.id)
+      const data = await res.json()
+      const items = data?.setlist ?? []
+      setlists.push(
+        ...items
+          .map((s: any) => ({
+            id: String(s?.id ?? ""),
+            eventDate: String(s?.eventDate ?? ""),
+            artistName: String(s?.artist?.name ?? ""),
+            venueName: String(s?.venue?.name ?? ""),
+            cityName: String(s?.venue?.city?.name ?? ""),
+            tourName: s?.tour?.name ? String(s.tour.name) : null,
+            url: s?.url ? String(s.url) : null,
+            songs: flattenSongs(s),
+          }))
+          .filter((s: any) => s.id),
+      )
+      const total = Number(data?.total ?? 0)
+      if (items.length === 0 || page * PAGE_SIZE >= total) break
+    }
 
     await saveCache(setlists)
     return respond(setlists)
