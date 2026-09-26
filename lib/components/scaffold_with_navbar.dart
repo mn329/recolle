@@ -33,6 +33,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
             label: 'ホーム',
           ),
           NavigationDestination(
+            icon: Icon(Icons.star_border_rounded),
+            selectedIcon: Icon(Icons.star_rounded),
+            label: 'お気に入り',
+          ),
+          NavigationDestination(
             icon: Icon(Icons.person_outline),
             selectedIcon: Icon(Icons.person),
             label: 'アカウント',

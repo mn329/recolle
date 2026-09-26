@@ -11,12 +11,15 @@ import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/utils/ticket_image_compress.dart';
+import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/detail_screen.dart';
+import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:recolle/features/records/widgets/number_date_picker_sheet.dart';
 import 'package:recolle/features/records/widgets/record_form_text_field.dart';
+import 'package:recolle/features/records/widgets/setlistfm_import_sheet.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// 並び替え時に [ReorderableListView] 用の安定キーとなる行。
@@ -28,10 +31,13 @@ class _SetlistLine {
 }
 
 class CreateRecordScreen extends HookConsumerWidget {
-  const CreateRecordScreen({super.key, this.recordToEdit});
+  const CreateRecordScreen({super.key, this.recordToEdit, this.initialArtist});
 
   /// 指定時は編集モード。保存後は更新された [Record] を [Navigator.pop] で返す。
   final Record? recordToEdit;
+
+  /// 新規作成時にアーティスト欄へあらかじめ入れておく名前。
+  final String? initialArtist;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -63,12 +69,18 @@ class CreateRecordScreen extends HookConsumerWidget {
     // Controllers
     final titleController = useTextEditingController(text: recordToEdit?.title);
     final artistController = useTextEditingController(
-      text: recordToEdit?.artistOrAuthor,
+      text: recordToEdit?.artistOrAuthor ?? initialArtist,
     );
+    final artistText = useValueListenable(artistController).text;
+    final artistFocusNode = useFocusNode();
+    useListenable(artistFocusNode);
+    // 候補から選んだ直後は同じ候補を出し直さない
+    final artistTypedSincePick = useState(false);
     final sourceController = useTextEditingController(
       text: recordToEdit?.ticketSource,
     );
     final currentSongController = useTextEditingController();
+    final currentSongText = useValueListenable(currentSongController).text;
     final mcMemoController = useTextEditingController(
       text: recordToEdit?.mcMemo,
     );
@@ -127,6 +139,73 @@ class CreateRecordScreen extends HookConsumerWidget {
           currentSongFocusNode.requestFocus();
         }
       });
+    }
+
+    void pickArtist(String name) {
+      artistController.value = TextEditingValue(
+        text: name,
+        selection: TextSelection.collapsed(offset: name.length),
+      );
+      artistTypedSincePick.value = false;
+      artistFocusNode.unfocus();
+    }
+
+    Future<void> importSetlistFromSetlistFm() async {
+      final artist = artistController.text.trim();
+      if (artist.isEmpty) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('先にアーティスト名を入力してください')));
+        return;
+      }
+      FocusScope.of(context).unfocus();
+      final songs = await showSetlistFmImportSheet(
+        context,
+        artistName: artist,
+        date: date.value,
+      );
+      if (songs == null || songs.isEmpty || !context.mounted) return;
+
+      if (setlistLines.value.isNotEmpty) {
+        final replace = await showConfirmDialog(
+          context,
+          title: 'セットリストを置き換え',
+          message:
+              '入力済みの${setlistLines.value.length}曲を、取り込んだ${songs.length}曲で置き換えますか？',
+          okText: '置き換える',
+        );
+        if (!replace || !context.mounted) return;
+      }
+
+      final lines = <_SetlistLine>[];
+      var totalLength = 0;
+      var truncated = false;
+      for (final raw in songs) {
+        final song = raw.length > RecordFieldLimits.setlistSongLine
+            ? raw.substring(0, RecordFieldLimits.setlistSongLine)
+            : raw;
+        // 改行区切りで保存するので、区切り文字分も数える
+        final added = song.length + (lines.isEmpty ? 0 : 1);
+        if (totalLength + added > RecordFieldLimits.setlistTotal) {
+          truncated = true;
+          break;
+        }
+        totalLength += added;
+        truncated |= song.length != raw.length;
+        lines.add(
+          _SetlistLine(id: 'sl_${setlistIdCounter.value++}', text: song),
+        );
+      }
+      setlistLines.value = lines;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            truncated
+                ? '${lines.length}曲を取り込みました（文字数上限のため一部省略）'
+                : '${lines.length}曲を取り込みました',
+          ),
+        ),
+      );
     }
 
     Future<void> pickImage() async {
@@ -414,7 +493,8 @@ class CreateRecordScreen extends HookConsumerWidget {
                               fit: BoxFit.contain,
                               width: double.infinity,
                               height: double.infinity,
-                              cacheHeight: (constraints.maxHeight * dpr).round(),
+                              cacheHeight: (constraints.maxHeight * dpr)
+                                  .round(),
                             );
                           },
                         ),
@@ -490,10 +570,24 @@ class CreateRecordScreen extends HookConsumerWidget {
             const SizedBox(height: 16),
             RecordFormTextField(
               controller: artistController,
+              focusNode: artistFocusNode,
               label: 'アーティスト / 作者',
               icon: Icons.person_outline,
               maxLength: RecordFieldLimits.artistOrAuthor,
               scrollPadding: fieldScrollPadding,
+              onChanged: (_) => artistTypedSincePick.value = true,
+            ),
+            // iTunes のカタログは音楽のみなので、ライブのときだけ候補を出す
+            if (selectedType.value == RecordType.live &&
+                artistFocusNode.hasFocus &&
+                artistTypedSincePick.value)
+              ArtistSuggestions(
+                query: artistText,
+                onPick: (artist) => pickArtist(artist.name),
+              ),
+            FavoriteArtistQuickPick(
+              currentArtist: artistText,
+              onPick: (artist) => pickArtist(artist.name),
             ),
             const SizedBox(height: 16),
 
@@ -649,6 +743,20 @@ class CreateRecordScreen extends HookConsumerWidget {
                         ],
                       ),
                     ),
+                    TextButton.icon(
+                      onPressed: artistText.trim().isEmpty
+                          ? null
+                          : importSetlistFromSetlistFm,
+                      icon: const Icon(Icons.cloud_download_outlined, size: 18),
+                      label: const Text(
+                        'setlist.fm',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.gold,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -786,6 +894,15 @@ class CreateRecordScreen extends HookConsumerWidget {
                     ],
                   ),
                 ),
+              ),
+              SongSuggestions(
+                artistName: artistText,
+                query: currentSongText,
+                alreadyAdded: setlistLines.value.map((e) => e.text),
+                onPick: (song) {
+                  currentSongController.text = song.title;
+                  tryAddSongToSetlist();
+                },
               ),
 
               const SizedBox(height: 24),

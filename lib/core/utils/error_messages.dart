@@ -1,4 +1,5 @@
 // Supabase の Flutter 用パッケージを読み込む（認証例外などの型を使うため）
+import 'package:recolle/core/utils/user_facing_exception.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// アプリ内でユーザーに表示するエラーメッセージを日本語で返します。
@@ -8,6 +9,10 @@ String toUserFriendlyMessage(dynamic error) {
   if (error == null) {
     // null のときは、汎用メッセージを返して関数を終える
     return '問題が発生しました。しばらくして再度お試しください。';
+  }
+
+  if (error is UserFacingException) {
+    return error.userMessage;
   }
 
   // error が Supabase の認証例外（AuthException）型かどうかを判定する
@@ -123,8 +128,9 @@ String _authMessage(String message) {
   }
   // 既に日本語のメッセージならそのまま返す
   // ひらがな・カタカナ・漢字などが含まれるか正規表現で判定する（日本語が含まれていれば元の message を返す）
-  if (RegExp(r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf]')
-      .hasMatch(message)) {
+  if (RegExp(
+    r'[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\uff00-\uffef\u4e00-\u9faf]',
+  ).hasMatch(message)) {
     return message;
   }
   // どのパターンにも当てはまらない認証エラーのときは、汎用の認証メッセージを返す

@@ -6,12 +6,16 @@ import 'package:recolle/core/auth/auth_reauth_in_progress.dart';
 import 'package:recolle/features/records/screens/home_screen.dart';
 import 'package:recolle/components/scaffold_with_navbar.dart';
 import 'package:recolle/features/account/account_page.dart';
+import 'package:recolle/features/favorites/screens/favorites_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ナビゲーションの状態を管理するためのキー
 // ダイアログ表示などを制御する際に必要になります
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _homeNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'home');
+final _favoritesNavigatorKey = GlobalKey<NavigatorState>(
+  debugLabel: 'favorites',
+);
 final _accountNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'account');
 
 class _GoRouterRefreshStream extends ChangeNotifier {
@@ -70,14 +74,22 @@ final router = GoRouter(
         return ScaffoldWithNavBar(navigationShell: navigationShell);
       },
       branches: [
-        // 1つ目のタブ：ホーム画面
+        // タブの並びは ScaffoldWithNavBar の destinations と一致させる
         StatefulShellBranch(
           navigatorKey: _homeNavigatorKey,
           routes: [
             GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
           ],
         ),
-        // 2つ目のタブ：アカウント画面
+        StatefulShellBranch(
+          navigatorKey: _favoritesNavigatorKey,
+          routes: [
+            GoRoute(
+              path: '/favorites',
+              builder: (context, state) => const FavoritesScreen(),
+            ),
+          ],
+        ),
         StatefulShellBranch(
           navigatorKey: _accountNavigatorKey,
           routes: [

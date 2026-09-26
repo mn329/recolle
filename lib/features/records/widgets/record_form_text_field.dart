@@ -10,9 +10,13 @@ class RecordFormTextField extends StatelessWidget {
     this.maxLines = 1,
     this.maxLength,
     this.scrollPadding,
+    this.focusNode,
+    this.onChanged,
   });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
+  final ValueChanged<String>? onChanged;
   final String label;
   final IconData icon;
   final int maxLines;
@@ -25,6 +29,8 @@ class RecordFormTextField extends StatelessWidget {
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
+      focusNode: focusNode,
+      onChanged: onChanged,
       maxLines: maxLines,
       maxLength: maxLength,
       scrollPadding: scrollPadding ?? const EdgeInsets.all(20),
@@ -32,8 +38,9 @@ class RecordFormTextField extends StatelessWidget {
       cursorColor: AppColors.gold,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle:
-            TextStyle(color: AppColors.textSecondary.withValues(alpha: 0.7)),
+        labelStyle: TextStyle(
+          color: AppColors.textSecondary.withValues(alpha: 0.7),
+        ),
         prefixIcon: Icon(
           icon,
           color: AppColors.gold.withValues(alpha: 0.7),
