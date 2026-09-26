@@ -217,6 +217,13 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
 }
 
 /// 角丸のカードに行を並べる、iOS の設定アプリ風のグループ。
+/// 画面内のセクション見出しの文字。本文より大きく明るくして、見出しだと分かるようにする。
+TextStyle sectionHeaderTextStyle(BuildContext context) => TextStyle(
+  fontSize: 18,
+  fontWeight: FontWeight.w700,
+  color: context.colors.textPrimary,
+);
+
 class InsetGroupedSection extends StatelessWidget {
   const InsetGroupedSection({
     super.key,
@@ -249,14 +256,7 @@ class InsetGroupedSection extends StatelessWidget {
           ? null
           : Padding(
               padding: const EdgeInsets.only(left: 12),
-              child: Text(
-                header!,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: context.colors.textSecondary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
+              child: Text(header!, style: sectionHeaderTextStyle(context)),
             ),
       footer: footer == null
           ? null

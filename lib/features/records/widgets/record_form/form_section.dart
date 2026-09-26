@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 
 /// 作成フォームの 1 グループ。見出しの下に角丸カードで行を並べる。
 class FormSection extends StatelessWidget {
@@ -37,11 +38,7 @@ class FormSection extends StatelessWidget {
                   Expanded(
                     child: Text(
                       header!,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: context.colors.textPrimary,
-                      ),
+                      style: sectionHeaderTextStyle(context),
                     ),
                   ),
                   ?trailing,

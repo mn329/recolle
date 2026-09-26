@@ -206,14 +206,7 @@ class _SectionHeader extends StatelessWidget {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: context.colors.textSecondary,
-          ),
-        ),
+        child: Text(label, style: sectionHeaderTextStyle(context)),
       ),
     );
   }

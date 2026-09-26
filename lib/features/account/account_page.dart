@@ -195,11 +195,7 @@ class _GuestPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(32, 20, 32, 8),
           child: Text(
             showConnectionRecovery ? 'ログイン' : '記録を引き継げるようにする',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: context.colors.textSecondary,
-            ),
+            style: sectionHeaderTextStyle(context),
           ),
         ),
         Padding(

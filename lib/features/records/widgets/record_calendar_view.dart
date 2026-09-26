@@ -209,16 +209,7 @@ class _ListHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(28, 0, 16, 6),
       child: Row(
         children: [
-          Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                color: colors.textSecondary,
-              ),
-            ),
-          ),
+          Expanded(child: Text(title, style: sectionHeaderTextStyle(context))),
           if (onShowAll != null)
             CupertinoButton(
               padding: EdgeInsets.zero,
