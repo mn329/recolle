@@ -1,6 +1,8 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -9,27 +11,38 @@ import 'package:recolle/core/constants/ticket_image_settings.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/ticket_image_compress.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/screens/detail_screen.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
-import 'package:recolle/features/records/widgets/record_form/record_date_field.dart';
-import 'package:recolle/features/records/widgets/record_form/record_type_selector.dart';
+import 'package:recolle/features/records/widgets/record_form/form_text_row.dart';
+import 'package:recolle/features/records/widgets/record_form/record_date_row.dart';
 import 'package:recolle/features/records/widgets/record_form/setlist_editor.dart';
 import 'package:recolle/features/records/widgets/record_form/ticket_preview_picker.dart';
-import 'package:recolle/features/records/widgets/record_form_text_field.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// 記録の作成・編集フォーム。保存したら [Record] を返して閉じる。
+///
+/// 通常は `openRecordEditor` から iOS のシートとして開く。
 class CreateRecordScreen extends HookConsumerWidget {
-  const CreateRecordScreen({super.key, this.recordToEdit, this.initialArtist});
+  const CreateRecordScreen({
+    super.key,
+    this.recordToEdit,
+    this.initialArtist,
+    this.initialType,
+  });
 
-  /// 指定時は編集モード。保存後は更新された [Record] を [Navigator.pop] で返す。
+  /// 指定時は編集モード。
   final Record? recordToEdit;
 
   /// 新規作成時にアーティスト欄へあらかじめ入れておく名前。
   final String? initialArtist;
+
+  /// 新規作成時の種別。省略時はライブ。
+  final RecordType? initialType;
 
   /// キーボード表示中でも、入力欄の下に出る候補リストまで見えるようにする余白。
   static const _fieldScrollPadding = EdgeInsets.fromLTRB(20, 24, 20, 160);
@@ -39,7 +52,7 @@ class CreateRecordScreen extends HookConsumerWidget {
     final editingRecord = recordToEdit;
     final isEditMode = editingRecord != null;
 
-    final initialType = editingRecord?.type ?? RecordType.live;
+    final startType = editingRecord?.type ?? initialType ?? RecordType.live;
     final initialDate = useMemoized(
       () => editingRecord?.date ?? DateTime.now(),
     );
@@ -51,7 +64,7 @@ class CreateRecordScreen extends HookConsumerWidget {
           .toList(growable: false),
     );
 
-    final type = useState(initialType);
+    final type = useState(startType);
     final date = useState(initialDate);
     final songs = useState(initialSongs);
     final selectedImage = useState<File?>(null);
@@ -73,15 +86,6 @@ class CreateRecordScreen extends HookConsumerWidget {
     final impressionsController = useTextEditingController(
       text: editingRecord?.impressions,
     );
-    final initialTexts = useMemoized(
-      () => [
-        titleController.text,
-        artistController.text,
-        sourceController.text,
-        mcMemoController.text,
-        impressionsController.text,
-      ],
-    );
     final textControllers = [
       titleController,
       artistController,
@@ -89,6 +93,9 @@ class CreateRecordScreen extends HookConsumerWidget {
       mcMemoController,
       impressionsController,
     ];
+    final initialTexts = useMemoized(
+      () => [for (final c in textControllers) c.text],
+    );
     useListenable(useMemoized(() => Listenable.merge(textControllers)));
 
     final artistFocusNode = useFocusNode();
@@ -104,7 +111,7 @@ class CreateRecordScreen extends HookConsumerWidget {
         : editingRecord?.ticketImageUrl;
 
     final isDirty =
-        type.value != initialType ||
+        type.value != startType ||
         date.value != initialDate ||
         selectedImage.value != null ||
         removeSavedImage.value ||
@@ -115,15 +122,10 @@ class CreateRecordScreen extends HookConsumerWidget {
         ].any((changed) => changed);
 
     final missingLabels = [
-      if (title.isEmpty) type.value.titleFieldLabel,
       if (artist.isEmpty) type.value.creatorFieldLabel,
+      if (title.isEmpty) type.value.titleFieldLabel,
     ];
-
-    void showMessage(String message) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(message)));
-    }
+    final canSave = missingLabels.isEmpty && !isSaving.value;
 
     void pickArtist(String name) {
       artistController.value = TextEditingValue(
@@ -155,20 +157,20 @@ class CreateRecordScreen extends HookConsumerWidget {
     }
 
     Future<void> save() async {
-      if (isSaving.value || missingLabels.isNotEmpty) return;
+      if (!canSave) return;
       FocusScope.of(context).unfocus();
 
       final setlist = isLive && songs.value.isNotEmpty
           ? songs.value.join('\n')
           : null;
       if (setlist != null && setlist.length > RecordFieldLimits.setlistTotal) {
-        showMessage('セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。');
+        AppToast.error('セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。');
         return;
       }
 
       final userId = Supabase.instance.client.auth.currentUser?.id;
       if (userId == null) {
-        showMessage('ログインしてください');
+        AppToast.error('ログインしてください');
         return;
       }
 
@@ -198,56 +200,43 @@ class CreateRecordScreen extends HookConsumerWidget {
           impressions: nullIfEmpty(impressionsController),
         );
 
-        if (editingRecord != null) {
-          final updated = await repo.updateRecord(
-            editingRecord.id,
-            record.toJson(),
-          );
-          if (!context.mounted) return;
-          ref.invalidate(recordsProvider);
-          showMessage('記録を更新しました');
-          Navigator.of(context).pop(updated);
-        } else {
-          final inserted = await repo.insertRecord({
-            ...record.toJson(),
-            'user_id': userId,
-          });
-          if (!context.mounted) return;
-          ref.invalidate(recordsProvider);
-          showMessage('記録を保存しました');
-          final navigator = Navigator.of(context);
-          navigator.pop();
-          navigator.push(
-            MaterialPageRoute<void>(
-              builder: (_) => DetailScreen(record: inserted),
-            ),
-          );
-        }
+        final saved = editingRecord != null
+            ? await repo.updateRecord(editingRecord.id, record.toJson())
+            : await repo.insertRecord({...record.toJson(), 'user_id': userId});
+        ref.invalidate(recordsProvider);
+        HapticFeedback.mediumImpact();
+        AppToast.show(
+          isEditMode ? '記録を更新しました' : '記録を保存しました',
+          icon: CupertinoIcons.checkmark_circle_fill,
+        );
+        if (context.mounted) Navigator.of(context).pop(saved);
       } catch (e, stackTrace) {
         debugPrint('Error saving record: $e\n$stackTrace');
-        if (context.mounted) showMessage(toUserFriendlyMessage(e));
+        AppToast.error(toUserFriendlyMessage(e));
       } finally {
         if (context.mounted) isSaving.value = false;
       }
     }
 
-    final artistField = Column(
+    final artistBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        RecordFormTextField(
+        FormTextRow(
           controller: artistController,
           focusNode: artistFocusNode,
-          label: type.value.creatorFieldLabel,
-          icon: isLive ? Icons.person_outline : Icons.people_outline,
+          placeholder: type.value.creatorFieldLabel,
           maxLength: RecordFieldLimits.artistOrAuthor,
           scrollPadding: _fieldScrollPadding,
           onChanged: (_) => artistTypedSincePick.value = true,
         ),
         // iTunes のカタログとお気に入りは音楽のみなので、ライブのときだけ出す
         if (isLive && artistFocusNode.hasFocus && artistTypedSincePick.value)
-          ArtistSuggestions(
-            query: artistController.text,
-            onPick: (a) => pickArtist(a.name),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: ArtistSuggestions(
+              query: artistController.text,
+              onPick: (a) => pickArtist(a.name),
+            ),
           ),
         if (isLive)
           FavoriteArtistQuickPick(
@@ -256,10 +245,9 @@ class CreateRecordScreen extends HookConsumerWidget {
           ),
       ],
     );
-    final titleField = RecordFormTextField(
+    final titleRow = FormTextRow(
       controller: titleController,
-      label: type.value.titleFieldLabel,
-      icon: Icons.local_activity_outlined,
+      placeholder: type.value.titleFieldLabel,
       maxLength: RecordFieldLimits.title,
       scrollPadding: _fieldScrollPadding,
     );
@@ -268,37 +256,67 @@ class CreateRecordScreen extends HookConsumerWidget {
       canPop: !isDirty && !isSaving.value,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop || isSaving.value) return;
-        final discard = await showConfirmDialog(
+        final discard = await showActionSheet<bool>(
           context,
-          title: isEditMode ? '編集を破棄しますか？' : '入力内容を破棄しますか？',
-          message: '保存していない変更は失われます。',
-          okText: '破棄する',
+          message: isEditMode ? '編集内容は保存されません。' : '入力した内容は保存されません。',
+          actions: [
+            SheetAction(
+              label: isEditMode ? '変更を破棄' : '記録を破棄',
+              value: true,
+              isDestructive: true,
+            ),
+          ],
           cancelText: '編集を続ける',
         );
-        if (discard && context.mounted) Navigator.of(context).pop();
+        if (discard == true && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
-          title: Text(isEditMode ? 'EDIT RECORD' : 'NEW RECORD'),
-          leading: IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: '閉じる',
-            onPressed: () => Navigator.maybePop(context),
+          automaticallyImplyLeading: false,
+          leadingWidth: 110,
+          leading: Align(
+            alignment: Alignment.centerLeft,
+            child: NavBarTextButton(
+              label: 'キャンセル',
+              onPressed: () => Navigator.maybePop(context),
+            ),
           ),
+          title: Text(isEditMode ? '記録を編集' : '新規記録'),
+          actions: [
+            if (isSaving.value)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: CupertinoActivityIndicator(),
+              )
+            else
+              NavBarTextButton(
+                label: isEditMode ? '保存' : '追加',
+                isBold: true,
+                onPressed: canSave ? save : null,
+              ),
+          ],
         ),
         // ListView だと画面外に出たセトリ入力欄が破棄されフォーカスを失うため、一括で組み立てる
         body: SingleChildScrollView(
           keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            32 + MediaQuery.paddingOf(context).bottom,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              RecordTypeSelector(
-                selected: type.value,
+              IosSegmentedControl<RecordType>(
+                value: type.value,
+                segments: {
+                  for (final t in RecordType.values) t: t.japaneseLabel,
+                },
                 onChanged: (t) => type.value = t,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               TicketPreviewPicker(
                 type: type.value,
                 title: title,
@@ -310,25 +328,21 @@ class CreateRecordScreen extends HookConsumerWidget {
                 onRemoveImage: removeImage,
               ),
               FormSection(
-                title: 'BASICS',
-                japaneseLabel: '基本情報',
+                header: '基本情報',
+                footer: missingLabels.isEmpty
+                    ? null
+                    : '${missingLabels.join('と')}は必須です。',
                 children: [
                   // ライブはアーティストから決めることが多く、候補や setlist.fm もそこから引く
-                  ...isLive
-                      ? [artistField, const SizedBox(height: 12), titleField]
-                      : [titleField, const SizedBox(height: 12), artistField],
-                  const SizedBox(height: 12),
-                  RecordDateField(
+                  ...isLive ? [artistBlock, titleRow] : [titleRow, artistBlock],
+                  RecordDateRow(
                     label: isLive ? '公演日' : '日付',
                     date: date.value,
                     onChanged: (d) => date.value = d,
                   ),
-                  const SizedBox(height: 12),
-                  RecordFormTextField(
+                  FormTextRow(
                     controller: sourceController,
-                    label: 'チケット取得元',
-                    hintText: 'e+、ローチケ、Amazon など',
-                    icon: Icons.confirmation_number_outlined,
+                    placeholder: 'チケット取得元（e+、ローチケ など）',
                     maxLength: RecordFieldLimits.ticketSource,
                     scrollPadding: _fieldScrollPadding,
                   ),
@@ -336,17 +350,17 @@ class CreateRecordScreen extends HookConsumerWidget {
               ),
               if (isLive)
                 FormSection(
-                  title: 'SETLIST',
-                  japaneseLabel: 'セットリスト',
+                  header: 'セットリスト',
                   trailing: songs.value.isEmpty
                       ? null
                       : Text(
                           '${songs.value.length}曲',
                           style: const TextStyle(
-                            fontSize: 12,
+                            fontSize: 13,
                             color: AppColors.textSecondary,
                           ),
                         ),
+                  wrapInCard: false,
                   children: [
                     SetlistEditor(
                       initialSongs: songs.value,
@@ -357,28 +371,27 @@ class CreateRecordScreen extends HookConsumerWidget {
                     ),
                   ],
                 ),
-              FormSection(
-                title: 'NOTES',
-                japaneseLabel: 'メモ',
-                children: [
-                  if (isLive) ...[
-                    RecordFormTextField(
+              if (isLive)
+                FormSection(
+                  header: 'MCメモ',
+                  children: [
+                    FormTextRow(
                       controller: mcMemoController,
-                      label: 'MCメモ',
-                      hintText: '印象に残った MC や演出',
-                      icon: Icons.mic_none,
-                      maxLines: 4,
+                      placeholder: '印象に残った MC や演出',
+                      maxLines: 6,
                       maxLength: RecordFieldLimits.mcMemo,
                       scrollPadding: _fieldScrollPadding,
                     ),
-                    const SizedBox(height: 12),
                   ],
-                  RecordFormTextField(
+                ),
+              FormSection(
+                header: '感想',
+                children: [
+                  FormTextRow(
                     controller: impressionsController,
-                    label: '感想',
-                    hintText: 'あとで読み返したいことを自由に',
-                    icon: Icons.edit_note,
-                    maxLines: 8,
+                    placeholder: 'あとで読み返したいことを自由に',
+                    minLines: 5,
+                    maxLines: 12,
                     maxLength: RecordFieldLimits.impressions,
                     scrollPadding: _fieldScrollPadding,
                   ),
@@ -386,16 +399,6 @@ class CreateRecordScreen extends HookConsumerWidget {
               ),
             ],
           ),
-        ),
-        bottomNavigationBar: _SaveBar(
-          label: missingLabels.isNotEmpty
-              ? '${missingLabels.join('と')}を入力してください'
-              : isEditMode
-              ? '変更を保存'
-              : '記録を保存',
-          enabled: missingLabels.isEmpty,
-          isSaving: isSaving.value,
-          onPressed: save,
         ),
       ),
     );
@@ -407,68 +410,5 @@ class CreateRecordScreen extends HookConsumerWidget {
       if (a[i] != b[i]) return false;
     }
     return true;
-  }
-}
-
-class _SaveBar extends StatelessWidget {
-  const _SaveBar({
-    required this.label,
-    required this.enabled,
-    required this.isSaving,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool enabled;
-  final bool isSaving;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        border: Border(
-          top: BorderSide(color: AppColors.textDisabled.withValues(alpha: 0.1)),
-        ),
-      ),
-      child: SafeArea(
-        top: false,
-        minimum: const EdgeInsets.only(bottom: 12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-          child: SizedBox(
-            height: 52,
-            child: FilledButton(
-              // 保存中も有効色のままスピナーを見せる（二重保存は save 側で弾く）
-              onPressed: enabled ? onPressed : null,
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.gold,
-                foregroundColor: Colors.black,
-                disabledBackgroundColor: AppColors.surfaceLight,
-                disabledForegroundColor: AppColors.textSecondary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                textStyle: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              child: isSaving
-                  ? const SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: Colors.black,
-                      ),
-                    )
-                  : Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

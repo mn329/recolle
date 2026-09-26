@@ -1,13 +1,14 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:recolle/components/record_ticket_card.dart';
 import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/core/widgets/section_title.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/favorites/widgets/favorite_artist_toggle_button.dart';
@@ -18,7 +19,7 @@ import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/music/widgets/streaming_links.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/screens/create_record_screen.dart';
+import 'package:recolle/features/records/record_actions.dart';
 
 /// アーティスト詳細: ストリーミングへのリンク、人気曲、自分の記録。
 class ArtistDetailScreen extends HookConsumerWidget {
@@ -77,23 +78,14 @@ class ArtistDetailScreen extends HookConsumerWidget {
       appBar: AppBar(
         actions: [
           FavoriteArtistToggleButton(artistName: artistName),
-          IconButton(
-            icon: Icon(
-              Icons.add,
-              color: readOnlyOffline ? AppColors.textDisabled : AppColors.gold,
-            ),
-            tooltip: 'このアーティストの記録を追加',
+          NavBarIconButton(
+            icon: CupertinoIcons.plus_circle_fill,
+            semanticLabel: 'このアーティストの記録を追加',
             onPressed: readOnlyOffline
                 ? null
-                : () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          CreateRecordScreen(initialArtist: artistName),
-                      fullscreenDialog: true,
-                    ),
-                  ),
+                : () => openRecordEditor(context, initialArtist: artistName),
           ),
+          const SizedBox(width: 4),
         ],
       ),
       body: CustomScrollView(
@@ -163,35 +155,20 @@ class ArtistDetailScreen extends HookConsumerWidget {
               onToggleShowAll: () => showAllSongs.value = !showAllSongs.value,
             ),
           ],
-          SliverToBoxAdapter(
+          const SliverToBoxAdapter(
             child: SectionTitle(
               'RECORDS',
               'あなたの記録',
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              padding: EdgeInsets.fromLTRB(20, 24, 20, 4),
             ),
           ),
-          if (records.isEmpty)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'まだ記録がありません。\n右上の＋から追加できます。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textDisabled),
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.only(top: 12, bottom: 40),
-              sliver: SliverList.builder(
-                itemCount: records.length,
-                itemBuilder: (context, index) => RecordTicketCard(
-                  record: records[index],
-                  onTap: () => openRecordDetail(context, records[index]),
-                ),
-              ),
-            ),
+          SliverRecordTicketList(
+            records: records,
+            emptyMessage: 'まだ記録がありません。\n右上の＋から追加できます。',
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 32 + MediaQuery.paddingOf(context).bottom),
+          ),
         ],
       ),
     );
@@ -240,9 +217,16 @@ class _PopularSongsSliver extends ConsumerWidget {
                       ),
                     ),
                   if (songs.length > collapsedCount)
-                    TextButton(
+                    CupertinoButton(
                       onPressed: onToggleShowAll,
-                      child: Text(showAll ? '閉じる' : 'もっと見る'),
+                      child: Text(
+                        showAll ? '閉じる' : 'もっと見る',
+                        style: const TextStyle(
+                          color: AppColors.gold,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -267,13 +251,12 @@ class _SongTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+    return MediaListTile(
       leading: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           SizedBox(
-            width: 24,
+            width: 26,
             child: Text(
               rank.toString().padLeft(2, '0'),
               style: AppFonts.monoStyle(fontSize: 12, color: AppColors.gold),
@@ -282,38 +265,23 @@ class _SongTile extends StatelessWidget {
           ArtistAvatar(
             name: song.title,
             artworkUrl: song.artworkUrl,
-            size: 44,
+            size: 46,
             borderRadius: BorderRadius.circular(6),
           ),
         ],
       ),
-      title: Text(
-        song.title,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: const TextStyle(color: AppColors.textPrimary),
-      ),
-      subtitle: song.albumName == null
-          ? null
-          : Text(
-              song.albumName!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
+      title: song.title,
+      subtitle: song.albumName,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (heardLive)
-            Tooltip(
-              message: 'ライブで聴いた曲',
-              child: Icon(
-                Icons.confirmation_number_rounded,
+            Semantics(
+              label: 'ライブで聴いた曲',
+              child: const Icon(
+                CupertinoIcons.tickets_fill,
                 size: 18,
-                color: AppColors.gold.withValues(alpha: 0.9),
+                color: AppColors.gold,
               ),
             ),
           const SizedBox(width: 8),
@@ -322,7 +290,7 @@ class _SongTile extends StatelessWidget {
       ),
       onTap: () => Navigator.push(
         context,
-        MaterialPageRoute(
+        CupertinoPageRoute<void>(
           builder: (_) => SongDetailScreen(
             artistName: song.artistName,
             title: song.title,
@@ -361,12 +329,7 @@ class _SliverLoading extends StatelessWidget {
     return const SliverToBoxAdapter(
       child: Padding(
         padding: EdgeInsets.all(24),
-        child: Center(
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppColors.gold,
-          ),
-        ),
+        child: Center(child: CupertinoActivityIndicator()),
       ),
     );
   }

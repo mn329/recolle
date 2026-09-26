@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/hooks/use_debounced_search.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
@@ -29,42 +31,26 @@ class FavoriteArtistQuickPick extends ConsumerWidget {
     if (favorites.isEmpty) return const SizedBox.shrink();
 
     final current = normalizeArtistName(currentArtist);
-    return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: SizedBox(
-        height: 36,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: favorites.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 8),
-          itemBuilder: (context, index) {
-            final artist = favorites[index];
-            final selected = normalizeArtistName(artist.name) == current;
-            return ActionChip(
-              avatar: ArtistAvatar(
-                name: artist.name,
-                artworkUrl: artist.artworkUrl,
-                size: 20,
-              ),
-              label: Text(artist.name),
-              onPressed: () => onPick(artist),
-              labelStyle: TextStyle(
-                color: selected ? Colors.black : AppColors.textSecondary,
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-              ),
-              backgroundColor: selected ? AppColors.gold : AppColors.surface,
-              visualDensity: VisualDensity.compact,
-              shape: StadiumBorder(
-                side: BorderSide(
-                  color: selected
-                      ? Colors.transparent
-                      : AppColors.textDisabled.withValues(alpha: 0.5),
-                ),
-              ),
-            );
-          },
-        ),
+    return SizedBox(
+      height: 44,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+        itemCount: favorites.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final artist = favorites[index];
+          return CapsuleChip(
+            label: artist.name,
+            selected: normalizeArtistName(artist.name) == current,
+            avatar: ArtistAvatar(
+              name: artist.name,
+              artworkUrl: artist.artworkUrl,
+              size: 22,
+            ),
+            onTap: () => onPick(artist),
+          );
+        },
       ),
     );
   }
@@ -100,7 +86,7 @@ class ArtistSuggestions extends HookConsumerWidget {
       children: [
         for (final artist in artists)
           _SuggestionRow(
-            icon: Icons.person_outline,
+            icon: CupertinoIcons.person,
             title: artist.name,
             subtitle: artist.genre,
             onTap: () => onPick(artist),
@@ -153,7 +139,7 @@ class SongSuggestions extends HookConsumerWidget {
                     size: 32,
                     borderRadius: BorderRadius.circular(4),
                   ),
-            icon: Icons.music_note_outlined,
+            icon: CupertinoIcons.music_note,
             title: song.title,
             subtitle: song.artistName,
             onTap: () => onPick(song),
@@ -186,12 +172,19 @@ class _SuggestionPanel extends StatelessWidget {
         ),
       );
     } else if (!isEmpty) {
-      content = Column(mainAxisSize: MainAxisSize.min, children: children);
+      content = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (i, child) in children.indexed) ...[
+            if (i > 0) const FormDivider(indent: 56),
+            child,
+          ],
+        ],
+      );
     } else if (snapshot.connectionState == ConnectionState.waiting) {
-      content = const LinearProgressIndicator(
-        minHeight: 2,
-        color: AppColors.gold,
-        backgroundColor: Colors.transparent,
+      content = const Padding(
+        padding: EdgeInsets.all(12),
+        child: CupertinoActivityIndicator(),
       );
     } else {
       content = null;
@@ -205,13 +198,10 @@ class _SuggestionPanel extends StatelessWidget {
           ? const SizedBox(width: double.infinity)
           : Container(
               width: double.infinity,
-              margin: const EdgeInsets.only(top: 6),
+              margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
-                color: AppColors.surfaceLight,
+                color: AppColors.cardPressed,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: AppColors.gold.withValues(alpha: 0.18),
-                ),
               ),
               clipBehavior: Clip.antiAlias,
               child: content,
@@ -237,8 +227,11 @@ class _SuggestionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      pressedOpacity: 0.5,
+      onPressed: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
         child: Row(
@@ -276,8 +269,8 @@ class _SuggestionRow extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(
-              Icons.north_west_rounded,
+            const Icon(
+              CupertinoIcons.arrow_up_left,
               size: 16,
               color: AppColors.textDisabled,
             ),

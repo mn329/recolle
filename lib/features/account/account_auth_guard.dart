@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/features/account/services/social_credential.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -21,16 +22,10 @@ Future<void> runAccountAuthGuarded({
     debugPrint(
       'AuthException code=${e.code} statusCode=${e.statusCode} message=${e.message}',
     );
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(toUserFriendlyMessage(e))));
+    AppToast.error(toUserFriendlyMessage(e));
   } catch (e) {
     debugPrint('Account action failed: $e');
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(toUserFriendlyMessage(e))));
+    AppToast.error(toUserFriendlyMessage(e));
   } finally {
     if (context.mounted) {
       setBusy(false);

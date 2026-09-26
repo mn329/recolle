@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 
 /// 表示に必要な解像度だけデコードし、取得中はプレースホルダーを出すネットワーク画像。
@@ -61,18 +61,13 @@ class DecodedNetworkImage extends StatelessWidget {
           child: ColoredBox(
             color: AppColors.surfaceLight,
             child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: AppColors.gold,
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                      : null,
-                ),
-              ),
+              child: loadingProgress.expectedTotalBytes != null
+                  ? CupertinoActivityIndicator.partiallyRevealed(
+                      progress:
+                          loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!,
+                    )
+                  : const CupertinoActivityIndicator(),
             ),
           ),
         );

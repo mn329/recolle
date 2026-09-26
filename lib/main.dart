@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/router/router.dart';
 import 'package:recolle/core/theme/app_theme.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// App Store: 未登録でも使えるよう、起動直後に匿名セッションを保証する。
@@ -77,6 +78,7 @@ class MyApp extends StatelessWidget {
 
       // 4. ルーティング設定: router.dart で定義した画面遷移ルールを適用
       routerConfig: router,
+      builder: (context, child) => AppToastHost(child: child!),
 
       // 5. 日本語化設定: カレンダーや戻るボタンなどの標準UIを日本語にする
       localizationsDelegates: const [

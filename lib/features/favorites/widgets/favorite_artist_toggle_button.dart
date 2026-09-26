@@ -1,10 +1,12 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 
@@ -30,13 +32,14 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
 
     Future<void> toggle() async {
       isBusy.value = true;
-      final messenger = ScaffoldMessenger.of(context);
+      HapticFeedback.lightImpact();
       final notifier = ref.read(favoriteArtistsProvider.notifier);
       try {
         if (existing != null) {
           await notifier.remove(existing.id);
-          messenger.showSnackBar(
-            SnackBar(content: Text('「${existing.name}」をお気に入りから外しました')),
+          AppToast.show(
+            '「${existing.name}」をお気に入りから外しました',
+            icon: CupertinoIcons.star_slash,
           );
         } else {
           String? artworkUrl;
@@ -49,25 +52,41 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
             debugPrint('Artwork lookup failed for $artistName: $e');
           }
           await notifier.add(name: artistName, artworkUrl: artworkUrl);
-          messenger.showSnackBar(
-            SnackBar(content: Text('「${artistName.trim()}」をお気に入りに追加しました')),
+          AppToast.show(
+            '「${artistName.trim()}」をお気に入りに追加しました',
+            icon: CupertinoIcons.star_fill,
           );
         }
       } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(toUserFriendlyMessage(e))),
-        );
+        AppToast.error(toUserFriendlyMessage(e));
       } finally {
         if (context.mounted) isBusy.value = false;
       }
     }
 
-    return IconButton(
-      tooltip: existing != null ? 'お気に入りから外す' : 'お気に入りに追加',
-      onPressed: readOnlyOffline || isBusy.value ? null : toggle,
-      icon: Icon(
-        existing != null ? Icons.star_rounded : Icons.star_border_rounded,
-        color: existing != null ? AppColors.gold : AppColors.textSecondary,
+    final enabled = !readOnlyOffline && !isBusy.value;
+    return Semantics(
+      button: true,
+      label: existing != null ? 'お気に入りから外す' : 'お気に入りに追加',
+      child: CupertinoButton(
+        padding: const EdgeInsets.all(8),
+        minimumSize: const Size(44, 44),
+        onPressed: enabled ? toggle : null,
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          transitionBuilder: (child, animation) =>
+              ScaleTransition(scale: animation, child: child),
+          child: Icon(
+            existing != null ? CupertinoIcons.star_fill : CupertinoIcons.star,
+            key: ValueKey(existing != null),
+            size: 24,
+            color: existing != null
+                ? AppColors.gold
+                : enabled
+                ? AppColors.textSecondary
+                : AppColors.textDisabled,
+          ),
+        ),
       ),
     );
   }

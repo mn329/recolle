@@ -1,28 +1,25 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/hooks/use_debounced_search.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/data/favorite_artists_repository.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 
-/// お気に入りアーティストを検索して追加するボトムシート。
+/// お気に入りアーティストを検索して追加する、iOS のカード型シート。
 Future<void> showAddFavoriteArtistSheet(
   BuildContext context, {
   String initialQuery = '',
 }) {
-  return showModalBottomSheet<void>(
+  return showCupertinoSheet<void>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: AppColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
     builder: (_) => _AddFavoriteArtistSheet(initialQuery: initialQuery),
   );
 }
@@ -49,8 +46,13 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
 
     Future<void> addArtist(String name, {int? itunesArtistId}) async {
       if (isSaving.value) return;
+      if (name.trim().length > FavoriteArtistsRepository.maxNameLength) {
+        AppToast.error(
+          'アーティスト名は${FavoriteArtistsRepository.maxNameLength}文字以内にしてください',
+        );
+        return;
+      }
       isSaving.value = true;
-      final messenger = ScaffoldMessenger.of(context);
       final navigator = Navigator.of(context);
       try {
         String? artworkUrl;
@@ -67,14 +69,14 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
               itunesArtistId: itunesArtistId,
               artworkUrl: artworkUrl,
             );
+        HapticFeedback.lightImpact();
         navigator.pop();
-        messenger.showSnackBar(
-          SnackBar(content: Text('「${name.trim()}」をお気に入りに追加しました')),
+        AppToast.show(
+          '「${name.trim()}」をお気に入りに追加しました',
+          icon: CupertinoIcons.star_fill,
         );
       } catch (e) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(toUserFriendlyMessage(e))),
-        );
+        AppToast.error(toUserFriendlyMessage(e));
       } finally {
         if (context.mounted) isSaving.value = false;
       }
@@ -86,65 +88,57 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
       (a) => normalizeArtistName(a.name) == normalizeArtistName(trimmedQuery),
     );
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.surfaceLight,
+      navigationBar: CupertinoNavigationBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.surfaceLight,
+        border: null,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 44),
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'キャンセル',
+            style: TextStyle(color: AppColors.gold, fontSize: 17),
+          ),
         ),
+        middle: const Text('アーティストを追加'),
+        trailing: isSaving.value ? const CupertinoActivityIndicator() : null,
+      ),
+      child: SafeArea(
+        bottom: false,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const SizedBox(height: 12),
-            Center(
-              child: Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: AppColors.textDisabled,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: TextField(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+              child: CupertinoSearchTextField(
                 controller: controller,
                 autofocus: true,
-                maxLength: FavoriteArtistsRepository.maxNameLength,
-                textInputAction: TextInputAction.done,
-                style: const TextStyle(color: AppColors.textPrimary),
-                decoration: InputDecoration(
-                  hintText: 'アーティスト名で検索',
-                  prefixIcon: const Icon(Icons.search, color: AppColors.gold),
-                  counterText: '',
-                  suffixIcon: isSaving.value
-                      ? const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: SizedBox.square(
-                            dimension: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: AppColors.gold,
-                            ),
-                          ),
-                        )
-                      : null,
+                placeholder: 'アーティスト名で検索',
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontSize: 16,
                 ),
+                itemColor: AppColors.textSecondary,
+                backgroundColor: const Color(0x3D767680),
                 onSubmitted: (value) {
                   if (value.trim().isNotEmpty) addArtist(value);
                 },
               ),
             ),
-            Flexible(
+            Expanded(
               child: ListView(
-                shrinkWrap: true,
-                padding: const EdgeInsets.only(bottom: 24),
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.only(
+                  bottom: 24 + MediaQuery.paddingOf(context).bottom,
+                ),
                 children: [
                   if (trimmedQuery.isNotEmpty && !exactMatchInResults)
-                    _SuggestionTile(
-                      icon: Icons.add_circle_outline,
+                    _SuggestionRow(
+                      icon: CupertinoIcons.plus_circle,
                       title: '「$trimmedQuery」を追加',
                       subtitle: '入力した名前のまま登録',
                       enabled:
@@ -158,12 +152,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                       artists.isEmpty)
                     const Padding(
                       padding: EdgeInsets.all(24),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppColors.gold,
-                        ),
-                      ),
+                      child: CupertinoActivityIndicator(),
                     ),
                   if (suggestions.hasError)
                     Padding(
@@ -180,16 +169,13 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                       ),
                     ),
                   for (final artist in artists)
-                    _SuggestionTile(
-                      icon: Icons.person_outline,
+                    _SuggestionRow(
+                      icon: CupertinoIcons.person,
                       title: artist.name,
                       subtitle: artist.genre,
-                      trailingLabel:
-                          existingNames.contains(
-                            normalizeArtistName(artist.name),
-                          )
-                          ? '登録済み'
-                          : null,
+                      alreadyAdded: existingNames.contains(
+                        normalizeArtistName(artist.name),
+                      ),
                       enabled:
                           !isSaving.value &&
                           !existingNames.contains(
@@ -205,7 +191,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                         'Apple Music のカタログから候補を表示します',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: AppColors.textDisabled,
+                          color: AppColors.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -220,56 +206,42 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
   }
 }
 
-class _SuggestionTile extends StatelessWidget {
-  const _SuggestionTile({
+class _SuggestionRow extends StatelessWidget {
+  const _SuggestionRow({
     required this.icon,
     required this.title,
     required this.onTap,
     required this.enabled,
     this.subtitle,
-    this.trailingLabel,
+    this.alreadyAdded = false,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
-  final String? trailingLabel;
+  final bool alreadyAdded;
   final bool enabled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      enabled: enabled,
+    return GroupedRow(
       leading: Icon(
         icon,
+        size: 22,
         color: enabled ? AppColors.gold : AppColors.textDisabled,
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          color: enabled ? AppColors.textPrimary : AppColors.textDisabled,
-        ),
-      ),
-      subtitle: subtitle == null
-          ? null
-          : Text(
-              subtitle!,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-      trailing: trailingLabel == null
-          ? null
-          : Text(
-              trailingLabel!,
-              style: const TextStyle(
-                color: AppColors.textDisabled,
-                fontSize: 12,
-              ),
-            ),
-      onTap: onTap,
+      title: title,
+      titleColor: enabled ? AppColors.textPrimary : AppColors.textDisabled,
+      subtitle: subtitle,
+      showChevron: false,
+      additionalInfo: alreadyAdded
+          ? const Text(
+              '登録済み',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+            )
+          : null,
+      onTap: enabled ? onTap : null,
     );
   }
 }

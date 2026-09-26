@@ -1,3 +1,6 @@
+import 'dart:ui' show ImageFilter;
+
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 
@@ -106,7 +109,7 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer>
                       widget.url,
                       fit: BoxFit.contain,
                       errorBuilder: (_, _, _) => const Icon(
-                        Icons.broken_image,
+                        CupertinoIcons.photo,
                         size: 50,
                         color: AppColors.textDisabled,
                       ),
@@ -119,10 +122,30 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer>
           SafeArea(
             child: Align(
               alignment: Alignment.topRight,
-              child: IconButton(
-                tooltip: '閉じる',
-                icon: const Icon(Icons.close, color: Colors.white),
-                onPressed: () => Navigator.of(context).pop(),
+              child: Semantics(
+                button: true,
+                label: '閉じる',
+                child: CupertinoButton(
+                  padding: const EdgeInsets.all(12),
+                  minimumSize: Size.zero,
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: ClipOval(
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                      child: const ColoredBox(
+                        color: Color(0x66303030),
+                        child: SizedBox.square(
+                          dimension: 32,
+                          child: Icon(
+                            CupertinoIcons.xmark,
+                            size: 16,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),

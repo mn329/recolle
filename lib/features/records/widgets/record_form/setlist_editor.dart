@@ -1,10 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Material, ReorderableListView;
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:recolle/core/constants/field_limits.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
+import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/records/widgets/setlistfm_import_sheet.dart';
 
 /// 並び替え時に [ReorderableListView] 用の安定キーとなる行。
@@ -55,12 +59,6 @@ class SetlistEditor extends HookWidget {
       onChanged([for (final line in next) line.text]);
     }
 
-    void showMessage(String message, {SnackBarAction? action}) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(message), action: action));
-    }
-
     void addSong() {
       final song = inputController.text.trim();
       if (song.isEmpty) return;
@@ -69,9 +67,10 @@ class SetlistEditor extends HookWidget {
         song,
       ].join('\n').length;
       if (totalLength > RecordFieldLimits.setlistTotal) {
-        showMessage('セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。');
+        AppToast.error('セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。');
         return;
       }
+      HapticFeedback.selectionClick();
       commit([...lines.value, newLine(song)]);
       inputController.clear();
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -92,18 +91,16 @@ class SetlistEditor extends HookWidget {
     void removeAt(int index) {
       final removed = lines.value[index];
       commit([...lines.value]..removeAt(index));
-      showMessage(
+      AppToast.show(
         '「${removed.text}」を削除しました',
-        action: SnackBarAction(
-          label: '元に戻す',
-          textColor: AppColors.gold,
-          onPressed: () {
-            if (!context.mounted) return;
-            final restored = [...lines.value];
-            restored.insert(index.clamp(0, restored.length), removed);
-            commit(restored);
-          },
-        ),
+        icon: CupertinoIcons.trash,
+        actionLabel: '元に戻す',
+        onAction: () {
+          if (!context.mounted) return;
+          final restored = [...lines.value];
+          restored.insert(index.clamp(0, restored.length), removed);
+          commit(restored);
+        },
       );
     }
 
@@ -129,10 +126,12 @@ class SetlistEditor extends HookWidget {
 
       final (imported, truncated) = _fitToLimits(songs);
       commit(imported.map(newLine).toList());
-      showMessage(
+      HapticFeedback.mediumImpact();
+      AppToast.show(
         truncated
             ? '${imported.length}曲を取り込みました（文字数上限のため一部省略）'
             : '${imported.length}曲を取り込みました',
+        icon: CupertinoIcons.checkmark_circle_fill,
       );
     }
 
@@ -141,46 +140,11 @@ class SetlistEditor extends HookWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        OutlinedButton.icon(
-          onPressed: canImport ? importFromSetlistFm : null,
-          icon: const Icon(Icons.cloud_download_outlined, size: 18),
-          label: const Text('setlist.fm から取り込む'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.gold,
-            side: BorderSide(
-              color: canImport
-                  ? AppColors.gold.withValues(alpha: 0.5)
-                  : AppColors.textDisabled.withValues(alpha: 0.3),
-            ),
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
-        if (!canImport)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              'アーティストを入力すると、公演日のセットリストを取り込めます',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary.withValues(alpha: 0.6),
-              ),
-            ),
-          ),
-        const SizedBox(height: 12),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: AppColors.surfaceLight,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: AppColors.textDisabled.withValues(alpha: 0.12),
-            ),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(14),
+        // 各曲の行が自分の下に区切り線を引くので、FormCard の自動の区切り線は使わない
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: ColoredBox(
+            color: AppColors.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -191,15 +155,17 @@ class SetlistEditor extends HookWidget {
                     buildDefaultDragHandles: false,
                     padding: EdgeInsets.zero,
                     proxyDecorator: (child, _, _) => Material(
-                      color: AppColors.surface,
-                      elevation: 6,
-                      shadowColor: Colors.black,
+                      color: AppColors.cardPressed,
+                      elevation: 8,
+                      shadowColor: CupertinoColors.black,
+                      borderRadius: BorderRadius.circular(10),
                       child: child,
                     ),
                     onReorder: (oldIndex, newIndex) {
                       final items = [...lines.value];
                       if (newIndex > oldIndex) newIndex--;
                       items.insert(newIndex, items.removeAt(oldIndex));
+                      HapticFeedback.selectionClick();
                       commit(items);
                     },
                     children: [
@@ -247,18 +213,38 @@ class SetlistEditor extends HookWidget {
             addSong();
           },
         ),
-        if (lines.value.length > 1)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              '右のつまみで並び替え・左にスワイプで削除',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 11,
-                color: AppColors.textSecondary.withValues(alpha: 0.5),
+        const SizedBox(height: 12),
+        CupertinoButton.tinted(
+          color: AppColors.gold,
+          onPressed: canImport ? importFromSetlistFm : null,
+          sizeStyle: CupertinoButtonSize.medium,
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(CupertinoIcons.cloud_download, size: 18),
+              SizedBox(width: 6),
+              Text(
+                'setlist.fm から取り込む',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            canImport
+                ? (lines.value.length > 1
+                      ? '右端のつまみで並び替え、左にスワイプで削除できます。'
+                      : '公演日のセットリストを取り込めます。')
+                : 'アーティストを入力すると、公演日のセットリストを取り込めます。',
+            style: const TextStyle(
+              fontSize: 12,
+              height: 1.45,
+              color: AppColors.textSecondary,
             ),
           ),
+        ),
       ],
     );
   }
@@ -292,12 +278,12 @@ class _DeleteBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const ColoredBox(
-      color: Color(0xFFB71C1C),
+      color: AppColors.destructive,
       child: Align(
         alignment: Alignment.centerRight,
         child: Padding(
           padding: EdgeInsets.only(right: 20),
-          child: Icon(Icons.delete_outline_rounded, color: Colors.white),
+          child: Icon(CupertinoIcons.trash, color: CupertinoColors.white),
         ),
       ),
     );
@@ -323,6 +309,39 @@ class _SongNumber extends StatelessWidget {
       ),
     );
   }
+}
+
+/// セトリの曲名入力に共通の見た目。
+CupertinoTextField _songTextField({
+  required TextEditingController controller,
+  required FocusNode focusNode,
+  required EdgeInsets scrollPadding,
+  String? placeholder,
+  int maxLines = 1,
+  TextInputAction? textInputAction,
+  ValueChanged<String>? onChanged,
+  VoidCallback? onEditingComplete,
+}) {
+  return CupertinoTextField(
+    controller: controller,
+    focusNode: focusNode,
+    scrollPadding: scrollPadding,
+    maxLength: RecordFieldLimits.setlistSongLine,
+    minLines: 1,
+    maxLines: maxLines,
+    placeholder: placeholder,
+    textInputAction: textInputAction,
+    decoration: null,
+    padding: const EdgeInsets.symmetric(vertical: 13),
+    cursorColor: AppColors.gold,
+    style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
+    placeholderStyle: const TextStyle(
+      fontSize: 16,
+      color: AppColors.textDisabled,
+    ),
+    onChanged: onChanged,
+    onEditingComplete: onEditingComplete,
+  );
 }
 
 class _SongRow extends StatefulWidget {
@@ -370,60 +389,40 @@ class _SongRowState extends State<_SongRow> {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: AppColors.textDisabled.withValues(alpha: 0.1),
+    return ColoredBox(
+      color: AppColors.card,
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: Row(
+              children: [
+                _SongNumber(widget.number),
+                Expanded(
+                  child: _songTextField(
+                    controller: _controller,
+                    focusNode: _focusNode,
+                    scrollPadding: widget.scrollPadding,
+                    maxLines: 2,
+                    onChanged: widget.onChanged,
+                  ),
+                ),
+                ReorderableDragStartListener(
+                  index: widget.index,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Icon(
+                      CupertinoIcons.line_horizontal_3,
+                      size: 20,
+                      color: AppColors.textDisabled,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.only(left: 16),
-        child: Row(
-          children: [
-            _SongNumber(widget.number),
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                scrollPadding: widget.scrollPadding,
-                maxLength: RecordFieldLimits.setlistSongLine,
-                minLines: 1,
-                maxLines: 2,
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 15,
-                ),
-                cursorColor: AppColors.gold,
-                decoration: const InputDecoration(
-                  counterText: '',
-                  isDense: true,
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
-                ),
-                onChanged: widget.onChanged,
-              ),
-            ),
-            ReorderableDragStartListener(
-              index: widget.index,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
-                ),
-                child: Icon(
-                  Icons.drag_handle_rounded,
-                  size: 20,
-                  color: AppColors.textSecondary.withValues(alpha: 0.5),
-                ),
-              ),
-            ),
-          ],
-        ),
+          const FormDivider(indent: 44),
+        ],
       ),
     );
   }
@@ -450,35 +449,17 @@ class _AddSongInput extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(left: 16, right: 6),
+      padding: const EdgeInsets.only(left: 16, right: 4),
       child: Row(
         children: [
           _SongNumber(nextNumber, dimmed: true),
           Expanded(
-            child: TextField(
+            child: _songTextField(
               controller: controller,
               focusNode: focusNode,
-              maxLength: RecordFieldLimits.setlistSongLine,
               scrollPadding: scrollPadding,
+              placeholder: hasSongs ? '次の曲を追加' : '1曲目の曲名を入力',
               textInputAction: TextInputAction.done,
-              style: const TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15,
-              ),
-              cursorColor: AppColors.gold,
-              decoration: InputDecoration(
-                hintText: hasSongs ? '次の曲を追加' : '1曲目の曲名を入力',
-                hintStyle: TextStyle(
-                  color: AppColors.textSecondary.withValues(alpha: 0.4),
-                ),
-                counterText: '',
-                isDense: true,
-                filled: false,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 14),
-              ),
               // 連続入力しやすいよう、確定してもキーボードを閉じない
               onEditingComplete: onSubmit,
             ),
@@ -487,11 +468,13 @@ class _AddSongInput extends StatelessWidget {
             valueListenable: controller,
             builder: (context, value, _) {
               final enabled = value.text.trim().isNotEmpty;
-              return IconButton(
+              return CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                minimumSize: const Size(44, 44),
                 onPressed: enabled ? onSubmit : null,
-                tooltip: '追加',
-                icon: Icon(
-                  Icons.add_circle_rounded,
+                child: Icon(
+                  CupertinoIcons.plus_circle_fill,
+                  size: 26,
                   color: enabled ? AppColors.gold : AppColors.textDisabled,
                 ),
               );

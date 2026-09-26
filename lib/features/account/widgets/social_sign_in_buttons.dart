@@ -1,4 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
+// Apple のロゴは CupertinoIcons に無いため Material のアイコンを使う
+import 'package:flutter/material.dart' show Icons;
 import 'package:recolle/features/account/services/social_credential.dart';
 
 /// Apple / Google で続行するボタン群。Apple は iOS / macOS のみ表示する。
@@ -27,7 +29,7 @@ class SocialSignInButtons extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (final (i, provider) in providers.indexed) ...[
-          if (i > 0) const SizedBox(height: 12),
+          if (i > 0) const SizedBox(height: 10),
           _SocialButton(
             provider: provider,
             onPressed: isBusy ? null : () => onPressed(provider),
@@ -46,35 +48,74 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (Widget icon, String label) = switch (provider) {
-      SocialProvider.apple => (
-        const Icon(Icons.apple, size: 22, color: Colors.black),
-        'Apple で続ける',
-      ),
-      SocialProvider.google => (const _GoogleMark(), 'Google で続ける'),
+    final label = switch (provider) {
+      SocialProvider.apple => 'Apple で続ける',
+      SocialProvider.google => 'Google で続ける',
     };
 
-    return SizedBox(
-      height: 52,
-      child: FilledButton(
-        onPressed: onPressed,
-        style: FilledButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-          disabledBackgroundColor: Colors.white.withAlpha(90),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
+    return CupertinoButton(
+      color: CupertinoColors.white,
+      disabledColor: CupertinoColors.white.withAlpha(90),
+      borderRadius: BorderRadius.circular(12),
+      minimumSize: const Size.fromHeight(50),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      onPressed: onPressed,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 24,
+            child: Center(child: _ProviderMark(provider: provider)),
           ),
-          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SizedBox(width: 24, child: Center(child: icon)),
-            const SizedBox(width: 10),
-            Text(label),
-          ],
-        ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: CupertinoColors.black,
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProviderMark extends StatelessWidget {
+  const _ProviderMark({required this.provider});
+
+  final SocialProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return switch (provider) {
+      SocialProvider.apple => const Icon(
+        Icons.apple,
+        size: 22,
+        color: CupertinoColors.black,
+      ),
+      SocialProvider.google => const _GoogleMark(),
+    };
+  }
+}
+
+/// 設定行の先頭に置く、白い角丸四角に provider のロゴ。
+class SocialProviderIcon extends StatelessWidget {
+  const SocialProviderIcon({super.key, required this.provider});
+
+  final SocialProvider provider;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: CupertinoColors.white,
+        borderRadius: BorderRadius.circular(7),
+      ),
+      child: SizedBox.square(
+        dimension: 30,
+        child: Center(child: _ProviderMark(provider: provider)),
       ),
     );
   }

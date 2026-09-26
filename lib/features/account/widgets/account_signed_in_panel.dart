@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/account/services/auth_service.dart';
 import 'package:recolle/features/account/services/social_credential.dart';
-import 'package:recolle/features/account/widgets/account_expandable_section.dart';
 import 'package:recolle/features/account/widgets/social_sign_in_buttons.dart';
 
 class AccountSignedInPanel extends StatelessWidget {
@@ -20,121 +21,110 @@ class AccountSignedInPanel extends StatelessWidget {
   final AuthService authService;
   final void Function(SocialProvider provider) onLink;
 
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final ok = await showActionSheet<bool>(
+      context,
+      message: 'ログアウトすると、この端末では未登録の状態に戻ります。記録は Apple / Google で再ログインすると戻せます。',
+      actions: const [
+        SheetAction(label: 'ログアウト', value: true, isDestructive: true),
+      ],
+    );
+    if (ok != true) return;
+    await runGuarded(() async {
+      await authService.resetToAnonymous();
+      AppToast.show('ログアウトしました', icon: CupertinoIcons.checkmark_circle_fill);
+    });
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final ok = await showConfirmDialog(
+      context,
+      title: '本当に削除しますか？',
+      message: '思い出データと登録アカウントを完全に消去します。再度登録しても同じ内容は戻りません。',
+      okText: '完全に削除',
+      isDestructive: true,
+    );
+    if (!ok) return;
+    await runGuarded(() async {
+      await authService.deleteRegisteredAccount();
+      AppToast.show('アカウントとデータを削除しました', icon: CupertinoIcons.trash);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final linked = authService.linkedProviders;
+    final providers = [
+      if (isAppleSignInSupported) SocialProvider.apple,
+      SocialProvider.google,
+    ];
     final linkedSocial = {
       for (final p in SocialProvider.values)
         if (linked.contains(p.identityName)) p,
     };
-    final canLinkMore = SocialProvider.values.any(
-      (p) =>
-          !linkedSocial.contains(p) &&
-          (p != SocialProvider.apple || isAppleSignInSupported),
-    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        AccountExpandableSection(
-          title: 'ログイン方法',
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final p in linkedSocial)
-                _LinkedRow(label: '${p.label} で連携済み'),
-              if (linkedSocial.isEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Apple または Google を連携しておくと、機種変更後もログインできます。',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: AppColors.textSecondary.withAlpha(200),
-                  ),
-                ),
-              ],
-              if (canLinkMore) ...[
-                const SizedBox(height: 12),
-                SocialSignInButtons(
-                  isBusy: isBusy,
-                  hiddenProviders: linkedSocial,
-                  onPressed: onLink,
-                ),
-              ],
-            ],
-          ),
+        InsetGroupedSection(
+          header: 'ログイン方法',
+          footer: linkedSocial.isEmpty
+              ? 'Apple または Google を連携しておくと、機種変更後もログインできます。'
+              : '連携したアカウントで、別の端末からも同じ記録にログインできます。',
+          children: [
+            for (final p in providers)
+              linkedSocial.contains(p)
+                  ? GroupedRow(
+                      leading: SocialProviderIcon(provider: p),
+                      title: p.label,
+                      additionalInfo: const Text(
+                        '連携済み',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 15,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        CupertinoIcons.checkmark_alt,
+                        size: 20,
+                        color: AppColors.gold,
+                      ),
+                    )
+                  : GroupedRow(
+                      leading: SocialProviderIcon(provider: p),
+                      title: '${p.label} と連携',
+                      titleColor: AppColors.gold,
+                      showChevron: false,
+                      onTap: isBusy ? null : () => onLink(p),
+                    ),
+          ],
         ),
-        const SizedBox(height: 16),
-        AccountExpandableSection(
-          title: 'ログアウト',
-          child: FilledButton.tonal(
-            onPressed: isBusy
-                ? null
-                : () {
-                    runGuarded(() async {
-                      // await 後はこのパネルはツリーから外れ context が unmount しうる。
-                      // Messenger は先に取っておけば表示できる。
-                      final messenger = ScaffoldMessenger.of(context);
-                      await authService.resetToAnonymous();
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('ログアウトしました。')),
-                      );
-                    });
-                  },
-            child: const Text('ログアウト'),
-          ),
-        ),
-        const SizedBox(height: 16),
-        AccountExpandableSection(
-          title: 'アカウントを削除',
-          child: FilledButton.tonal(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.red.withAlpha(38),
+        const SizedBox(height: 12),
+        InsetGroupedSection(
+          hasLeading: false,
+          children: [
+            GroupedRow(
+              title: 'ログアウト',
+              titleColor: AppColors.gold,
+              showChevron: false,
+              onTap: isBusy ? null : () => _confirmSignOut(context),
             ),
-            onPressed: isBusy
-                ? null
-                : () {
-                    runGuarded(() async {
-                      final messenger = ScaffoldMessenger.of(context);
-                      final ok = await showConfirmDialog(
-                        context,
-                        title: '本当に削除しますか？',
-                        message: '思い出データと登録アカウントを完全に消去します。再度登録しても同じ内容は戻りません。',
-                        okText: '完全に削除',
-                        cancelText: 'キャンセル',
-                      );
-                      if (!ok) return;
-                      await authService.deleteRegisteredAccount();
-                      messenger.showSnackBar(
-                        const SnackBar(content: Text('アカウントとデータを削除しました')),
-                      );
-                    });
-                  },
-            child: const Text('アカウントを完全に削除'),
-          ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        InsetGroupedSection(
+          hasLeading: false,
+          footer: '記録・画像・お気に入りを含むすべてのデータが削除されます。',
+          children: [
+            GroupedRow(
+              title: 'アカウントを完全に削除',
+              titleColor: AppColors.destructive,
+              showChevron: false,
+              onTap: isBusy ? null : () => _confirmDelete(context),
+            ),
+          ],
         ),
       ],
-    );
-  }
-}
-
-class _LinkedRow extends StatelessWidget {
-  const _LinkedRow({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        children: [
-          const Icon(Icons.check_circle, size: 18, color: AppColors.gold),
-          const SizedBox(width: 8),
-          Text(label),
-        ],
-      ),
     );
   }
 }

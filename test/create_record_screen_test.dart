@@ -1,6 +1,8 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/records/models/record.dart';
@@ -23,10 +25,10 @@ Future<void> _pumpScreen(WidgetTester tester, {Record? recordToEdit}) async {
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
-              child: TextButton(
+              child: CupertinoButton(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute<void>(
+                  CupertinoPageRoute<void>(
                     builder: (_) =>
                         CreateRecordScreen(recordToEdit: recordToEdit),
                   ),
@@ -43,60 +45,58 @@ Future<void> _pumpScreen(WidgetTester tester, {Record? recordToEdit}) async {
   await tester.pumpAndSettle();
 }
 
-FilledButton _saveButton(WidgetTester tester) =>
-    tester.widget<FilledButton>(find.byType(FilledButton));
+Finder _field(String placeholder) =>
+    find.widgetWithText(CupertinoTextField, placeholder);
+
+NavBarTextButton _navButton(WidgetTester tester, String label) => tester
+    .widget<NavBarTextButton>(find.widgetWithText(NavBarTextButton, label));
 
 void main() {
-  testWidgets('必須項目が揃うまで保存ボタンは無効で、足りない項目を案内する', (tester) async {
+  testWidgets('必須項目が揃うまで追加ボタンは無効で、足りない項目を案内する', (tester) async {
     await _pumpScreen(tester);
 
-    expect(find.text('公演名・ツアー名とアーティストを入力してください'), findsOneWidget);
-    expect(_saveButton(tester).onPressed, isNull);
+    expect(find.text('新規記録'), findsOneWidget);
+    expect(find.text('アーティストと公演名・ツアー名は必須です。'), findsOneWidget);
+    expect(_navButton(tester, '追加').onPressed, isNull);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'アーティスト'),
-      'YOASOBI',
-    );
-    await tester.enterText(
-      find.widgetWithText(TextField, '公演名・ツアー名'),
-      'ZEPP TOUR',
-    );
+    await tester.enterText(_field('アーティスト'), 'YOASOBI');
+    await tester.enterText(_field('公演名・ツアー名'), 'ZEPP TOUR');
     await tester.pump();
 
-    expect(find.text('記録を保存'), findsOneWidget);
-    expect(_saveButton(tester).onPressed, isNotNull);
+    expect(find.textContaining('必須です'), findsNothing);
+    expect(_navButton(tester, '追加').onPressed, isNotNull);
   });
 
   testWidgets('種別に応じて入力欄の呼び方とライブ専用欄が切り替わる', (tester) async {
     await _pumpScreen(tester);
-    expect(find.text('SETLIST'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'MCメモ'), findsOneWidget);
+    expect(find.text('セットリスト'), findsOneWidget);
+    expect(find.text('MCメモ'), findsOneWidget);
 
     await tester.tap(find.text('本'));
     await tester.pumpAndSettle();
 
-    expect(find.widgetWithText(TextField, '書名'), findsOneWidget);
-    expect(find.widgetWithText(TextField, '著者'), findsOneWidget);
-    expect(find.text('SETLIST'), findsNothing);
-    expect(find.widgetWithText(TextField, 'MCメモ'), findsNothing);
+    expect(_field('書名'), findsOneWidget);
+    expect(_field('著者'), findsOneWidget);
+    expect(find.text('セットリスト'), findsNothing);
+    expect(find.text('MCメモ'), findsNothing);
   });
 
   testWidgets('入力途中で閉じると破棄の確認を出し、続けるを選ぶと画面に留まる', (tester) async {
     await _pumpScreen(tester);
-    await tester.enterText(find.widgetWithText(TextField, '感想'), 'よかった');
+    await tester.enterText(_field('あとで読み返したいことを自由に'), 'よかった');
     await tester.pump();
 
-    await tester.tap(find.byTooltip('閉じる'));
+    await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
-    expect(find.text('入力内容を破棄しますか？'), findsOneWidget);
+    expect(find.text('記録を破棄'), findsOneWidget);
 
     await tester.tap(find.text('編集を続ける'));
     await tester.pumpAndSettle();
-    expect(find.text('NEW RECORD'), findsOneWidget);
+    expect(find.text('新規記録'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('閉じる'));
+    await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('破棄する'));
+    await tester.tap(find.text('記録を破棄'));
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
   });
@@ -104,7 +104,7 @@ void main() {
   testWidgets('未変更なら確認なしで閉じられる', (tester) async {
     await _pumpScreen(tester);
 
-    await tester.tap(find.byTooltip('閉じる'));
+    await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
 
     expect(find.text('open'), findsOneWidget);
@@ -124,9 +124,9 @@ void main() {
       ),
     );
 
-    expect(find.text('EDIT RECORD'), findsOneWidget);
+    expect(find.text('記録を編集'), findsOneWidget);
     expect(find.text('2曲'), findsOneWidget);
-    expect(find.widgetWithText(TextField, 'アイドル'), findsOneWidget);
-    expect(find.text('変更を保存'), findsOneWidget);
+    expect(find.text('アイドル'), findsOneWidget);
+    expect(_navButton(tester, '保存').onPressed, isNotNull);
   });
 }

@@ -1,17 +1,18 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 
-/// 英字の印字風見出しに、和文の小さなラベルを添える。
+/// Apple Music のような太字の和文見出しに、印字風の英字を小さく添える。
 class SectionTitle extends StatelessWidget {
   const SectionTitle(
     this.title,
     this.japaneseLabel, {
     super.key,
-    this.padding = const EdgeInsets.symmetric(horizontal: 24),
+    this.padding = const EdgeInsets.fromLTRB(20, 8, 20, 0),
     this.trailing,
   });
 
+  /// 見出しの上に小さく添える英字。
   final String title;
   final String japaneseLabel;
   final EdgeInsetsGeometry padding;
@@ -22,25 +23,30 @@ class SectionTitle extends StatelessWidget {
     return Padding(
       padding: padding,
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Text(
-            title,
-            style: AppFonts.displayStyle(
-              fontSize: 24,
-              color: AppColors.gold,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              japaneseLabel,
-              style: TextStyle(
-                fontSize: 12,
-                color: AppColors.textSecondary.withValues(alpha: 0.7),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppFonts.monoStyle(
+                    fontSize: 11,
+                    color: AppColors.gold,
+                  ).copyWith(letterSpacing: 1.6),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  japaneseLabel,
+                  style: const TextStyle(
+                    fontSize: 21,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+              ],
             ),
           ),
           ?trailing,

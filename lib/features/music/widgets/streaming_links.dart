@@ -1,5 +1,6 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/features/music/music_links.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -18,28 +19,23 @@ class StreamingLinks extends StatelessWidget {
   };
 
   static const _icons = {
-    StreamingService.appleMusic: Icons.music_note_rounded,
-    StreamingService.spotify: Icons.graphic_eq_rounded,
-    StreamingService.youtubeMusic: Icons.play_circle_fill_rounded,
+    StreamingService.appleMusic: CupertinoIcons.music_note_2,
+    StreamingService.spotify: CupertinoIcons.waveform,
+    StreamingService.youtubeMusic: CupertinoIcons.play_circle_fill,
   };
 
-  Future<void> _open(BuildContext context, StreamingService service) async {
+  Future<void> _open(StreamingService service) async {
     final uri = service.link(
       query: query,
       directUrl: service == StreamingService.appleMusic ? appleMusicUrl : null,
     );
-    final messenger = ScaffoldMessenger.of(context);
     var opened = false;
     try {
       opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('launchUrl failed for $uri: $e');
     }
-    if (!opened) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('${service.label} を開けませんでした')),
-      );
-    }
+    if (!opened) AppToast.error('${service.label} を開けませんでした');
   }
 
   @override
@@ -50,19 +46,12 @@ class StreamingLinks extends StatelessWidget {
           if (service != StreamingService.values.first)
             const SizedBox(width: 8),
           Expanded(
-            child: OutlinedButton(
-              onPressed: () => _open(context, service),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.textPrimary,
-                backgroundColor: AppColors.surfaceLight,
-                side: BorderSide(
-                  color: _brandColors[service]!.withValues(alpha: 0.6),
-                ),
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+            child: CupertinoButton(
+              color: AppColors.card,
+              borderRadius: BorderRadius.circular(12),
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+              minimumSize: Size.zero,
+              onPressed: () => _open(service),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -72,7 +61,10 @@ class StreamingLinks extends StatelessWidget {
                     service.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 11),
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textPrimary,
+                    ),
                   ),
                 ],
               ),

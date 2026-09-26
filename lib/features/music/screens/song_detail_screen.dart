@@ -1,6 +1,6 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:recolle/components/record_ticket_card.dart';
 import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
@@ -74,9 +74,7 @@ class SongDetailScreen extends ConsumerWidget {
                         ? SizedBox.square(
                             dimension: artworkSize,
                             child: const Center(
-                              child: CircularProgressIndicator(
-                                color: AppColors.gold,
-                              ),
+                              child: CupertinoActivityIndicator(radius: 14),
                             ),
                           )
                         : ArtistAvatar(
@@ -98,10 +96,12 @@ class SongDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   const SizedBox(height: 6),
-                  TextButton(
+                  CupertinoButton(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    minimumSize: Size.zero,
                     onPressed: () => Navigator.push(
                       context,
-                      MaterialPageRoute(
+                      CupertinoPageRoute<void>(
                         builder: (_) => ArtistDetailScreen(
                           artistName: artistName,
                           itunesArtistId: resolved?.artistId,
@@ -116,6 +116,7 @@ class SongDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
+                  const SizedBox(height: 6),
                   if (resolved != null) _SongMeta(song: resolved),
                   if (resolved?.previewUrl != null) ...[
                     const SizedBox(height: 16),
@@ -154,30 +155,19 @@ class SongDetailScreen extends ConsumerWidget {
             ),
           ),
           const SliverToBoxAdapter(
-            child: SectionTitle('LIVE HISTORY', 'この曲を聴いた記録'),
-          ),
-          if (heardRecords.isEmpty)
-            const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.all(32),
-                child: Text(
-                  'セトリにこの曲が入った記録はまだありません',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: AppColors.textDisabled),
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.only(top: 12, bottom: 40),
-              sliver: SliverList.builder(
-                itemCount: heardRecords.length,
-                itemBuilder: (context, index) => RecordTicketCard(
-                  record: heardRecords[index],
-                  onTap: () => openRecordDetail(context, heardRecords[index]),
-                ),
-              ),
+            child: SectionTitle(
+              'LIVE HISTORY',
+              'この曲を聴いた記録',
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 4),
             ),
+          ),
+          SliverRecordTicketList(
+            records: heardRecords,
+            emptyMessage: 'セトリにこの曲が入った記録はまだありません',
+          ),
+          SliverToBoxAdapter(
+            child: SizedBox(height: 32 + MediaQuery.paddingOf(context).bottom),
+          ),
         ],
       ),
     );

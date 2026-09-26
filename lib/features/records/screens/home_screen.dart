@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -7,12 +8,13 @@ import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/screens/create_record_screen.dart';
+import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/search/screens/search_screen.dart';
 
 class HomeScreen extends HookConsumerWidget {
@@ -25,6 +27,7 @@ class HomeScreen extends HookConsumerWidget {
     final favorites =
         ref.watch(favoriteArtistsProvider).asData?.value ??
         const <FavoriteArtist>[];
+    final selectedType = useState(RecordType.live);
     final selectedFavoriteId = useState<String?>(null);
 
     // 選択中のお気に入りが削除されたら絞り込みを解除する
@@ -32,118 +35,171 @@ class HomeScreen extends HookConsumerWidget {
         .where((f) => f.id == selectedFavoriteId.value)
         .firstOrNull;
 
-    return DefaultTabController(
-      length: RecordType.values.length,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: Text(
-            'RECOLLE',
-            style: AppFonts.displayStyle(
-              fontSize: 30,
-              color: AppColors.gold,
-              letterSpacing: 3,
-            ),
+    void openEditor() => openRecordEditor(
+      context,
+      initialType: selectedType.value,
+      initialArtist: selectedFavorite?.name,
+    );
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      body: LargeTitleScrollView(
+        title: 'RECOLLE',
+        largeTitle: Text(
+          'RECOLLE',
+          style: AppFonts.displayStyle(
+            fontSize: 38,
+            color: AppColors.gold,
+            letterSpacing: 3,
           ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.search, color: AppColors.gold),
-              tooltip: '検索',
+        ),
+        middle: Text(
+          'RECOLLE',
+          style: AppFonts.displayStyle(
+            fontSize: 22,
+            color: AppColors.gold,
+            letterSpacing: 2,
+          ),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            NavBarIconButton(
+              icon: CupertinoIcons.search,
+              semanticLabel: '検索',
               onPressed: () => Navigator.push(
                 context,
-                MaterialPageRoute(builder: (_) => const SearchScreen()),
+                CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
               ),
             ),
-            IconButton(
-              icon: Icon(
-                Icons.add,
-                color: readOnlyOffline
-                    ? AppColors.textDisabled
-                    : AppColors.gold,
-              ),
-              tooltip: readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
-              onPressed: readOnlyOffline
-                  ? null
-                  : () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => CreateRecordScreen(
-                            initialArtist: selectedFavorite?.name,
-                          ),
-                          fullscreenDialog: true,
-                        ),
-                      );
-                    },
+            NavBarIconButton(
+              icon: CupertinoIcons.plus_circle_fill,
+              semanticLabel: readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
+              onPressed: readOnlyOffline ? null : openEditor,
             ),
           ],
-          bottom: TabBar(
-            isScrollable: false,
-            indicatorColor: AppColors.gold,
-            labelColor: AppColors.gold,
-            unselectedLabelColor: AppColors.textSecondary,
-            tabs: RecordType.values
-                .map((t) => Tab(text: t.japaneseLabel))
-                .toList(),
-          ),
         ),
-        body: recordsAsync.when(
-          data: (records) {
-            final visible = selectedFavorite == null
-                ? records
-                : records
-                      .where(
-                        (r) => artistMatches(
-                          r.artistOrAuthor,
-                          selectedFavorite.name,
-                        ),
-                      )
-                      .toList();
-            final emptyMessage = selectedFavorite == null
-                ? '記録がありません'
-                : '${selectedFavorite.name} の記録はまだありません';
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (readOnlyOffline) const _OfflineBanner(),
-                if (favorites.isNotEmpty)
-                  _FavoriteFilterBar(
-                    favorites: favorites,
-                    selectedId: selectedFavorite?.id,
-                    onSelected: (id) => selectedFavoriteId.value = id,
-                  ),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      for (final type in RecordType.values)
-                        RecordTicketList(
-                          records: visible
-                              .where((r) => r.type == type)
-                              .toList(),
-                          emptyMessage: emptyMessage,
-                        ),
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.gold),
-          ),
-          error: (error, stack) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                toUserFriendlyMessage(error),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+        bottom: _HomeFilterBar(
+          selectedType: selectedType.value,
+          onTypeChanged: (t) => selectedType.value = t,
+          favorites: favorites,
+          selectedFavoriteId: selectedFavorite?.id,
+          onFavoriteSelected: (id) => selectedFavoriteId.value = id,
+        ),
+        onRefresh: () => ref.refresh(recordsProvider.future),
+        slivers: [
+          if (readOnlyOffline)
+            const SliverToBoxAdapter(child: _OfflineBanner()),
+          recordsAsync.when(
+            data: (records) {
+              final visible = records.where(
+                (r) =>
+                    r.type == selectedType.value &&
+                    (selectedFavorite == null ||
+                        artistMatches(r.artistOrAuthor, selectedFavorite.name)),
+              );
+              return SliverRecordTicketList(
+                records: visible.toList(),
+                emptyTitle: selectedFavorite == null
+                    ? '${selectedType.value.japaneseLabel}の記録はまだありません'
+                    : '${selectedFavorite.name} の記録はまだありません',
+                emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
+                emptyActionLabel: readOnlyOffline ? null : '記録を追加',
+                onEmptyAction: readOnlyOffline ? null : openEditor,
+              );
+            },
+            loading: () => const SliverFillRemaining(
+              hasScrollBody: false,
+              child: Center(child: CupertinoActivityIndicator(radius: 14)),
+            ),
+            error: (error, stack) => SliverFillRemaining(
+              hasScrollBody: false,
+              child: IosEmptyState(
+                icon: CupertinoIcons.exclamationmark_triangle,
+                message: toUserFriendlyMessage(error),
+                actionLabel: '再読み込み',
+                onAction: () => ref.invalidate(recordsProvider),
               ),
             ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+}
+
+/// ナビゲーションバーの下に固定する、種別の切り替えとお気に入りの絞り込み。
+class _HomeFilterBar extends StatelessWidget implements PreferredSizeWidget {
+  const _HomeFilterBar({
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.favorites,
+    required this.selectedFavoriteId,
+    required this.onFavoriteSelected,
+  });
+
+  final RecordType selectedType;
+  final ValueChanged<RecordType> onTypeChanged;
+  final List<FavoriteArtist> favorites;
+  final String? selectedFavoriteId;
+  final ValueChanged<String?> onFavoriteSelected;
+
+  static const double _segmentHeight = 48;
+  static const double _chipsHeight = 44;
+
+  @override
+  Size get preferredSize =>
+      Size.fromHeight(_segmentHeight + (favorites.isEmpty ? 0 : _chipsHeight));
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: _segmentHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: IosSegmentedControl<RecordType>(
+              value: selectedType,
+              segments: {for (final t in RecordType.values) t: t.japaneseLabel},
+              onChanged: onTypeChanged,
+            ),
+          ),
+        ),
+        if (favorites.isNotEmpty)
+          SizedBox(
+            height: _chipsHeight,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+              itemCount: favorites.length + 1,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                if (index == 0) {
+                  return CapsuleChip(
+                    label: 'すべて',
+                    selected: selectedFavoriteId == null,
+                    onTap: () => onFavoriteSelected(null),
+                  );
+                }
+                final artist = favorites[index - 1];
+                return CapsuleChip(
+                  label: artist.name,
+                  selected: selectedFavoriteId == artist.id,
+                  avatar: ArtistAvatar(
+                    name: artist.name,
+                    artworkUrl: artist.artworkUrl,
+                    size: 22,
+                  ),
+                  onTap: () => onFavoriteSelected(
+                    selectedFavoriteId == artist.id ? null : artist.id,
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 }
@@ -154,16 +210,15 @@ class _OfflineBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: AppColors.surfaceLight,
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(12),
+      ),
       child: const Row(
         children: [
-          Icon(
-            Icons.wifi_off_rounded,
-            size: 18,
-            color: AppColors.textSecondary,
-          ),
+          Icon(CupertinoIcons.wifi_slash, size: 18, color: AppColors.gold),
           SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -172,91 +227,6 @@ class _OfflineBanner extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// お気に入りアーティストで記録を絞り込む横スクロールのチップ列。
-class _FavoriteFilterBar extends StatelessWidget {
-  const _FavoriteFilterBar({
-    required this.favorites,
-    required this.selectedId,
-    required this.onSelected,
-  });
-
-  final List<FavoriteArtist> favorites;
-  final String? selectedId;
-  final ValueChanged<String?> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 52,
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-        children: [
-          _FilterChip(
-            label: 'すべて',
-            selected: selectedId == null,
-            onTap: () => onSelected(null),
-          ),
-          for (final artist in favorites)
-            _FilterChip(
-              label: artist.name,
-              selected: selectedId == artist.id,
-              avatar: ArtistAvatar(
-                name: artist.name,
-                artworkUrl: artist.artworkUrl,
-                size: 22,
-              ),
-              onTap: () =>
-                  onSelected(selectedId == artist.id ? null : artist.id),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.avatar,
-  });
-
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final Widget? avatar;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 8),
-      child: ChoiceChip(
-        avatar: avatar,
-        label: Text(label),
-        selected: selected,
-        onSelected: (_) => onTap(),
-        showCheckmark: false,
-        labelStyle: TextStyle(
-          color: selected ? Colors.black : AppColors.textSecondary,
-          fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-          fontSize: 13,
-        ),
-        selectedColor: AppColors.gold,
-        backgroundColor: AppColors.surface,
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        visualDensity: VisualDensity.compact,
-        shape: StadiumBorder(
-          side: BorderSide(
-            color: selected ? Colors.transparent : AppColors.textDisabled,
-          ),
-        ),
       ),
     );
   }

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 
@@ -13,14 +14,8 @@ Future<List<String>?> showSetlistFmImportSheet(
   required String artistName,
   required DateTime date,
 }) {
-  return showModalBottomSheet<List<String>>(
+  return showCupertinoSheet<List<String>>(
     context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
-    backgroundColor: AppColors.surface,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
     builder: (_) => _SetlistFmImportSheet(artistName: artistName, date: date),
   );
 }
@@ -64,65 +59,65 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
       if (context.mounted) Navigator.of(context).pop(songs);
     }
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.background,
+      navigationBar: CupertinoNavigationBar(
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.background,
+        border: null,
+        leading: CupertinoButton(
+          padding: EdgeInsets.zero,
+          minimumSize: const Size(0, 44),
+          onPressed: () => Navigator.pop(context),
+          child: const Text(
+            'キャンセル',
+            style: TextStyle(color: AppColors.gold, fontSize: 17),
+          ),
+        ),
+        middle: const Text('setlist.fm から取り込む'),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 4),
-            child: Text(
-              'SETLIST.FM',
-              style: AppFonts.displayStyle(fontSize: 26, color: AppColors.gold),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Text(
-              filterByDate.value
-                  ? '$artistName・${_formatDate(date)} の公演'
-                  : '$artistName の最近の公演',
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 13,
+      child: SafeArea(
+        bottom: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+              child: Text(
+                filterByDate.value
+                    ? '$artistName・${_formatDate(date)} の公演'
+                    : '$artistName の最近の公演',
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 13,
+                ),
               ),
             ),
-          ),
-          if (isLocalizing.value)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: Column(
-                children: [
-                  CircularProgressIndicator(color: AppColors.gold),
-                  SizedBox(height: 16),
-                  Text(
-                    '曲名を日本語表記に変換しています…',
-                    style: TextStyle(color: AppColors.textSecondary),
-                  ),
-                ],
-              ),
-            )
-          else
-            Flexible(
-              child: _buildBody(
-                context,
-                snapshot,
-                filterByDate,
-                retryToken,
-                pick,
-              ),
+            Expanded(
+              child: isLocalizing.value
+                  ? const Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          CupertinoActivityIndicator(radius: 14),
+                          SizedBox(height: 16),
+                          Text(
+                            '曲名を日本語表記に変換しています…',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    )
+                  : _buildBody(
+                      context,
+                      snapshot,
+                      filterByDate,
+                      retryToken,
+                      pick,
+                    ),
             ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Text(
-              'Setlist data from setlist.fm',
-              style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -135,14 +130,12 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
     ValueChanged<SetlistSummary> onPick,
   ) {
     if (snapshot.connectionState != ConnectionState.done) {
-      return const Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator(color: AppColors.gold)),
-      );
+      return const Center(child: CupertinoActivityIndicator(radius: 14));
     }
     if (snapshot.hasError) {
-      return _Message(
-        text: toUserFriendlyMessage(snapshot.error),
+      return IosEmptyState(
+        icon: CupertinoIcons.wifi_exclamationmark,
+        message: toUserFriendlyMessage(snapshot.error),
         actionLabel: '再試行',
         onAction: () => retryToken.value++,
       );
@@ -151,20 +144,38 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
     final setlists = snapshot.data ?? const <SetlistSummary>[];
     if (setlists.isEmpty) {
       return filterByDate.value
-          ? _Message(
-              text: 'この日のセットリストは登録されていません。',
+          ? IosEmptyState(
+              icon: CupertinoIcons.calendar,
+              message: 'この日のセットリストは登録されていません。',
               actionLabel: '日付を指定せずに探す',
               onAction: () => filterByDate.value = false,
             )
-          : const _Message(text: 'セットリストが見つかりませんでした。');
+          : const IosEmptyState(
+              icon: CupertinoIcons.music_note_list,
+              message: 'セットリストが見つかりませんでした。',
+            );
     }
 
     return ListView.separated(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      itemCount: setlists.length,
+      padding: EdgeInsets.fromLTRB(
+        16,
+        4,
+        16,
+        24 + MediaQuery.paddingOf(context).bottom,
+      ),
+      itemCount: setlists.length + 1,
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
+        if (index == setlists.length) {
+          return const Padding(
+            padding: EdgeInsets.only(top: 4),
+            child: Text(
+              'Setlist data from setlist.fm',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
+            ),
+          );
+        }
         final s = setlists[index];
         return _SetlistCard(setlist: s, onTap: () => onPick(s));
       },
@@ -190,97 +201,83 @@ class _SetlistCard extends StatelessWidget {
     ].where((e) => e.isNotEmpty).join(' / ');
     final preview = setlist.songs.take(3).join('、');
 
-    return Material(
-      color: AppColors.surfaceLight,
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    return CupertinoButton(
+      padding: EdgeInsets.zero,
+      minimumSize: Size.zero,
+      onPressed: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.card,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (date != null)
+                  Row(
+                    children: [
+                      if (date != null)
+                        Text(
+                          _SetlistFmImportSheet._formatDate(date),
+                          style: AppFonts.monoStyle(
+                            fontSize: 13,
+                            color: AppColors.gold,
+                          ),
+                        ),
+                      const Spacer(),
+                      Text(
+                        '${setlist.songs.length}曲',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (place.isNotEmpty) ...[
+                    const SizedBox(height: 4),
                     Text(
-                      _SetlistFmImportSheet._formatDate(date),
-                      style: AppFonts.monoStyle(
-                        fontSize: 13,
-                        color: AppColors.gold,
+                      place,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  const Spacer(),
+                  ],
+                  if (setlist.tourName != null)
+                    Text(
+                      setlist.tourName!,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  const SizedBox(height: 6),
                   Text(
-                    '${setlist.songs.length} SONGS',
-                    style: AppFonts.monoStyle(
-                      fontSize: 11,
+                    '$preview${setlist.songs.length > 3 ? ' ほか' : ''}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
+                      fontSize: 12,
                     ),
                   ),
                 ],
               ),
-              if (place.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  place,
-                  style: const TextStyle(
-                    color: AppColors.textPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-              if (setlist.tourName != null)
-                Text(
-                  setlist.tourName!,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
-                    fontSize: 12,
-                  ),
-                ),
-              const SizedBox(height: 6),
-              Text(
-                '$preview${setlist.songs.length > 3 ? ' ほか' : ''}',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: AppColors.textDisabled,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.actionLabel, this.onAction});
-
-  final String text;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppColors.textSecondary),
-          ),
-          if (actionLabel != null) ...[
-            const SizedBox(height: 12),
-            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+            ),
+            const SizedBox(width: 8),
+            const Icon(
+              CupertinoIcons.chevron_forward,
+              size: 16,
+              color: AppColors.textDisabled,
+            ),
           ],
-        ],
+        ),
       ),
     );
   }
