@@ -123,9 +123,6 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                 ),
                 itemColor: context.colors.textSecondary,
                 backgroundColor: context.colors.fill,
-                onSubmitted: (value) {
-                  if (value.trim().isNotEmpty) addArtist(value);
-                },
               ),
             ),
             Expanded(
