@@ -30,6 +30,67 @@ extension RecordTypeUi on RecordType {
     RecordType.book => '著者',
     RecordType.other => '出演・作者',
   };
+
+  /// 日時・会場・チケットなどをまとめた入力欄の見出し。
+  String get detailsSectionLabel => switch (this) {
+    RecordType.live => '公演・チケット',
+    RecordType.movie => '上映・チケット',
+    RecordType.book => '購入情報',
+    RecordType.other => '日時・チケット',
+  };
+
+  /// 開場時刻を持つか。
+  bool get hasOpenTime => this == RecordType.live;
+
+  /// 開始・終了時刻を持つか。本は日時の決まった催しではないので持たない。
+  bool get hasSchedule => this != RecordType.book;
+
+  String get startTimeLabel => switch (this) {
+    RecordType.live => '開演',
+    RecordType.movie => '上映開始',
+    RecordType.book || RecordType.other => '開始',
+  };
+
+  String get endTimeLabel => switch (this) {
+    RecordType.live => '終演',
+    RecordType.movie => '上映終了',
+    RecordType.book || RecordType.other => '終了',
+  };
+
+  /// 開始から終了までの間の呼び方。
+  String get inProgressLabel => switch (this) {
+    RecordType.live => '公演中',
+    RecordType.movie => '上映中',
+    RecordType.book || RecordType.other => '開催中',
+  };
+
+  /// [Record.venue] の呼び方。null なら入力欄を出さない。
+  String? get venueLabel => switch (this) {
+    RecordType.live => '会場',
+    RecordType.movie => '映画館',
+    RecordType.book => null,
+    RecordType.other => '会場・場所',
+  };
+
+  /// [Record.seat] の入力例つきの呼び方。null なら入力欄を出さない。
+  String? get seatPlaceholder => switch (this) {
+    RecordType.live => '座席（アリーナ A5 12列 34番 など）',
+    RecordType.movie => '座席（G-12 など）',
+    RecordType.book || RecordType.other => null,
+  };
+
+  /// [Record.ticketPrice] の呼び方。
+  String get priceLabel => this == RecordType.book ? '価格' : 'チケット代';
+
+  /// [Record.ticketSource] の呼び方。
+  String get sourceLabel => this == RecordType.book ? '購入先' : 'チケット取得元';
+
+  String get sourcePlaceholder => switch (this) {
+    RecordType.live => 'チケット取得元（e+、ローチケ など）',
+    RecordType.movie => 'チケット取得元（劇場窓口、アプリ など）',
+    RecordType.book => '購入先（書店、電子書籍ストア など）',
+    RecordType.other => 'チケット取得元',
+  };
 }
 
 /// 開演時刻などの「時:分」。日付やタイムゾーンを持たない。
@@ -82,7 +143,7 @@ class Record {
   final String? venue;
   final String? seat;
 
-  /// チケット代（円）。
+  /// チケット代・本の価格（円）。
   final int? ticketPrice;
 
   /// 開場時刻。未入力なら null。

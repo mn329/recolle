@@ -11,6 +11,9 @@ struct UpcomingEvent: Decodable {
   let endsAt: Double?
   let venue: String?
   let isLive: Bool
+  let startLabel: String?
+  let endLabel: String?
+  let inProgressLabel: String?
 
   var date: Date { Date(timeIntervalSince1970: startsAt / 1000) }
   var openDate: Date? { opensAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
@@ -25,9 +28,12 @@ struct UpcomingEvent: Decodable {
 
   /// 当日の、まだ来ていない最初の区切り（開場・開演・終演）。
   func nextMilestone(after now: Date) -> (label: String, date: Date)? {
+    let start = startLabel ?? "開演"
+    let end = endLabel ?? "終演"
+    let inProgress = inProgressLabel ?? "公演中"
     if let open = openDate, open > now { return ("開場まで", open) }
-    if hasStartTime, date > now { return ("開演まで", date) }
-    if let end = endDate, end > now { return ("公演中・終演まで", end) }
+    if hasStartTime, date > now { return ("\(start)まで", date) }
+    if let endDate, endDate > now { return ("\(inProgress)・\(end)まで", endDate) }
     return nil
   }
 }
@@ -52,7 +58,10 @@ struct Provider: TimelineProvider {
         opensAt: nil,
         endsAt: nil,
         venue: "さいたまスーパーアリーナ",
-        isLive: true
+        isLive: true,
+        startLabel: nil,
+        endLabel: nil,
+        inProgressLabel: nil
       )
     )
   }

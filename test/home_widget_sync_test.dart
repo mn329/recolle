@@ -59,6 +59,9 @@ void main() {
       'endsAt': null,
       'venue': '日本武道館',
       'isLive': true,
+      'startLabel': '開演',
+      'endLabel': '終演',
+      'inProgressLabel': '公演中',
     });
     expect(payload[1]['hasStartTime'], false);
     expect(payload[1]['venue'], isNull);

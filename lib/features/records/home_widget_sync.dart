@@ -32,6 +32,9 @@ List<Map<String, Object?>> upcomingEventsPayload(
         'endsAt': r.endsAt?.millisecondsSinceEpoch,
         'venue': r.venue,
         'isLive': r.type == RecordType.live,
+        'startLabel': r.type.startTimeLabel,
+        'endLabel': r.type.endTimeLabel,
+        'inProgressLabel': r.type.inProgressLabel,
       },
   ];
 }

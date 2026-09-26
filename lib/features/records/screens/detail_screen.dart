@@ -212,8 +212,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
               for (final (title, time) in [
                 ('開場', record.openTime),
-                ('開演', record.startTime),
-                ('終演', record.endTime),
+                (record.type.startTimeLabel, record.startTime),
+                (record.type.endTimeLabel, record.endTime),
               ])
                 if (time != null)
                   _InfoRow(
@@ -222,17 +222,23 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     monospaced: true,
                   ),
               if (record.venue != null)
-                _InfoRow(title: '会場', value: record.venue!),
+                _InfoRow(
+                  title: record.type.venueLabel ?? '会場',
+                  value: record.venue!,
+                ),
               if (record.seat != null)
                 _InfoRow(title: '座席', value: record.seat!),
               if (record.ticketPrice != null)
                 _InfoRow(
-                  title: 'チケット代',
+                  title: record.type.priceLabel,
                   value: formatYen(record.ticketPrice!),
                   monospaced: true,
                 ),
               if (record.ticketSource != null)
-                _InfoRow(title: 'チケット取得元', value: record.ticketSource!),
+                _InfoRow(
+                  title: record.type.sourceLabel,
+                  value: record.ticketSource!,
+                ),
             ],
           ),
           if (isLive) ...[

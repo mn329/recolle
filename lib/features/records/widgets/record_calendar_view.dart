@@ -151,7 +151,8 @@ class RecordCalendarView extends HookWidget {
                   title: r.title,
                   subtitle: [
                     r.artistOrAuthor,
-                    if (r.startTime != null) '${r.startTime!.format()} 開演',
+                    if (r.startTime != null)
+                      '${r.startTime!.format()} ${r.type.startTimeLabel}',
                     ?r.venue,
                   ].join('・'),
                   trailing: Text(

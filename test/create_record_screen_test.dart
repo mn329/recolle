@@ -79,6 +79,42 @@ void main() {
     expect(_field('著者'), findsOneWidget);
     expect(find.text('セットリスト'), findsNothing);
     expect(find.text('MCメモ'), findsNothing);
+    expect(find.text('購入情報'), findsOneWidget);
+    expect(_field('価格'), findsOneWidget);
+    expect(_field('座席（G-12 など）'), findsNothing);
+  });
+
+  testWidgets('映画の編集では、保存済みの映画館・座席・料金・上映時刻を表示する', (tester) async {
+    await _pumpScreen(
+      tester,
+      recordToEdit: Record(
+        id: 'm1',
+        type: RecordType.movie,
+        title: 'ルックバック',
+        artistOrAuthor: '押山清高',
+        date: DateTime(2026, 11, 3),
+        ticketImageUrl: '',
+        venue: 'TOHOシネマズ 新宿',
+        seat: 'G-12',
+        ticketPrice: 2000,
+        startTime: const ClockTime(20, 15),
+        endTime: const ClockTime(22, 0),
+      ),
+    );
+
+    expect(find.text('上映・チケット'), findsOneWidget);
+    expect(find.text('開場'), findsNothing);
+    expect(find.text('上映開始'), findsOneWidget);
+    expect(find.text('20:15'), findsOneWidget);
+    expect(find.text('上映終了'), findsOneWidget);
+    expect(find.text('22:00'), findsOneWidget);
+    expect(find.text('TOHOシネマズ 新宿'), findsOneWidget);
+    expect(find.text('G-12'), findsOneWidget);
+    expect(find.text('2000'), findsOneWidget);
+    // 読み込んだだけでは未変更のまま（閉じても破棄の確認が出ない）
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+    expect(find.text('open'), findsOneWidget);
   });
 
   testWidgets('入力途中で閉じると破棄の確認を出し、続けるを選ぶと画面に留まる', (tester) async {

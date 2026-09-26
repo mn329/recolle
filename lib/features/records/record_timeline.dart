@@ -25,13 +25,16 @@ import 'package:recolle/features/records/models/record.dart';
 
 /// カウントダウンの行き先。
 enum CountdownTarget {
-  open('開場'),
-  start('開演'),
-  end('終演');
+  open,
+  start,
+  end;
 
-  const CountdownTarget(this.label);
-
-  final String label;
+  /// 種別ごとの呼び方（ライブなら開場・開演・終演、映画なら上映開始・上映終了）。
+  String labelFor(RecordType type) => switch (this) {
+    CountdownTarget.open => '開場',
+    CountdownTarget.start => type.startTimeLabel,
+    CountdownTarget.end => type.endTimeLabel,
+  };
 }
 
 /// カウントダウンの表示内容。
@@ -91,10 +94,14 @@ class CountdownRemaining extends Countdown {
 
 /// 「17:00 開場・18:00 開演・20:30 終演」の形。時刻が 1 つもなければ null。
 String? formatEventTimes(Record record) {
+  final type = record.type;
   final parts = [
-    if (record.openTime case final t?) '${t.format()} 開場',
-    if (record.startTime case final t?) '${t.format()} 開演',
-    if (record.endTime case final t?) '${t.format()} 終演',
+    for (final (target, time) in [
+      (CountdownTarget.open, record.openTime),
+      (CountdownTarget.start, record.startTime),
+      (CountdownTarget.end, record.endTime),
+    ])
+      if (time != null) '${time.format()} ${target.labelFor(type)}',
   ];
   return parts.isEmpty ? null : parts.join('・');
 }

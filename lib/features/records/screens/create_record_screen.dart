@@ -121,6 +121,9 @@ class CreateRecordScreen extends HookConsumerWidget {
     final title = titleController.text.trim();
     final artist = artistController.text.trim();
     final isLive = type.value == RecordType.live;
+    final kind = type.value;
+    final hasVenue = kind.venueLabel != null;
+    final hasSeat = kind.seatPlaceholder != null;
     final savedImageUrl = removeSavedImage.value
         ? null
         : editingRecord?.ticketImageUrl;
@@ -190,29 +193,32 @@ class CreateRecordScreen extends HookConsumerWidget {
       fill(artistController, info.artist, RecordFieldLimits.artistOrAuthor);
       fill(sourceController, info.ticketSource, RecordFieldLimits.ticketSource);
       if (info.date != null) date.value = info.date!;
-      if (isLive) {
-        fill(venueController, info.venue, RecordFieldLimits.venue);
-        fill(seatController, info.seat, RecordFieldLimits.seat);
-        if (info.ticketPrice != null &&
-            info.ticketPrice! <= RecordFieldLimits.ticketPriceMax) {
-          priceController.text = '${info.ticketPrice}';
-        }
-        if (info.openTime != null) openTime.value = info.openTime;
-        if (info.startTime != null) startTime.value = info.startTime;
-        if (info.endTime != null) endTime.value = info.endTime;
-      }
+      final priceFits =
+          info.ticketPrice != null &&
+          info.ticketPrice! <= RecordFieldLimits.ticketPriceMax;
+      final useOpen = kind.hasOpenTime && info.openTime != null;
+      final useStart = kind.hasSchedule && info.startTime != null;
+      final useEnd = kind.hasSchedule && info.endTime != null;
+      final useVenue = hasVenue && info.venue != null;
+      final useSeat = hasSeat && info.seat != null;
+      if (useVenue) fill(venueController, info.venue, RecordFieldLimits.venue);
+      if (useSeat) fill(seatController, info.seat, RecordFieldLimits.seat);
+      if (priceFits) priceController.text = '${info.ticketPrice}';
+      if (useOpen) openTime.value = info.openTime;
+      if (useStart) startTime.value = info.startTime;
+      if (useEnd) endTime.value = info.endTime;
       artistTypedSincePick.value = false;
 
       final filled = [
-        if (info.title != null) type.value.titleFieldLabel,
-        if (info.artist != null) type.value.creatorFieldLabel,
+        if (info.title != null) kind.titleFieldLabel,
+        if (info.artist != null) kind.creatorFieldLabel,
         if (info.date != null) isLive ? '公演日' : '日付',
-        if (isLive && info.openTime != null) '開場',
-        if (isLive && info.startTime != null) '開演',
-        if (isLive && info.endTime != null) '終演',
-        if (isLive && info.venue != null) '会場',
-        if (isLive && info.seat != null) '座席',
-        if (isLive && info.ticketPrice != null) 'チケット代',
+        if (useOpen) '開場',
+        if (useStart) kind.startTimeLabel,
+        if (useEnd) kind.endTimeLabel,
+        if (useVenue) kind.venueLabel!,
+        if (useSeat) '座席',
+        if (priceFits) kind.priceLabel,
         if (info.ticketSource != null) '取得元',
       ];
       AppToast.show(
@@ -234,14 +240,14 @@ class CreateRecordScreen extends HookConsumerWidget {
       }
 
       final price = int.tryParse(priceController.text.trim());
-      if (isLive && price != null && price > RecordFieldLimits.ticketPriceMax) {
-        AppToast.error('チケット代が大きすぎます。金額を確認してください。');
+      if (price != null && price > RecordFieldLimits.ticketPriceMax) {
+        AppToast.error('${kind.priceLabel}が大きすぎます。金額を確認してください。');
         return;
       }
 
       final open = openTime.value;
       final start = startTime.value;
-      if (isLive &&
+      if (kind.hasOpenTime &&
           open != null &&
           start != null &&
           open.compareTo(start) > 0) {
@@ -276,12 +282,12 @@ class CreateRecordScreen extends HookConsumerWidget {
           date: date.value,
           ticketImageUrl: ticketImageUrl,
           ticketSource: nullIfEmpty(sourceController),
-          venue: isLive ? nullIfEmpty(venueController) : null,
-          seat: isLive ? nullIfEmpty(seatController) : null,
-          ticketPrice: isLive ? price : null,
-          openTime: isLive ? openTime.value : null,
-          startTime: isLive ? startTime.value : null,
-          endTime: isLive ? endTime.value : null,
+          venue: hasVenue ? nullIfEmpty(venueController) : null,
+          seat: hasSeat ? nullIfEmpty(seatController) : null,
+          ticketPrice: price,
+          openTime: kind.hasOpenTime ? openTime.value : null,
+          startTime: kind.hasSchedule ? startTime.value : null,
+          endTime: kind.hasSchedule ? endTime.value : null,
           setlist: setlist,
           mcMemo: isLive ? nullIfEmpty(mcMemoController) : null,
           impressions: nullIfEmpty(impressionsController),
@@ -341,7 +347,7 @@ class CreateRecordScreen extends HookConsumerWidget {
 
     final sourceRow = FormTextRow(
       controller: sourceController,
-      placeholder: 'チケット取得元（e+、ローチケ など）',
+      placeholder: kind.sourcePlaceholder,
       maxLength: RecordFieldLimits.ticketSource,
       scrollPadding: _fieldScrollPadding,
     );
@@ -458,13 +464,12 @@ class CreateRecordScreen extends HookConsumerWidget {
                     date: date.value,
                     onChanged: (d) => date.value = d,
                   ),
-                  if (!isLive) sourceRow,
                 ],
               ),
-              if (isLive)
-                FormSection(
-                  header: '公演・チケット',
-                  children: [
+              FormSection(
+                header: kind.detailsSectionLabel,
+                children: [
+                  if (kind.hasOpenTime)
                     RecordTimeRow(
                       label: '開場',
                       time: openTime.value,
@@ -473,49 +478,53 @@ class CreateRecordScreen extends HookConsumerWidget {
                           const ClockTime(17, 0),
                       onChanged: (t) => openTime.value = t,
                     ),
+                  if (kind.hasSchedule) ...[
                     RecordTimeRow(
-                      label: '開演',
+                      label: kind.startTimeLabel,
                       time: startTime.value,
                       defaultTime:
                           _shift(openTime.value, 60) ?? const ClockTime(18, 0),
                       onChanged: (t) => startTime.value = t,
                     ),
                     RecordTimeRow(
-                      label: '終演',
+                      label: kind.endTimeLabel,
                       time: endTime.value,
                       defaultTime:
                           _shift(startTime.value, 120) ??
                           const ClockTime(20, 0),
                       onChanged: (t) => endTime.value = t,
                     ),
+                  ],
+                  if (hasVenue)
                     FormTextRow(
                       controller: venueController,
-                      placeholder: '会場',
+                      placeholder: kind.venueLabel!,
                       maxLength: RecordFieldLimits.venue,
                       scrollPadding: _fieldScrollPadding,
                     ),
+                  if (hasSeat)
                     FormTextRow(
                       controller: seatController,
-                      placeholder: '座席（アリーナ A5 12列 34番 など）',
+                      placeholder: kind.seatPlaceholder!,
                       maxLength: RecordFieldLimits.seat,
                       scrollPadding: _fieldScrollPadding,
                     ),
-                    FormTextRow(
-                      controller: priceController,
-                      placeholder: 'チケット代',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(
-                          '${RecordFieldLimits.ticketPriceMax}'.length,
-                        ),
-                      ],
-                      suffix: '円',
-                      scrollPadding: _fieldScrollPadding,
-                    ),
-                    sourceRow,
-                  ],
-                ),
+                  FormTextRow(
+                    controller: priceController,
+                    placeholder: kind.priceLabel,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(
+                        '${RecordFieldLimits.ticketPriceMax}'.length,
+                      ),
+                    ],
+                    suffix: '円',
+                    scrollPadding: _fieldScrollPadding,
+                  ),
+                  sourceRow,
+                ],
+              ),
               if (isLive)
                 FormSection(
                   header: 'セットリスト',

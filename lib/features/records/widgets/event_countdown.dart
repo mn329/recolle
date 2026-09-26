@@ -43,17 +43,19 @@ class _EventCountdownState extends State<EventCountdown> {
   }
 
   String _heading(Countdown countdown) {
-    final kind = widget.record.type == RecordType.live ? '公演' : '予定';
+    final type = widget.record.type;
+    final kind = type == RecordType.live ? '公演' : '予定';
     final next = widget.isNext ? '次の$kind' : '';
     return switch (countdown) {
-      CountdownRemaining(target: CountdownTarget.end) => '公演中・終演まで',
+      CountdownRemaining(target: CountdownTarget.end) =>
+        '${type.inProgressLabel}・${type.endTimeLabel}まで',
       CountdownRemaining(:final target, hasTime: true) => [
         if (next.isNotEmpty) next,
-        '${target.label}まで',
+        '${target.labelFor(type)}まで',
       ].join('・'),
       CountdownRemaining() ||
       CountdownToday() => '${next.isEmpty ? kind : next}まで',
-      CountdownEnded() => '終演しました',
+      CountdownEnded() => '${type.endTimeLabel}しました',
     };
   }
 
@@ -81,7 +83,10 @@ class _EventCountdownState extends State<EventCountdown> {
         const SizedBox(height: 6),
         switch (countdown) {
           CountdownToday() => Text('今日', style: bigWord),
-          CountdownEnded() => Text('終演', style: bigWord),
+          CountdownEnded() => Text(
+            widget.record.type.endTimeLabel,
+            style: bigWord,
+          ),
           CountdownRemaining(:final days, :final clock) => Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
