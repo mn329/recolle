@@ -46,6 +46,14 @@ Future<void> _ensureAnonymousSession() async {
   }
 }
 
+String _requireEnv(String key) {
+  final value = dotenv.env[key];
+  if (value == null || value.isEmpty) {
+    throw StateError('.env に $key が設定されていません（env.example を参照）');
+  }
+  return value;
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -55,8 +63,9 @@ void main() async {
   // Supabaseの初期化
 
   await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL'] ?? '',
-    anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
+    url: _requireEnv('SUPABASE_URL'),
+    // supabase_flutter 2.x は publishable キーも anonKey 引数で受け取る。
+    anonKey: _requireEnv('SUPABASE_PUBLISHABLE_KEY'),
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       // 既定 true のディープリンク監視は PKCE 時に query の code のみ判定するため、
