@@ -23,7 +23,6 @@ const PAGE_INTERVAL_MS = 1100
 // 429 のときの再試行。待ち時間は回数に比例して延ばす
 const MAX_RATE_LIMIT_RETRIES = 2
 const RATE_LIMIT_BACKOFF_MS = 1500
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 // 上限は API キー単位で全ユーザー共有のため、同じ検索は 1 日 1 回までにする
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -98,7 +97,6 @@ Deno.serve(async (req) => {
 
   const artistName =
     typeof payload?.artistName === "string" ? payload.artistName.trim() : ""
-  const date = typeof payload?.date === "string" ? payload.date : ""
   const tourName =
     typeof payload?.tourName === "string" ? payload.tourName.trim() : ""
   // 公演の候補には、曲がまだ登録されていない公演（開催前など）も出したい
@@ -106,18 +104,15 @@ Deno.serve(async (req) => {
   if (!artistName || artistName.length > MAX_ARTIST_NAME_LENGTH) {
     return json({ error: "invalid_artist_name" }, 400)
   }
-  if (date && !DATE_PATTERN.test(date)) {
-    return json({ error: "invalid_date" }, 400)
-  }
   if (tourName.length > MAX_TOUR_NAME_LENGTH) {
     return json({ error: "invalid_tour_name" }, 400)
   }
 
   // 直近の公演を多めに取り、アプリ側でツアー名の部分一致に使う。setlist.fm は単語単位の
-  // 一致しかできないため。ツアー名・日付の検索は 1 ページで足りる
+  // 一致しかできないため。ツアー名の検索は 1 ページで足りる
   const requestedPages = Number.isInteger(payload?.pages) ? payload.pages : 1
   const pages =
-    tourName || date ? 1 : Math.min(Math.max(requestedPages, 1), MAX_PAGES)
+    tourName ? 1 : Math.min(Math.max(requestedPages, 1), MAX_PAGES)
 
   const respond = (all: any[]) =>
     json({
@@ -132,7 +127,6 @@ Deno.serve(async (req) => {
   )
   const cacheKey = [
     normalizeKey(artistName),
-    date,
     normalizeKey(tourName),
     `p${pages}`,
   ].join("|")
@@ -169,11 +163,6 @@ Deno.serve(async (req) => {
 
   const params = new URLSearchParams({ artistName })
   if (tourName) params.set("tourName", tourName)
-  if (date) {
-    // setlist.fm は dd-MM-yyyy 形式
-    const [y, m, d] = date.split("-")
-    params.set("date", `${d}-${m}-${y}`)
-  }
 
   async function fetchPage(page: number): Promise<Response> {
     params.set("p", String(page))

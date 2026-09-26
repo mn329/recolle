@@ -50,7 +50,6 @@ class _FakeSetlistFmClient extends SetlistFmClient {
   @override
   Future<List<SetlistSummary>> search({
     required String artistName,
-    DateTime? date,
     String? tourName,
     bool includeEmpty = false,
     int pages = 1,

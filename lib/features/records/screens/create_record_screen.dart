@@ -636,7 +636,6 @@ class CreateRecordScreen extends HookConsumerWidget {
                       key: ValueKey(setlistEditorGeneration.value),
                       initialSongs: songs.value,
                       artistName: artist,
-                      date: date.value,
                       scrollPadding: _fieldScrollPadding,
                       onChanged: (next) => songs.value = next,
                     ),

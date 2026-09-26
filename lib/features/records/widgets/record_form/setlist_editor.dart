@@ -6,10 +6,8 @@ import 'package:recolle/core/constants/field_limits.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
-import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
-import 'package:recolle/features/records/widgets/setlistfm_import_sheet.dart';
 
 /// 並び替え時に [ReorderableListView] 用の安定キーとなる行。
 class _SetlistLine {
@@ -19,24 +17,20 @@ class _SetlistLine {
   final String text;
 }
 
-/// セットリストの入力欄。曲の追加・編集・並び替え・削除と setlist.fm 取り込みを担う。
+/// セットリストの入力欄。曲の追加・編集・並び替え・削除を担う。
 class SetlistEditor extends HookWidget {
   const SetlistEditor({
     super.key,
     required this.initialSongs,
     required this.artistName,
-    required this.date,
     required this.onChanged,
     this.scrollPadding = const EdgeInsets.all(20),
   });
 
   final List<String> initialSongs;
 
-  /// 曲名候補と setlist.fm 検索に使う。
+  /// 曲名候補の検索に使う。
   final String artistName;
-
-  /// setlist.fm で公演を探すときの日付。
-  final DateTime date;
   final ValueChanged<List<String>> onChanged;
   final EdgeInsets scrollPadding;
 
@@ -103,39 +97,6 @@ class SetlistEditor extends HookWidget {
         },
       );
     }
-
-    Future<void> importFromSetlistFm() async {
-      FocusScope.of(context).unfocus();
-      final songs = await showSetlistFmImportSheet(
-        context,
-        artistName: artistName.trim(),
-        date: date,
-      );
-      if (songs == null || songs.isEmpty || !context.mounted) return;
-
-      if (lines.value.isNotEmpty) {
-        final replace = await showConfirmDialog(
-          context,
-          title: 'セットリストを置き換え',
-          message:
-              '入力済みの${lines.value.length}曲を、取り込んだ${songs.length}曲で置き換えますか？',
-          okText: '置き換える',
-        );
-        if (!replace || !context.mounted) return;
-      }
-
-      final (imported, truncated) = _fitToLimits(songs);
-      commit(imported.map(newLine).toList());
-      HapticFeedback.mediumImpact();
-      AppToast.show(
-        truncated
-            ? '${imported.length}曲を取り込みました（文字数上限のため一部省略）'
-            : '${imported.length}曲を取り込みました',
-        icon: CupertinoIcons.checkmark_circle_fill,
-      );
-    }
-
-    final canImport = artistName.trim().isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -213,62 +174,20 @@ class SetlistEditor extends HookWidget {
             addSong();
           },
         ),
-        const SizedBox(height: 12),
-        CupertinoButton.tinted(
-          color: context.colors.accent,
-          onPressed: canImport ? importFromSetlistFm : null,
-          sizeStyle: CupertinoButtonSize.medium,
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(CupertinoIcons.cloud_download, size: 18),
-              SizedBox(width: 6),
-              Text(
-                'setlist.fm から取り込む',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        if (lines.value.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text(
+              '右端のつまみで並び替え、左にスワイプで削除できます。',
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.45,
+                color: context.colors.textSecondary,
               ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-          child: Text(
-            canImport
-                ? (lines.value.length > 1
-                      ? '右端のつまみで並び替え、左にスワイプで削除できます。'
-                      : '公演日のセットリストを取り込めます。')
-                : 'アーティストを入力すると、公演日のセットリストを取り込めます。',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.45,
-              color: context.colors.textSecondary,
             ),
           ),
-        ),
       ],
     );
-  }
-
-  /// 1 曲・全体の文字数上限に収まるよう切り詰める。
-  static (List<String>, bool truncated) _fitToLimits(List<String> songs) {
-    final result = <String>[];
-    var totalLength = 0;
-    var truncated = false;
-    for (final raw in songs) {
-      final song = raw.length > RecordFieldLimits.setlistSongLine
-          ? raw.substring(0, RecordFieldLimits.setlistSongLine)
-          : raw;
-      // 改行区切りで保存するので、区切り文字分も数える
-      final added = song.length + (result.isEmpty ? 0 : 1);
-      if (totalLength + added > RecordFieldLimits.setlistTotal) {
-        truncated = true;
-        break;
-      }
-      totalLength += added;
-      truncated |= song.length != raw.length;
-      result.add(song);
-    }
-    return (result, truncated);
   }
 }
 

@@ -55,10 +55,9 @@ class SetlistFmClient {
 
   /// [tourName] を渡すとツアー名でも絞り込む。[includeEmpty] が true なら、
   /// 曲が未登録の公演（開催前など）も返す。[pages] は新しい順に何ページ（1 ページ
-  /// 20 件、最大 5）取るか。ツアー名や日付で絞るときは 1 ページだけになる。
+  /// 20 件、最大 5）取るか。ツアー名で絞るときは 1 ページだけになる。
   Future<List<SetlistSummary>> search({
     required String artistName,
-    DateTime? date,
     String? tourName,
     bool includeEmpty = false,
     int pages = 1,
@@ -72,7 +71,6 @@ class SetlistFmClient {
         'setlistfm-search',
         body: {
           'artistName': artist,
-          if (date != null) 'date': _isoDate(date),
           if (tour.isNotEmpty) 'tourName': tour,
           if (includeEmpty) 'includeEmpty': true,
           if (pages > 1) 'pages': pages,
@@ -97,9 +95,4 @@ class SetlistFmClient {
       });
     }
   }
-
-  static String _isoDate(DateTime d) =>
-      '${d.year.toString().padLeft(4, '0')}-'
-      '${d.month.toString().padLeft(2, '0')}-'
-      '${d.day.toString().padLeft(2, '0')}';
 }

@@ -75,9 +75,9 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **メールから入力**: 作成画面の「メールから入力」に e+・ローチケ・チケットぴあなどの購入／当選メール本文を貼ると、公演名・出演者・公演日・取得元を入力欄に入れます（`features/records/ticket_mail_parser.dart`）。各社とも公開 API がなく、サイトの自動取得は利用規約に抵触しうるため、本文を端末内で読み取る方式にしています。
-- **セットリスト取り込み**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索します（下記の設定が必要）。
+- **setlist.fm 連携**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索し、下の「公演名の候補」に使います（下記の設定が必要）。
 - **これからの公演（AI 検索）**: アーティスト詳細の「公演を探す」で、Gemini が Web（Google 検索、または無料枠では公式サイト）から今後のライブ・フェス出演を集めます（Edge Function `concert-discovery`、`features/music/widgets/upcoming_concerts_section.dart`）。＋を押すと公演名・日付・会場・開場／開演を入れた作成画面が開きます。誤りがありうるので出典リンクを添え、Gemini の規約どおり Google 検索の候補（`google_search_suggestions.dart`）も表示します。無料枠を節約するため、開いただけでは検索せず、結果はアーティストごとに 24 時間キャッシュ（`concert_discovery_cache`）し、キャッシュ外の検索は 1 人 1 日 20 回まで（`concert_discovery_usage`）です。
-- **公演名の候補**: ライブの作成画面でアーティストを入れてから公演名欄に触れると、今後の公演（上の AI 検索。検索済みなら自動、未検索なら「これからの公演を探す」から）・setlist.fm の直近 100 公演（曲が未登録の公演も含む。ツアー名の途中までの入力でも見つかるよう多めに取る）・自分の過去の記録を候補に出し、入力した文字で絞り込みます。手元の候補に一致するものがなく 3 文字以上入力したときだけ、setlist.fm をツアー名でも検索し、直近にない公演も出します（setlist.fm の一致は単語単位で、単語の途中までの入力では見つかりません）。setlist.fm の上限（1 日 1,440 回）は API キー単位で全ユーザー共有のため、Edge Function は同じ検索の結果を 24 時間キャッシュ（`setlistfm_cache`）します。候補の一覧は高さを抑えてスクロールできます（`features/records/concert_candidates.dart`、`ConcertSuggestions`）。選ぶと公演名に加えて日付・会場・開場／開演、セトリが空なら setlist.fm のセトリも入ります（ローマ字の曲名はセトリ取り込みと同じく iTunes で日本語の曲名に直します）。過去の記録はツアーの別日向けなので公演名だけを入れます。
+- **公演名の候補**: ライブの作成画面でアーティストを入れてから公演名欄に触れると、今後の公演（上の AI 検索。検索済みなら自動、未検索なら「これからの公演を探す」から）・setlist.fm の直近 100 公演（曲が未登録の公演も含む。ツアー名の途中までの入力でも見つかるよう多めに取る）・自分の過去の記録を候補に出し、入力した文字で絞り込みます。手元の候補に一致するものがなく 3 文字以上入力したときだけ、setlist.fm をツアー名でも検索し、直近にない公演も出します（setlist.fm の一致は単語単位で、単語の途中までの入力では見つかりません）。setlist.fm の上限（1 日 1,440 回）は API キー単位で全ユーザー共有のため、Edge Function は同じ検索の結果を 24 時間キャッシュ（`setlistfm_cache`）します。候補の一覧は高さを抑えてスクロールできます（`features/records/concert_candidates.dart`、`ConcertSuggestions`）。選ぶと公演名に加えて日付・会場・開場／開演、セトリが空なら setlist.fm のセトリも入ります（setlist.fm はローマ字で登録されがちな曲名を、iTunes で日本語の曲名に直します）。セトリを setlist.fm から入れる方法はこの候補に一本化しています。過去の記録はツアーの別日向けなので公演名だけを入れます。
 - **公演・チケット情報**: ライブの記録には開場・開演・終演の時刻、会場・座席・チケット代を残せます（`records` の `open_time` / `start_time` / `end_time` / `venue` / `seat` / `ticket_price`）。終演が開演より前の時刻なら翌日（オールナイトなど）とみなします。
 - **これから / これまで**: ホームは「これから」と「これまで」に分けます（終演時刻があれば終演した時点で、なければ日付が変わった時点で「これまで」へ）。直近の公演は、開場まで → 開演まで → 公演中・終演までと段階的に秒単位でカウントダウンし、これからの記録の詳細画面にも同じカウントダウンを出します（`features/records/record_timeline.dart`、`widgets/event_countdown.dart`）。
 - **振り返り**: 記録のカレンダーと、年別の件数・よく行ったアーティスト／会場・チケット代合計などの集計（`record_calendar.dart` / `record_stats.dart`）。ホームと同じお気に入りアーティストのチップ（`favorite_artist_chips.dart`）か、ランキングの行でアーティストを選ぶと、カレンダーも集計もそのアーティストだけになり、初めて・最後に行った日、次の公演、よく聴いた曲、行ったライブの一覧を出します。カレンダーは月の記録を下に一覧し、日を押すとその日に絞ります。
@@ -113,7 +113,7 @@ supabase secrets set SETLISTFM_API_KEY=<発行したキー> --project-ref <proje
 supabase functions deploy setlistfm-search --project-ref <project-ref>
 ```
 
-キー未登録の間、アプリの「setlist.fm」ボタンは「連携が未設定です」と表示します。
+キー未登録の間、公演名の候補には setlist.fm の公演が出ず、「連携が未設定です」と表示します。
 
 `supabase/functions/concert-discovery` は Gemini API のプロキシです。既定のモデルは `gemini-3.5-flash-lite` です（`GEMINI_MODEL` で変更可）。Gemini 3.x の無料枠では Google 検索グラウンディングの上限が 0 で必ず 429 になるため、既定では試さずに [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) に登録された公式サイト（official homepage）とサイト内のライブ・ツアー告知らしいページを、無料枠で使える URL context で読み取って公演を集めます。このときの出典は公式サイトで、公演の告知 URL は実際に読んだページのものだけを載せます。MusicBrainz に公式サイトが登録されていないアーティストは探せません（`discovery_no_official_site`）。課金を有効にしたうえでシークレット `GEMINI_SEARCH_GROUNDING=true` を設定すると、先に検索グラウンディング（月 5,000 回まで無料）を使うようになり、公式サイト以外の告知も拾えます（`supabase secrets set GEMINI_SEARCH_GROUNDING=true`）。無料枠では入力内容（アーティスト名）が Google のサービス改善に使われることがあります。
 
