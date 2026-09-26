@@ -145,6 +145,7 @@ class FavoritesScreen extends ConsumerWidget {
       backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: 'お気に入り',
+        enTitle: 'FAVORITES',
         trailing: NavBarIconButton(
           icon: CupertinoIcons.person_badge_plus,
           semanticLabel: readOnlyOffline ? 'オフラインでは追加できません' : 'アーティストを追加',

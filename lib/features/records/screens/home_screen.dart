@@ -5,7 +5,6 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
-import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
@@ -46,22 +45,7 @@ class HomeScreen extends HookConsumerWidget {
       backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: 'RECOLLE',
-        largeTitle: Text(
-          'RECOLLE',
-          style: AppFonts.displayStyle(
-            fontSize: 38,
-            color: context.colors.accent,
-            letterSpacing: 3,
-          ),
-        ),
-        middle: Text(
-          'RECOLLE',
-          style: AppFonts.displayStyle(
-            fontSize: 22,
-            color: context.colors.accent,
-            letterSpacing: 2,
-          ),
-        ),
+        enTitle: 'RECOLLE',
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [

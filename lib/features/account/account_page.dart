@@ -108,6 +108,7 @@ class AccountPage extends HookConsumerWidget {
         listenable: AuthReauthInProgress.instance,
         builder: (context, _) => LargeTitleScrollView(
           title: 'アカウント',
+          enTitle: 'ACCOUNT',
           trailing: isBusy.value
               ? const Padding(
                   padding: EdgeInsets.only(right: 8),

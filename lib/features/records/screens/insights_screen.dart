@@ -49,6 +49,7 @@ class InsightsScreen extends HookConsumerWidget {
       backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: '振り返り',
+        enTitle: 'LOOK BACK',
         bottom: _InsightsFilterBar(
           view: view.value,
           onViewChanged: (v) => view.value = v,

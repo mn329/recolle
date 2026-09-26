@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 
 /// ナビゲーションバーに置くアイコンボタン。iOS と同じく押下中は淡くなる。
 class NavBarIconButton extends StatelessWidget {
@@ -82,20 +83,18 @@ class LargeTitleScrollView extends StatefulWidget {
     super.key,
     required this.title,
     required this.slivers,
-    this.largeTitle,
-    this.middle,
+    this.enTitle,
     this.trailing,
     this.bottom,
     this.onRefresh,
     this.contentKey,
   });
 
-  /// 縮んだときに中央に出す見出し。[largeTitle] 省略時は大見出しにも使う。
+  /// 画面の見出し。[enTitle] があれば、大見出しでは英字の横に小さく添える。
   final String title;
-  final Widget? largeTitle;
 
-  /// 縮んだときの見出しを文字以外で出したいときに指定する。
-  final Widget? middle;
+  /// 印字風の英字で大きく出す見出し（ホームの「RECOLLE」など）。縮んだときもこちらを出す。
+  final String? enTitle;
   final Widget? trailing;
 
   /// タイトルの下に固定する部品（セグメントコントロールなど）。
@@ -164,6 +163,55 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
     );
   }
 
+  Widget _largeTitle(BuildContext context) {
+    final en = widget.enTitle;
+    if (en == null) return Text(widget.title);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          en,
+          style: AppFonts.displayStyle(
+            fontSize: 38,
+            color: context.colors.accent,
+            letterSpacing: 3,
+          ),
+        ),
+        // 英字と同じ名前（ホームの「RECOLLE」）なら添えない
+        if (widget.title != en) ...[
+          const SizedBox(width: 10),
+          Flexible(
+            child: Text(
+              widget.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0,
+                color: context.colors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _middleTitle(BuildContext context) {
+    final en = widget.enTitle;
+    if (en == null) return Text(widget.title);
+    return Text(
+      en,
+      style: AppFonts.displayStyle(
+        fontSize: 22,
+        color: context.colors.accent,
+        letterSpacing: 2,
+      ),
+    );
+  }
+
   Widget _buildScrollView(BuildContext context) {
     final refresh = widget.onRefresh;
     final bottom = widget.bottom;
@@ -174,8 +222,8 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
       ),
       slivers: [
         CupertinoSliverNavigationBar(
-          largeTitle: widget.largeTitle ?? Text(widget.title),
-          middle: widget.middle ?? Text(widget.title),
+          largeTitle: _largeTitle(context),
+          middle: _middleTitle(context),
           alwaysShowMiddle: false,
           trailing: widget.trailing,
           backgroundColor: context.colors.bar,
