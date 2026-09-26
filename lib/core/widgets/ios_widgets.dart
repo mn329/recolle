@@ -74,7 +74,10 @@ class NavBarTextButton extends StatelessWidget {
 }
 
 /// タブのトップ画面用。スクロールで縮むラージタイトルと、引っ張って更新を備える。
-class LargeTitleScrollView extends StatelessWidget {
+///
+/// [contentKey] が変わる（セグメントや絞り込みを切り替える）と、表示ごとに覚えた
+/// スクロール位置へ戻す。初めて開く表示は、ナビバーの縮み具合を保ったまま先頭から見せる。
+class LargeTitleScrollView extends StatefulWidget {
   const LargeTitleScrollView({
     super.key,
     required this.title,
@@ -84,6 +87,7 @@ class LargeTitleScrollView extends StatelessWidget {
     this.trailing,
     this.bottom,
     this.onRefresh,
+    this.contentKey,
   });
 
   /// 縮んだときに中央に出す見出し。[largeTitle] 省略時は大見出しにも使う。
@@ -99,30 +103,81 @@ class LargeTitleScrollView extends StatelessWidget {
   final Future<void> Function()? onRefresh;
   final List<Widget> slivers;
 
+  /// 表示中の内容を表すキー。変わるとスクロール位置を表示ごとに切り替える。
+  final Object? contentKey;
+
+  @override
+  State<LargeTitleScrollView> createState() => _LargeTitleScrollViewState();
+}
+
+class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
+  /// ラージタイトルが縮みきるまでのスクロール量（CupertinoSliverNavigationBar の固定値）。
+  static const double _largeTitleExtent = 52;
+
+  final _savedOffsets = <Object?, double>{};
+
+  /// CupertinoPageScaffold の内側の context。ステータスバーのタップで先頭へ戻る動きを
+  /// 残すため、自前の controller ではなくそこで渡される PrimaryScrollController を使う。
+  BuildContext? _scrollContext;
+
+  ScrollController? get _controller {
+    final scrollContext = _scrollContext;
+    if (scrollContext == null || !scrollContext.mounted) return null;
+    final controller = PrimaryScrollController.maybeOf(scrollContext);
+    return controller != null && controller.hasClients ? controller : null;
+  }
+
+  @override
+  void didUpdateWidget(LargeTitleScrollView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final controller = _controller;
+    if (oldWidget.contentKey == widget.contentKey || controller == null) {
+      return;
+    }
+    final current = controller.offset;
+    _savedOffsets[oldWidget.contentKey] = current;
+    final target =
+        _savedOffsets[widget.contentKey] ??
+        current.clamp(0, _largeTitleExtent).toDouble();
+    // 新しい内容の長さが決まってから動かす（build 中に位置を変えると通知が走るため）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final controller = _controller;
+      if (!mounted || controller == null) return;
+      final position = controller.position;
+      controller.jumpTo(
+        target.clamp(position.minScrollExtent, position.maxScrollExtent),
+      );
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final refresh = onRefresh;
     // CupertinoPageScaffold の下に置くと、スクロール前はナビバーの背景と区切り線が消える
     return CupertinoPageScaffold(
       backgroundColor: context.colors.background,
-      child: _buildScrollView(context, refresh),
+      child: Builder(
+        builder: (scrollContext) {
+          _scrollContext = scrollContext;
+          return _buildScrollView(scrollContext);
+        },
+      ),
     );
   }
 
-  Widget _buildScrollView(
-    BuildContext context,
-    Future<void> Function()? refresh,
-  ) {
+  Widget _buildScrollView(BuildContext context) {
+    final refresh = widget.onRefresh;
+    final bottom = widget.bottom;
     return CustomScrollView(
+      primary: true,
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
       ),
       slivers: [
         CupertinoSliverNavigationBar(
-          largeTitle: largeTitle ?? Text(title),
-          middle: middle ?? Text(title),
+          largeTitle: widget.largeTitle ?? Text(widget.title),
+          middle: widget.middle ?? Text(widget.title),
           alwaysShowMiddle: false,
-          trailing: trailing,
+          trailing: widget.trailing,
           backgroundColor: context.colors.bar,
           border: Border(
             bottom: BorderSide(color: context.colors.separator, width: 0.33),
@@ -139,7 +194,7 @@ class LargeTitleScrollView extends StatelessWidget {
               await refresh();
             },
           ),
-        ...slivers,
+        ...widget.slivers,
         // タブバーの裏に最後の要素が隠れないようにする
         SliverToBoxAdapter(
           child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 24),

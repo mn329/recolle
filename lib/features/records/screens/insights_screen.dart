@@ -56,6 +56,7 @@ class InsightsScreen extends HookConsumerWidget {
           onArtistSelected: (a) => selectedArtist.value = a,
         ),
         onRefresh: () => ref.refresh(recordsProvider.future),
+        contentKey: (view.value, selectedArtist.value),
         slivers: [
           recordsAsync.when(
             data: (records) {

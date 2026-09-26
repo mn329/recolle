@@ -89,6 +89,7 @@ class HomeScreen extends HookConsumerWidget {
           onArtistSelected: (name) => selectedArtistName.value = name,
         ),
         onRefresh: () => ref.refresh(recordsProvider.future),
+        contentKey: (selectedType.value, selectedFavorite?.name),
         slivers: [
           if (readOnlyOffline)
             const SliverToBoxAdapter(child: _OfflineBanner()),
