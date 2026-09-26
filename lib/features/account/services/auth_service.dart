@@ -52,7 +52,9 @@ class AuthService {
           nonce: credential.rawNonce,
         );
       } on AuthException catch (e) {
-        if (e.code == 'identity_already_exists') {
+        // email_exists: 同じメールアドレスの別ユーザーがいる。そちらでサインインすれば
+        // Supabase がメールアドレスで自動リンクするので、切り替えで入れる
+        if (e.code == 'identity_already_exists' || e.code == 'email_exists') {
           throw SocialIdentityInUseException(credential);
         }
         rethrow;
