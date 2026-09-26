@@ -230,13 +230,48 @@ class _SuggestionPanel extends StatelessWidget {
 }
 
 /// 候補リストの枠。[child] が null なら何も出さない（出し入れはアニメーションする）。
-class _SuggestionCard extends StatelessWidget {
+///
+/// 候補は入力欄の下に出て、検索結果が届くとあとから広がる。入力中はキーボードに隠れないよう、
+/// 中身が変わるたびに枠の下端が見える位置まで親をスクロールする。
+class _SuggestionCard extends StatefulWidget {
   const _SuggestionCard({required this.child});
 
   final Widget? child;
 
   @override
+  State<_SuggestionCard> createState() => _SuggestionCardState();
+}
+
+class _SuggestionCardState extends State<_SuggestionCard> {
+  /// 中身は広がりきった大きさで配置されるので、枠のアニメーションを待たずに見る位置を決められる。
+  final _contentKey = GlobalKey();
+  Size? _revealedSize;
+
+  void _reveal(Duration _) {
+    final content = _contentKey.currentContext;
+    if (!mounted || content == null) return;
+    final size = content.size;
+    if (size == null || size == _revealedSize) return;
+    // 入力中（キーボードが出ている）ときだけ。ほかの欄を見ているときに勝手に動かさない。
+    // Scaffold は本文の MediaQuery からキーボードの高さを取り除くので、View から見る
+    if (View.of(context).viewInsets.bottom == 0) return;
+    _revealedSize = size;
+    Scrollable.ensureVisible(
+      content,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final child = widget.child;
+    if (child == null) {
+      _revealedSize = null;
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback(_reveal);
+    }
     return AnimatedSize(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
@@ -244,6 +279,7 @@ class _SuggestionCard extends StatelessWidget {
       child: child == null
           ? const SizedBox(width: double.infinity)
           : Container(
+              key: _contentKey,
               width: double.infinity,
               margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
