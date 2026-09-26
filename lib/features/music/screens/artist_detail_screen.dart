@@ -78,7 +78,10 @@ class ArtistDetailScreen extends HookConsumerWidget {
       backgroundColor: context.colors.background,
       appBar: AppBar(
         actions: [
-          FavoriteArtistToggleButton(artistName: artistName),
+          FavoriteArtistToggleButton(
+            artistName: artistName,
+            itunesArtistId: itunesArtistId ?? artist?.id,
+          ),
           NavBarIconButton(
             icon: CupertinoIcons.plus_circle_fill,
             semanticLabel: 'このアーティストの記録を追加',

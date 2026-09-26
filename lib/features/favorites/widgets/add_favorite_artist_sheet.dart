@@ -12,15 +12,27 @@ import 'package:recolle/features/favorites/data/favorite_artists_repository.dart
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 
 /// お気に入りアーティストを検索して追加する、iOS のカード型シート。
+///
+/// 候補を選ぶとアーティスト詳細を開く。どんなアーティストか見たいだけのこともあるので、
+/// 選んだだけでは登録せず、詳細の星ボタンで登録してもらう。
 Future<void> showAddFavoriteArtistSheet(
   BuildContext context, {
   String initialQuery = '',
-}) {
-  return showCupertinoSheet<void>(
+}) async {
+  final picked = await showCupertinoSheet<ItunesArtist>(
     context: context,
     builder: (_) => _AddFavoriteArtistSheet(initialQuery: initialQuery),
+  );
+  if (picked == null || !context.mounted) return;
+  await Navigator.push(
+    context,
+    CupertinoPageRoute<void>(
+      builder: (_) =>
+          ArtistDetailScreen(artistName: picked.name, itunesArtistId: picked.id),
+    ),
   );
 }
 
@@ -44,7 +56,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
         normalizeArtistName(f.name),
     };
 
-    Future<void> addArtist(String name, {int? itunesArtistId}) async {
+    Future<void> addArtist(String name) async {
       if (isSaving.value) return;
       if (name.trim().length > FavoriteArtistsRepository.maxNameLength) {
         AppToast.error(
@@ -64,11 +76,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
         }
         await ref
             .read(favoriteArtistsProvider.notifier)
-            .add(
-              name: name,
-              itunesArtistId: itunesArtistId,
-              artworkUrl: artworkUrl,
-            );
+            .add(name: name, artworkUrl: artworkUrl);
         HapticFeedback.lightImpact();
         navigator.pop();
         AppToast.show(
@@ -173,19 +181,15 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                       alreadyAdded: existingNames.contains(
                         normalizeArtistName(artist.name),
                       ),
-                      enabled:
-                          !isSaving.value &&
-                          !existingNames.contains(
-                            normalizeArtistName(artist.name),
-                          ),
-                      onTap: () =>
-                          addArtist(artist.name, itunesArtistId: artist.id),
+                      enabled: !isSaving.value,
+                      showChevron: true,
+                      onTap: () => Navigator.pop(context, artist),
                     ),
                   if (trimmedQuery.isEmpty)
                     Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Apple Music のカタログから候補を表示します',
+                        'Apple Music のカタログから候補を表示します。\n選ぶと詳細を開き、☆でお気に入りに登録できます',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: context.colors.textSecondary,
@@ -211,12 +215,14 @@ class _SuggestionRow extends StatelessWidget {
     required this.enabled,
     this.subtitle,
     this.alreadyAdded = false,
+    this.showChevron = false,
   });
 
   final IconData icon;
   final String title;
   final String? subtitle;
   final bool alreadyAdded;
+  final bool showChevron;
   final bool enabled;
   final VoidCallback onTap;
 
@@ -233,7 +239,7 @@ class _SuggestionRow extends StatelessWidget {
           ? context.colors.textPrimary
           : context.colors.textDisabled,
       subtitle: subtitle,
-      showChevron: false,
+      showChevron: showChevron,
       additionalInfo: alreadyAdded
           ? Text(
               '登録済み',

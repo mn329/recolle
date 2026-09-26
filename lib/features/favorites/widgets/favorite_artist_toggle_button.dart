@@ -12,9 +12,14 @@ import 'package:recolle/features/music/providers/music_providers.dart';
 
 /// アーティスト名の横に置く、お気に入り登録・解除の星ボタン。
 class FavoriteArtistToggleButton extends HookConsumerWidget {
-  const FavoriteArtistToggleButton({super.key, required this.artistName});
+  const FavoriteArtistToggleButton({
+    super.key,
+    required this.artistName,
+    this.itunesArtistId,
+  });
 
   final String artistName;
+  final int? itunesArtistId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -51,7 +56,11 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
             // アートワークは任意項目なので、取得失敗でも登録は続ける
             debugPrint('Artwork lookup failed for $artistName: $e');
           }
-          await notifier.add(name: artistName, artworkUrl: artworkUrl);
+          await notifier.add(
+            name: artistName,
+            itunesArtistId: itunesArtistId,
+            artworkUrl: artworkUrl,
+          );
           AppToast.show(
             '「${artistName.trim()}」をお気に入りに追加しました',
             icon: CupertinoIcons.star_fill,
