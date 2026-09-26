@@ -1,5 +1,5 @@
 # Supabase 無料プランは、DB へのクエリが少ない状態が約 7 日続くとプロジェクトを一時停止する。
-# 公式の目安（毎日数回のリクエスト）に合わせて、records テーブルへの SELECT を 1 日 2 回送る。
+# 公式の目安（毎日数回のリクエスト）に合わせて、各プロジェクトのテーブルへ SELECT を 1 日 2 回送る。
 # 一時停止後はこのワークフローでは復旧できないため、失敗したらダッシュボードで Resume すること。
 name: Supabase Keep Alive
 
@@ -14,23 +14,37 @@ permissions:
 
 jobs:
   ping:
+    name: ping (${{ matrix.project }})
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - project: recolle
+            table: records
+            url_secret: SUPABASE_URL
+            key_secret: SUPABASE_ANON_KEY
+          - project: nostargia
+            table: t_stars
+            url_secret: NOSTARGIA_SUPABASE_URL
+            key_secret: NOSTARGIA_SUPABASE_KEY
 
     steps:
-      - name: Query records table
+      - name: Query ${{ matrix.table }}
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_URL: ${{ secrets[matrix.url_secret] }}
+          SUPABASE_KEY: ${{ secrets[matrix.key_secret] }}
+          TABLE: ${{ matrix.table }}
         run: |
           set -euo pipefail
 
           if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_KEY}" ]; then
-            echo "::error::GitHub Secrets に SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。"
+            echo "::error::GitHub Secrets に ${{ matrix.url_secret }} と ${{ matrix.key_secret }} を設定してください。"
             exit 1
           fi
 
-          url="${SUPABASE_URL%/}/rest/v1/records?select=id&limit=1"
+          url="${SUPABASE_URL%/}/rest/v1/${TABLE}?select=id&limit=1"
 
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
             --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
@@ -41,9 +55,9 @@ jobs:
             exit 1
           }
 
-          echo "records への SELECT: HTTP ${status}"
+          echo "${TABLE} への SELECT: HTTP ${status}"
 
           if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
-            echo "::error::クエリが失敗しました (HTTP ${status})。キーと records テーブルの RLS（SELECT）を確認してください。"
+            echo "::error::クエリが失敗しました (HTTP ${status})。キーと ${TABLE} テーブルの RLS（SELECT）を確認してください。"
             exit 1
           fi
