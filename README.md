@@ -64,22 +64,11 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 ## Supabase Edge Functions（任意）
 
-バックエンドを自プロジェクトにデプロイする場合、`supabase/functions/` に Resend 経由の認証メール送信（`resend-auth`）やアカウント削除用（`delete-account`）などの関数があります。
-
-| シークレット | 用途 | 設定方法 |
-|--------------|------|----------|
-| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | DB・Auth 管理操作 | Supabase が自動で注入（設定不要） |
-| `RESEND_API_KEY` | `resend-auth` のメール送信 | 手動で登録 |
-
-`RESEND_API_KEY` は [Resend](https://resend.com/api-keys) で発行し、次の手順で登録します。
+`supabase/functions/delete-account` はアカウント削除用の関数です。使用する `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` は Supabase が自動で注入するため、シークレットの手動登録は不要です。
 
 ```bash
-cp supabase/functions/.env.example supabase/functions/.env   # 値を埋める（.gitignore 済み）
-supabase secrets set --env-file supabase/functions/.env --project-ref <project-ref>
-supabase secrets list --project-ref <project-ref>             # 登録確認
+supabase functions deploy delete-account --project-ref <project-ref>
 ```
-
-ローカル実行は `supabase functions serve --env-file supabase/functions/.env` です。
 
 ## Supabase 無停止（GitHub Actions）
 
