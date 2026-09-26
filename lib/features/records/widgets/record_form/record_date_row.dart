@@ -21,19 +21,17 @@ class RecordDateRow extends StatefulWidget {
   State<RecordDateRow> createState() => _RecordDateRowState();
 }
 
-class _RecordDateRowState extends State<RecordDateRow> {
+class _RecordDateRowState extends State<RecordDateRow>
+    with InlinePickerExpansion {
   static const _minimumYear = 2000;
   static const _maximumYear = 2100;
 
-  bool _expanded = false;
-
-  void _toggle() {
-    FocusScope.of(context).unfocus();
-    setState(() => _expanded = !_expanded);
-  }
-
   @override
   Widget build(BuildContext context) {
+    return Focus(focusNode: pickerFocusNode, child: _buildRow(context));
+  }
+
+  Widget _buildRow(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -41,7 +39,7 @@ class _RecordDateRowState extends State<RecordDateRow> {
           padding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
           minimumSize: const Size(0, 48),
           pressedOpacity: 0.6,
-          onPressed: _toggle,
+          onPressed: () => setExpanded(!expanded),
           child: Row(
             children: [
               Expanded(
@@ -71,7 +69,7 @@ class _RecordDateRowState extends State<RecordDateRow> {
                   ),
                   style: AppFonts.monoStyle(
                     fontSize: 15,
-                    color: _expanded
+                    color: expanded
                         ? context.colors.accent
                         : context.colors.textPrimary,
                   ),
@@ -84,9 +82,9 @@ class _RecordDateRowState extends State<RecordDateRow> {
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: _expanded
+          child: expanded
               ? InlinePickerPanel(
-                  onDone: () => setState(() => _expanded = false),
+                  onDone: () => setExpanded(false),
                   picker: CupertinoDatePicker(
                     mode: CupertinoDatePickerMode.date,
                     dateOrder: DatePickerDateOrder.ymd,

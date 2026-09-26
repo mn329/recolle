@@ -25,22 +25,24 @@ class RecordTimeRow extends StatefulWidget {
   State<RecordTimeRow> createState() => _RecordTimeRowState();
 }
 
-class _RecordTimeRowState extends State<RecordTimeRow> {
-  bool _expanded = false;
-
+class _RecordTimeRowState extends State<RecordTimeRow>
+    with InlinePickerExpansion {
   void _toggle() {
-    FocusScope.of(context).unfocus();
-    if (!_expanded && widget.time == null) widget.onChanged(widget.defaultTime);
-    setState(() => _expanded = !_expanded);
+    if (!expanded && widget.time == null) widget.onChanged(widget.defaultTime);
+    setExpanded(!expanded);
   }
 
   void _clear() {
     widget.onChanged(null);
-    setState(() => _expanded = false);
+    setExpanded(false);
   }
 
   @override
   Widget build(BuildContext context) {
+    return Focus(focusNode: pickerFocusNode, child: _buildRow(context));
+  }
+
+  Widget _buildRow(BuildContext context) {
     final time = widget.time;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -91,7 +93,7 @@ class _RecordTimeRowState extends State<RecordTimeRow> {
                         )
                       : AppFonts.monoStyle(
                           fontSize: 15,
-                          color: _expanded
+                          color: expanded
                               ? context.colors.accent
                               : context.colors.textPrimary,
                         ),
@@ -104,9 +106,9 @@ class _RecordTimeRowState extends State<RecordTimeRow> {
           duration: const Duration(milliseconds: 260),
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
-          child: _expanded && time != null
+          child: expanded && time != null
               ? InlinePickerPanel(
-                  onDone: () => setState(() => _expanded = false),
+                  onDone: () => setExpanded(false),
                   picker: CupertinoDatePicker(
                     mode: CupertinoDatePickerMode.time,
                     use24hFormat: true,
