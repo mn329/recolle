@@ -160,13 +160,14 @@ class _FavoriteArtistCard extends StatelessWidget {
           children: [
             Expanded(
               child: LayoutBuilder(
-                builder: (context, constraints) => Hero(
+                builder: (context, constraints) => ArtistArtworkHero(
                   tag: 'favorite-artist-${artist.id}',
-                  child: ArtistAvatar(
-                    name: artist.name,
-                    artworkUrl: artist.artworkUrl,
-                    size: constraints.maxWidth,
-                    borderRadius: BorderRadius.zero,
+                  name: artist.name,
+                  artworkUrl: artist.artworkUrl,
+                  size: constraints.maxWidth,
+                  // カードの上辺の角丸と揃える
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
                   ),
                 ),
               ),

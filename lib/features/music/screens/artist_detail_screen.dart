@@ -54,12 +54,23 @@ class ArtistDetailScreen extends HookConsumerWidget {
         : null;
     final showAllSongs = useState(false);
 
-    final avatar = ArtistAvatar(
-      name: artistName,
-      artworkUrl: artworkUrl ?? fallbackArtwork,
-      size: 104,
-      borderRadius: BorderRadius.circular(14),
-    );
+    const avatarSize = 104.0;
+    const avatarRadius = BorderRadius.all(Radius.circular(14));
+    final resolvedArtwork = artworkUrl ?? fallbackArtwork;
+    final avatar = heroTag == null
+        ? ArtistAvatar(
+            name: artistName,
+            artworkUrl: resolvedArtwork,
+            size: avatarSize,
+            borderRadius: avatarRadius,
+          )
+        : ArtistArtworkHero(
+            tag: heroTag!,
+            name: artistName,
+            artworkUrl: resolvedArtwork,
+            size: avatarSize,
+            borderRadius: avatarRadius,
+          );
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -92,7 +103,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
               child: Row(
                 children: [
-                  heroTag == null ? avatar : Hero(tag: heroTag!, child: avatar),
+                  avatar,
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
