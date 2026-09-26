@@ -53,17 +53,27 @@ class SetlistFmClient {
 
   final FunctionsClient _functions;
 
+  /// [tourName] を渡すとツアー名でも絞り込む。[includeEmpty] が true なら、
+  /// 曲が未登録の公演（開催前など）も返す。
   Future<List<SetlistSummary>> search({
     required String artistName,
     DateTime? date,
+    String? tourName,
+    bool includeEmpty = false,
   }) async {
     final artist = artistName.trim();
     if (artist.isEmpty) return const [];
+    final tour = tourName?.trim() ?? '';
 
     try {
       final res = await _functions.invoke(
         'setlistfm-search',
-        body: {'artistName': artist, if (date != null) 'date': _isoDate(date)},
+        body: {
+          'artistName': artist,
+          if (date != null) 'date': _isoDate(date),
+          if (tour.isNotEmpty) 'tourName': tour,
+          if (includeEmpty) 'includeEmpty': true,
+        },
       );
       final data = res.data;
       if (data is! Map || data['setlists'] is! List) {

@@ -26,13 +26,15 @@ final concertDiscoveryProvider =
       retry: (_, _) => null,
     );
 
-/// setlist.fm に登録されたアーティストの直近の公演（新しい順に最大 10 件）。
+/// setlist.fm に登録されたアーティストの直近の公演（新しい順に最大 20 件）。
+/// 曲が未登録の公演も含む。
 ///
 /// setlist.fm は呼び出し回数の制限が厳しいため、失敗しても自動では再試行しない。
 final recentSetlistsProvider =
     FutureProvider.family<List<SetlistSummary>, String>(
-      (ref, artistName) =>
-          ref.read(setlistFmClientProvider).search(artistName: artistName),
+      (ref, artistName) => ref
+          .read(setlistFmClientProvider)
+          .search(artistName: artistName, includeEmpty: true),
       retry: (_, _) => null,
     );
 

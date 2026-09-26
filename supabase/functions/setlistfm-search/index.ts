@@ -13,6 +13,8 @@ const corsHeaders = {
 const SETLISTFM_ENDPOINT = "https://api.setlist.fm/rest/1.0/search/setlists"
 const REQUEST_TIMEOUT_MS = 8000
 const MAX_ARTIST_NAME_LENGTH = 100
+const MAX_TOUR_NAME_LENGTH = 200
+const MAX_RESULTS = 20
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 
 function json(body: unknown, status = 200) {
@@ -75,14 +77,22 @@ Deno.serve(async (req) => {
   const artistName =
     typeof payload?.artistName === "string" ? payload.artistName.trim() : ""
   const date = typeof payload?.date === "string" ? payload.date : ""
+  const tourName =
+    typeof payload?.tourName === "string" ? payload.tourName.trim() : ""
+  // 公演の候補には、曲がまだ登録されていない公演（開催前など）も出したい
+  const includeEmpty = payload?.includeEmpty === true
   if (!artistName || artistName.length > MAX_ARTIST_NAME_LENGTH) {
     return json({ error: "invalid_artist_name" }, 400)
   }
   if (date && !DATE_PATTERN.test(date)) {
     return json({ error: "invalid_date" }, 400)
   }
+  if (tourName.length > MAX_TOUR_NAME_LENGTH) {
+    return json({ error: "invalid_tour_name" }, 400)
+  }
 
   const params = new URLSearchParams({ artistName, p: "1" })
+  if (tourName) params.set("tourName", tourName)
   if (date) {
     // setlist.fm は dd-MM-yyyy 形式
     const [y, m, d] = date.split("-")
@@ -124,8 +134,8 @@ Deno.serve(async (req) => {
         url: s?.url ? String(s.url) : null,
         songs: flattenSongs(s),
       }))
-      .filter((s: any) => s.id && s.songs.length > 0)
-      .slice(0, 10)
+      .filter((s: any) => s.id && (includeEmpty || s.songs.length > 0))
+      .slice(0, MAX_RESULTS)
 
     return json({ setlists })
   } catch (e) {

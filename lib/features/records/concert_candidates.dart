@@ -43,17 +43,20 @@ class ConcertCandidate {
   bool get fillsDetails => source != ConcertCandidateSource.record;
 }
 
-/// 出どころごとの件数の上限。入力中に一覧が長くなりすぎないようにする。
-const _maxPerSource = 5;
+/// 出どころごとの件数の上限。一覧はスクロールできるが、際限なく並べない。
+const _maxPerSource = 20;
 
 /// [query] で絞り込んだ候補。今後の公演・setlist.fm・過去の記録の順に並べる。
 ///
 /// [query] が空なら絞り込まない。同じ日の同じ公演名は 1 件にまとめる。
+/// [searchedSetlists] は [query] で setlist.fm を検索した結果。setlist.fm 側の
+/// あいまい一致を信じ、ここでは絞り込まずに直近の公演の後ろへ並べる。
 List<ConcertCandidate> buildConcertCandidates({
   required String query,
   required String artist,
   Iterable<DiscoveredConcert> upcoming = const [],
   Iterable<SetlistSummary> setlists = const [],
+  Iterable<SetlistSummary> searchedSetlists = const [],
   Iterable<Record> records = const [],
 }) {
   final q = normalizeArtistName(query);
@@ -77,8 +80,8 @@ List<ConcertCandidate> buildConcertCandidates({
         startTime: c.startTime,
       ),
   ];
-  final fromSetlists = [
-    for (final s in setlists)
+  List<ConcertCandidate> fromSetlistFm(Iterable<SetlistSummary> items) => [
+    for (final s in items)
       if (s.eventDate != null)
         ConcertCandidate(
           // ツアー名のない単発公演は会場名で呼び分ける
@@ -113,8 +116,10 @@ List<ConcertCandidate> buildConcertCandidates({
 
   final seen = <String>{};
   return [
-    for (final group in [fromUpcoming, fromSetlists, fromRecords])
-      ...group.where(matches).take(_maxPerSource),
+    ...fromUpcoming.where(matches).take(_maxPerSource),
+    ...fromSetlistFm(setlists).where(matches).take(_maxPerSource),
+    ...fromSetlistFm(searchedSetlists).take(_maxPerSource),
+    ...fromRecords.where(matches).take(_maxPerSource),
   ].where((c) {
     final day = c.date == null
         ? ''

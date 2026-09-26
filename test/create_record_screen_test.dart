@@ -12,6 +12,7 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
+import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class _NoFavorites extends FavoriteArtistsNotifier {
@@ -37,6 +38,26 @@ class _FakeDiscoveryClient extends ConcertDiscoveryClient {
   }
 }
 
+class _FakeSetlistFmClient extends SetlistFmClient {
+  _FakeSetlistFmClient(this.byTourName)
+    : super(FunctionsClient('http://localhost', {}));
+
+  /// ツアー名で検索したときの結果。
+  final Map<String, List<SetlistSummary>> byTourName;
+  final tourQueries = <String>[];
+
+  @override
+  Future<List<SetlistSummary>> search({
+    required String artistName,
+    DateTime? date,
+    String? tourName,
+    bool includeEmpty = false,
+  }) async {
+    if (tourName != null) tourQueries.add(tourName);
+    return byTourName[tourName] ?? const [];
+  }
+}
+
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Record? recordToEdit,
@@ -44,6 +65,7 @@ Future<void> _pumpScreen(
   List<SetlistSummary> setlists = const [],
   List<Record> records = const [],
   ConcertDiscoveryClient? discoveryClient,
+  SetlistFmClient? setlistFmClient,
 }) async {
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
@@ -54,6 +76,9 @@ Future<void> _pumpScreen(
       overrides: [
         favoriteArtistsProvider.overrideWith(_NoFavorites.new),
         recentSetlistsProvider.overrideWith((ref, _) async => setlists),
+        setlistFmClientProvider.overrideWithValue(
+          setlistFmClient ?? _FakeSetlistFmClient(const {}),
+        ),
         recordsProvider.overrideWith((ref) => Stream.value(records)),
         concertDiscoveryClientProvider.overrideWithValue(
           discoveryClient ?? _FakeDiscoveryClient(const []),
@@ -320,6 +345,66 @@ void main() {
 
       expect(find.text('CEREMONY'), findsOneWidget);
       expect(find.text('ARENA TOUR 2025'), findsNothing);
+    });
+
+    testWidgets('直近の公演にないツアーも、入力した名前で setlist.fm から探す', (tester) async {
+      final client = _FakeSetlistFmClient({
+        'dome': [
+          SetlistSummary(
+            id: 's9',
+            eventDate: DateTime(2019, 12, 1),
+            artistName: 'King Gnu',
+            venueName: '東京ドーム',
+            cityName: 'Tokyo',
+            tourName: 'Sympa Tour',
+            songs: const [],
+          ),
+        ],
+      });
+      await _pumpScreen(tester, setlists: [setlist], setlistFmClient: client);
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.enterText(_field('公演名・ツアー名'), 'd');
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('公演名・ツアー名'), 'dome');
+      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pumpAndSettle();
+
+      // 1 文字では検索せず、名前に「dome」を含まない結果も setlist.fm の一致として出す
+      expect(client.tourQueries, ['dome']);
+      expect(find.text('Sympa Tour'), findsOneWidget);
+      expect(find.text('ARENA TOUR 2025'), findsNothing);
+    });
+
+    testWidgets('候補が多いときは一覧の高さを抑えてスクロールできる', (tester) async {
+      await _pumpScreen(
+        tester,
+        setlists: [
+          for (var i = 0; i < 15; i++)
+            SetlistSummary(
+              id: 's$i',
+              eventDate: DateTime(2025, 1, i + 1),
+              artistName: 'King Gnu',
+              venueName: '会場$i',
+              cityName: 'Tokyo',
+              tourName: 'TOUR $i',
+              songs: const [],
+            ),
+        ],
+      );
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.showKeyboard(_field('公演名・ツアー名'));
+      await tester.pumpAndSettle();
+
+      final list = find.descendant(
+        of: find.byType(ConcertSuggestions),
+        matching: find.byType(ListView),
+      );
+      expect(tester.getSize(list).height, lessThanOrEqualTo(260));
+      expect(find.text('TOUR 14'), findsNothing);
+
+      await tester.drag(list, const Offset(0, -2000));
+      await tester.pumpAndSettle();
+      expect(find.text('TOUR 14'), findsOneWidget);
     });
 
     testWidgets('これからの公演は押したときだけ探し、選ぶと開演時刻まで入れる', (tester) async {

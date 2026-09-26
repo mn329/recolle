@@ -43,6 +43,23 @@ void main() {
     expect(candidates.last.fillsDetails, isFalse);
   });
 
+  test('入力で検索した setlist.fm の公演は、文字が一致しなくても直近の公演の後ろに出す', () {
+    final candidates = buildConcertCandidates(
+      query: 'dome',
+      artist: 'King Gnu',
+      setlists: [
+        _setlist('s1', DateTime(2025, 5, 3), tour: 'DOME TOUR'),
+        _setlist('s2', DateTime(2025, 4, 1), tour: 'ARENA'),
+      ],
+      searchedSetlists: [
+        _setlist('s3', DateTime(2019, 12, 1), tour: 'Sympa'),
+        _setlist('s1', DateTime(2025, 5, 3), tour: 'DOME TOUR'),
+      ],
+    );
+
+    expect(candidates.map((c) => c.title), ['DOME TOUR', 'Sympa']);
+  });
+
   test('ツアー名のない公演は会場名で呼び、日付のない公演は出さない', () {
     final candidates = buildConcertCandidates(
       query: '',

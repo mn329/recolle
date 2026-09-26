@@ -12,6 +12,7 @@ import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
+import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
 import 'package:recolle/features/records/models/record.dart';
@@ -247,8 +248,18 @@ class ConcertSuggestions extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final discovery = concertDiscoveryProvider(artist);
     final discoveryRequested = useState(ref.exists(discovery));
+    final scrollController = useScrollController();
     final upcoming = discoveryRequested.value ? ref.watch(discovery) : null;
     final setlists = ref.watch(recentSetlistsProvider(artist));
+    final setlistFm = ref.watch(setlistFmClientProvider);
+    // 直近の公演にないツアーも、入力した名前で setlist.fm から探す
+    final searched = useDebouncedSearch<SetlistSummary>(
+      query,
+      (q) =>
+          setlistFm.search(artistName: artist, tourName: q, includeEmpty: true),
+      delay: const Duration(milliseconds: 600),
+      minLength: 2,
+    );
     final records =
         ref.watch(recordsProvider).asData?.value ?? const <Record>[];
 
@@ -257,26 +268,20 @@ class ConcertSuggestions extends HookConsumerWidget {
       artist: artist,
       upcoming: upcoming?.asData?.value.concerts ?? const [],
       setlists: setlists.asData?.value ?? const [],
+      searchedSetlists: searched.data ?? const [],
       records: records,
     );
-    final errors = [
+    final errors = {
       if (upcoming?.error case final e?) toUserFriendlyMessage(e),
       if (setlists.error case final e?) toUserFriendlyMessage(e),
-    ];
-    final isLoading = setlists.isLoading || (upcoming?.isLoading ?? false);
+      if (searched.error case final e?) toUserFriendlyMessage(e),
+    };
+    final isLoading =
+        setlists.isLoading ||
+        (upcoming?.isLoading ?? false) ||
+        searched.connectionState == ConnectionState.waiting;
 
-    final rows = <Widget>[
-      for (final c in candidates)
-        _SuggestionRow(
-          icon: switch (c.source) {
-            ConcertCandidateSource.upcoming => CupertinoIcons.sparkles,
-            ConcertCandidateSource.setlistFm => CupertinoIcons.music_note_list,
-            ConcertCandidateSource.record => CupertinoIcons.clock,
-          },
-          title: c.title,
-          subtitle: _subtitle(c),
-          onTap: () => onPick(c),
-        ),
+    final footer = <Widget>[
       if (isLoading)
         const Padding(
           padding: EdgeInsets.all(12),
@@ -299,20 +304,58 @@ class ConcertSuggestions extends HookConsumerWidget {
         ),
     ];
 
+    if (candidates.isEmpty && footer.isEmpty) {
+      return const _SuggestionCard(child: null);
+    }
     return _SuggestionCard(
-      child: rows.isEmpty
-          ? null
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final (i, row) in rows.indexed) ...[
-                  if (i > 0) const FormDivider(indent: 56),
-                  row,
-                ],
-              ],
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (candidates.isNotEmpty)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: _maxListHeight),
+              // 作成画面はドラッグでキーボードを閉じるため、候補のスクロールを伝えると
+              // 公演名欄のフォーカスが外れて候補ごと消えてしまう
+              child: NotificationListener<ScrollNotification>(
+                onNotification: (_) => true,
+                child: CupertinoScrollbar(
+                  controller: scrollController,
+                  child: ListView.separated(
+                    controller: scrollController,
+                    shrinkWrap: true,
+                    padding: EdgeInsets.zero,
+                    itemCount: candidates.length,
+                    separatorBuilder: (_, _) => const FormDivider(indent: 56),
+                    itemBuilder: (context, i) {
+                      final c = candidates[i];
+                      return _SuggestionRow(
+                        icon: switch (c.source) {
+                          ConcertCandidateSource.upcoming =>
+                            CupertinoIcons.sparkles,
+                          ConcertCandidateSource.setlistFm =>
+                            CupertinoIcons.music_note_list,
+                          ConcertCandidateSource.record => CupertinoIcons.clock,
+                        },
+                        title: c.title,
+                        subtitle: _subtitle(c),
+                        onTap: () => onPick(c),
+                      );
+                    },
+                  ),
+                ),
+              ),
             ),
+          for (final (i, row) in footer.indexed) ...[
+            if (i > 0 || candidates.isNotEmpty) const FormDivider(indent: 56),
+            row,
+          ],
+        ],
+      ),
     );
   }
+
+  /// 候補がおよそ 4 件半見える高さ。途中で切れて見えることで、スクロールできると分かる。
+  static const _maxListHeight = 260.0;
 
   static String _subtitle(ConcertCandidate c) {
     final date = c.date;
