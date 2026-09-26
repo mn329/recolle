@@ -26,6 +26,23 @@ class RecordTicketTile extends ConsumerWidget {
       action();
     }
 
+    // プレビューは幅に制約のない FittedBox の中で描かれるので、一覧での幅に固定しておく
+    return LayoutBuilder(
+      builder: (context, constraints) => _buildMenu(
+        context,
+        ref,
+        SizedBox(width: constraints.maxWidth, child: card),
+        closeMenuThen,
+      ),
+    );
+  }
+
+  Widget _buildMenu(
+    BuildContext context,
+    WidgetRef ref,
+    Widget card,
+    void Function(VoidCallback action) closeMenuThen,
+  ) {
     return CupertinoContextMenu(
       enableHapticFeedback: true,
       actions: [
