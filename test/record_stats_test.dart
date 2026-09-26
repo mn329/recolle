@@ -194,8 +194,6 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('集計'));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();
     expect(find.text('4'), findsWidgets);
@@ -259,8 +257,6 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('集計'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();

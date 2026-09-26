@@ -21,15 +21,15 @@ import 'package:recolle/features/records/screens/live_list_screen.dart';
 import 'package:recolle/features/records/widgets/record_calendar_view.dart';
 
 enum InsightsView {
-  calendar('カレンダー'),
-  stats('集計');
+  stats('集計'),
+  calendar('カレンダー');
 
   const InsightsView(this.label);
 
   final String label;
 }
 
-/// 「振り返り」タブ。カレンダーと、年ごとの参戦回数・チケット代・ランキングを切り替える。
+/// 「振り返り」タブ。年ごとの参戦回数・チケット代・ランキング（最初に出す）とカレンダーを切り替える。
 ///
 /// ホームと同じお気に入りアーティストのチップ（または集計のランキング）でアーティストを選ぶと、
 /// カレンダーも集計もそのアーティストの記録だけになる。
@@ -39,7 +39,7 @@ class InsightsScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(recordsProvider);
-    final view = useState(InsightsView.calendar);
+    final view = useState(InsightsView.stats);
     final selectedYear = useState<int?>(DateTime.now().year);
     final selectedArtist = useState<String?>(null);
     final favorites =
