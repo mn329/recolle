@@ -1,8 +1,10 @@
 // アーティストの今後の公演を Gemini で集める。
-// まず Google 検索（グラウンディング）を試し、無料枠の対象外などで 429 になったら、
-// MusicBrainz で公式サイトを特定して、そのページを URL context（無料枠で使える）で読み取る。
+// MusicBrainz で公式サイトを特定し、そのページを URL context（無料枠で使える）で読み取る。
 // 必要なシークレット: GEMINI_API_KEY（https://aistudio.google.com/apikey で無料発行）
 // 任意: GEMINI_MODEL（既定 gemini-3.5-flash-lite）
+// 任意: GEMINI_SEARCH_GROUNDING=true で、先に Google 検索（グラウンディング）を試す。
+//   無料枠では上限 0 で必ず 429 になり、リクエストを 1 回無駄にするので既定では使わない。
+//   有料枠にしたら有効にすると、公式サイト以外（ニュース・チケットサイト）からも探せる。
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
@@ -363,15 +365,22 @@ Deno.serve(async (req) => {
 
   const today = todayInTokyo()
   const model = Deno.env.get("GEMINI_MODEL") || DEFAULT_MODEL
+  const useSearchGrounding = Deno.env.get("GEMINI_SEARCH_GROUNDING") === "true"
   try {
-    let res = await generate(apiKey, model, {
-      contents: [{ parts: [{ text: buildPrompt(artist, today) }] }],
-      tools: [{ google_search: {} }],
-    })
+    let res: Response | null = null
+    if (useSearchGrounding) {
+      res = await generate(apiKey, model, {
+        contents: [{ parts: [{ text: buildPrompt(artist, today) }] }],
+        tools: [{ google_search: {} }],
+      })
+      if (res.status === 429) {
+        // 検索の上限に達したときは、公式サイトの読み取りに切り替える
+        console.error("gemini search rate limited", await res.text())
+        res = null
+      }
+    }
     let pages: string[] | null = null
-    if (res.status === 429) {
-      // 検索グラウンディングは無料枠の上限が 0 のモデルがあるため、公式サイトの読み取りに切り替える
-      console.error("gemini search rate limited", await res.text())
+    if (!res) {
       let homepage: string | null
       try {
         homepage = await findOfficialSite(artist)

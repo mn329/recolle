@@ -115,7 +115,7 @@ supabase functions deploy setlistfm-search --project-ref <project-ref>
 
 キー未登録の間、アプリの「setlist.fm」ボタンは「連携が未設定です」と表示します。
 
-`supabase/functions/concert-discovery` は Gemini API のプロキシです。既定のモデルは `gemini-3.5-flash-lite` です（`GEMINI_MODEL` で変更可）。まず Google 検索グラウンディングを試しますが、Gemini 3.x の無料枠では検索グラウンディングの上限が 0 で 429 になります。その場合は [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) に登録された公式サイト（official homepage）とサイト内のライブ・ツアー告知らしいページを、無料枠で使える URL context で読み取って公演を集めます。このときの出典は公式サイトで、公演の告知 URL は実際に読んだページのものだけを載せます。MusicBrainz に公式サイトが登録されていないアーティストは探せません（`discovery_no_official_site`）。課金を有効にすると検索グラウンディング（月 5,000 回まで無料）が使われるようになり、公式サイト以外の告知も拾えます。無料枠では入力内容（アーティスト名）が Google のサービス改善に使われることがあります。
+`supabase/functions/concert-discovery` は Gemini API のプロキシです。既定のモデルは `gemini-3.5-flash-lite` です（`GEMINI_MODEL` で変更可）。Gemini 3.x の無料枠では Google 検索グラウンディングの上限が 0 で必ず 429 になるため、既定では試さずに [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) に登録された公式サイト（official homepage）とサイト内のライブ・ツアー告知らしいページを、無料枠で使える URL context で読み取って公演を集めます。このときの出典は公式サイトで、公演の告知 URL は実際に読んだページのものだけを載せます。MusicBrainz に公式サイトが登録されていないアーティストは探せません（`discovery_no_official_site`）。課金を有効にしたうえでシークレット `GEMINI_SEARCH_GROUNDING=true` を設定すると、先に検索グラウンディング（月 5,000 回まで無料）を使うようになり、公式サイト以外の告知も拾えます（`supabase secrets set GEMINI_SEARCH_GROUNDING=true`）。無料枠では入力内容（アーティスト名）が Google のサービス改善に使われることがあります。
 
 1. [Google AI Studio](https://aistudio.google.com/apikey) で API キーを発行（無料、請求先の登録は不要）。
 2. シークレットを登録してデプロイ:
