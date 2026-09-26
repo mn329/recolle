@@ -63,11 +63,19 @@ class ScaffoldWithNavBar extends StatelessWidget {
               items: _items,
               currentIndex: navigationShell.currentIndex,
               onTap: (index) {
-                // 表示中のタブをもう一度押したら、iOS と同じくそのタブの最初の画面へ戻る
-                navigationShell.goBranch(
-                  index,
-                  initialLocation: index == navigationShell.currentIndex,
-                );
+                final isCurrent = index == navigationShell.currentIndex;
+                // 表示中のタブをもう一度押したら、iOS と同じくそのタブの最初の画面へ戻る。
+                // 詳細画面は Navigator.push で積んでおり go_router の場所は変わらないため、
+                // goBranch だけでは戻らない。タブの Navigator を先頭まで戻す。
+                if (isCurrent) {
+                  navigationShell
+                      .route
+                      .branches[index]
+                      .navigatorKey
+                      ?.currentState
+                      ?.popUntil((route) => route.isFirst);
+                }
+                navigationShell.goBranch(index, initialLocation: isCurrent);
               },
             ),
           ),
