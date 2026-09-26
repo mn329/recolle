@@ -727,7 +727,7 @@ class CreateRecordScreen extends HookConsumerWidget {
                             color: context.colors.textSecondary,
                           ),
                         ),
-                  footer: '★ を付けた出演者がお目当てとしてチケットの見出しになります。',
+                  footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになります。',
                   wrapInCard: false,
                   children: [
                     ActsEditor(

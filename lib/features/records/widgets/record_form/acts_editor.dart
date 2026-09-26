@@ -18,7 +18,7 @@ class _ActDraft {
   final RecordAct act;
 }
 
-/// 対バン・フェスの出演者の入力欄。出演者ごとにお目当ての印とセトリを持つ。
+/// 対バン・フェスの出演者の入力欄。出演者ごとにセトリを持ち、お目当てを 1 組選べる。
 ///
 /// [days] が 2 日以上なら、日ごとに出演者を分けて入力する。
 class ActsEditor extends HookWidget {
@@ -52,7 +52,12 @@ class ActsEditor extends HookWidget {
 
     final drafts = useState<List<_ActDraft>>(
       useMemoized(() {
-        final initial = initialActs.map(draft).toList();
+        // 以前の記録にお目当てが複数あっても、先頭の 1 組だけを残す
+        final firstMain = initialActs.indexWhere((a) => a.isMain);
+        final initial = [
+          for (final (i, a) in initialActs.indexed)
+            draft(a.isMain && i != firstMain ? a.copyWith(isMain: false) : a),
+        ];
         if (days.length > 1) {
           // 出演者のいない日にも 1 組分の欄を用意する
           final filledDays = {for (final a in initialActs) a.day ?? 1};
@@ -85,6 +90,18 @@ class ActsEditor extends HookWidget {
         if (d.id == id) _ActDraft(id: d.id, act: change(d.act)) else d,
     ]);
 
+    // お目当ては 1 組だけ。別の出演者の ★ を押すとそちらへ移し、同じ ★ なら外す
+    void toggleMain(String id) {
+      HapticFeedback.selectionClick();
+      commit([
+        for (final d in drafts.value)
+          _ActDraft(
+            id: d.id,
+            act: d.act.copyWith(isMain: d.id == id && !d.act.isMain),
+          ),
+      ]);
+    }
+
     void add({int? day}) {
       if (drafts.value.length >= maxActs) return;
       HapticFeedback.selectionClick();
@@ -114,10 +131,7 @@ class ActsEditor extends HookWidget {
             scrollPadding: scrollPadding,
             onArtistChanged: (name) =>
                 update(d.id, (a) => a.copyWith(artist: name)),
-            onMainToggled: () {
-              HapticFeedback.selectionClick();
-              update(d.id, (a) => a.copyWith(isMain: !a.isMain));
-            },
+            onMainToggled: () => toggleMain(d.id),
             onSongsChanged: (songs) =>
                 update(d.id, (a) => a.copyWith(songs: songs)),
             onRemove: () => remove(d.id),

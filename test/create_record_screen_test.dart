@@ -401,6 +401,43 @@ void main() {
       expect(_field('3組目の出演者'), findsOneWidget);
     });
 
+    testWidgets('お目当ては 1 組だけで、別の ★ を押すとそちらへ移り、同じ ★ で外れる', (tester) async {
+      await _pumpScreen(tester);
+      await tester.ensureVisible(find.text('対バン'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('対バン'));
+      await tester.pumpAndSettle();
+      await tester.enterText(_field('1組目の出演者'), 'sumika');
+      await tester.enterText(_field('2組目の出演者'), 'Mrs. GREEN APPLE');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(_field('1組目の出演者'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(CupertinoIcons.star).first);
+      await tester.pump();
+      expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
+
+      await tester.tap(find.byIcon(CupertinoIcons.star));
+      await tester.pump();
+      expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
+      final secondRow = find.ancestor(
+        of: _field('2組目の出演者'),
+        matching: find.byType(Row),
+      );
+      expect(
+        find.descendant(
+          of: secondRow.first,
+          matching: find.byIcon(CupertinoIcons.star_fill),
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byIcon(CupertinoIcons.star_fill));
+      await tester.pump();
+      expect(find.byIcon(CupertinoIcons.star_fill), findsNothing);
+    });
+
     testWidgets('出演者のセトリはカードの中で開閉する', (tester) async {
       await _pumpScreen(tester);
       await tester.tap(find.text('対バン'));
