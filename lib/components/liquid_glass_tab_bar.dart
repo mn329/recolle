@@ -1,6 +1,8 @@
+import 'dart:io' show Platform;
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 import 'package:recolle/core/theme/app_colors.dart';
@@ -20,6 +22,13 @@ class LiquidGlassTabItem {
 /// iOS 26 風の、画面下に浮かぶリキッドグラスのタブバー。
 ///
 /// タップのほか、長押しや横スワイプで選択中のピルを指で動かし、離した位置のタブへ切り替えられる。
+///
+/// 見た目は端末に合わせて 3 段階に切り替える。
+/// - iOS 26 以降（シェーダー対応）: 屈折するリキッドグラス
+/// - それ以前の iOS・シェーダー非対応環境: 従来の iOS 風すりガラス
+/// - 「コントラストを上げる」が ON: 透過をやめた不透明なバー
+///
+/// 「視差効果を減らす」が ON のときは、伸び縮みや弾むアニメーションを止める。
 class LiquidGlassTabBar extends StatefulWidget {
   const LiquidGlassTabBar({
     super.key,
@@ -55,6 +64,29 @@ class LiquidGlassTabBar extends StatefulWidget {
   final List<LiquidGlassTabItem> items;
   final int currentIndex;
   final ValueChanged<int> onTap;
+
+  static final bool _usesShaderGlass = supportsShaderGlass(
+    shaderSupported: ImageFilter.isShaderFilterSupported,
+    isIOS: !kIsWeb && Platform.isIOS,
+    osVersion: kIsWeb ? '' : Platform.operatingSystemVersion,
+  );
+
+  /// 本物のリキッドグラスを描くか。Liquid Glass は iOS 26 のデザインなので、
+  /// それより前の iOS では OS 標準の見た目に合わせてすりガラスにとどめる。
+  @visibleForTesting
+  static bool supportsShaderGlass({
+    required bool shaderSupported,
+    required bool isIOS,
+    required String osVersion,
+  }) {
+    if (!shaderSupported) return false;
+    if (!isIOS) return true;
+    // 例: "Version 26.0 (Build 23A344)"
+    final major = int.tryParse(
+      RegExp(r'(\d+)\.').firstMatch(osVersion)?.group(1) ?? '',
+    );
+    return major != null && major >= 26;
+  }
 
   @override
   State<LiquidGlassTabBar> createState() => _LiquidGlassTabBarState();
@@ -93,13 +125,33 @@ class _LiquidGlassTabBarState extends State<LiquidGlassTabBar> {
 
   @override
   Widget build(BuildContext context) {
-    final dragging = _dragX != null;
-    final highlightedIndex = _hoveredIndex ?? widget.currentIndex;
     final colors = context.colors;
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    const shape = BorderRadius.all(
+      Radius.circular(LiquidGlassTabBar.height / 2),
+    );
+    final content = _buildContent(context, reduceMotion: reduceMotion);
 
+    if (MediaQuery.highContrastOf(context)) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: shape,
+          border: Border.all(color: colors.separator),
+          boxShadow: [BoxShadow(color: colors.shadow, blurRadius: 16)],
+        ),
+        child: ClipRRect(borderRadius: shape, child: content),
+      );
+    }
+
+    final Widget glass = LiquidGlass(
+      shape: const LiquidRoundedSuperellipse(
+        borderRadius: LiquidGlassTabBar.height / 2,
+      ),
+      child: GlassGlow(glowColor: colors.glassGlow, child: content),
+    );
     return LiquidGlassLayer(
-      // リキッドグラスのシェーダーは Impeller 専用。それ以外は軽量なすりガラスで代用する
-      fake: !ImageFilter.isShaderFilterSupported,
+      fake: !LiquidGlassTabBar._usesShaderGlass,
       settings: LiquidGlassSettings(
         thickness: 18,
         blur: 12,
@@ -109,97 +161,94 @@ class _LiquidGlassTabBarState extends State<LiquidGlassTabBar> {
         refractiveIndex: 1.25,
         saturation: 1.6,
       ),
-      child: LiquidStretch(
-        stretch: 0.3,
-        interactionScale: 1.03,
-        child: LiquidGlass(
-          shape: const LiquidRoundedSuperellipse(
-            borderRadius: LiquidGlassTabBar.height / 2,
-          ),
-          child: GlassGlow(
-            glowColor: colors.glassGlow,
-            child: SizedBox(
-              height: LiquidGlassTabBar.height,
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _itemWidth =
-                      (constraints.maxWidth - _inset * 2) / widget.items.length;
-                  final restingLeft = _inset + _itemWidth * widget.currentIndex;
-                  final indicatorLeft = dragging
-                      ? (_dragX! - _itemWidth / 2).clamp(
-                          _inset,
-                          constraints.maxWidth - _inset - _itemWidth,
-                        )
-                      : restingLeft;
-                  return GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPressStart: (d) => _startDrag(d.localPosition.dx),
-                    onLongPressMoveUpdate: (d) =>
-                        _updateDrag(d.localPosition.dx),
-                    onLongPressEnd: (_) => _endDrag(),
-                    onLongPressCancel: _cancelDrag,
-                    onHorizontalDragStart: (d) =>
-                        _startDrag(d.localPosition.dx),
-                    onHorizontalDragUpdate: (d) =>
-                        _updateDrag(d.localPosition.dx),
-                    onHorizontalDragEnd: (_) => _endDrag(),
-                    onHorizontalDragCancel: _cancelDrag,
-                    child: Stack(
-                      children: [
-                        AnimatedPositioned(
-                          // 指に追従している間は遅延なく動かし、離したらタブの位置へ弾むように戻す
-                          duration: dragging
-                              ? Duration.zero
-                              : const Duration(milliseconds: 380),
-                          curve: Curves.easeOutBack,
-                          left: indicatorLeft,
-                          top: _inset,
-                          bottom: _inset,
-                          width: _itemWidth,
-                          child: AnimatedScale(
-                            scale: dragging ? 1.12 : 1,
-                            duration: const Duration(milliseconds: 220),
-                            curve: Curves.easeOutBack,
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 220),
-                              decoration: BoxDecoration(
-                                color: dragging
-                                    ? colors.tabIndicatorActive
-                                    : colors.tabIndicator,
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(
-                                    LiquidGlassTabBar.height / 2 - _inset,
-                                  ),
-                                ),
-                              ),
-                            ),
+      child: reduceMotion
+          ? glass
+          : LiquidStretch(stretch: 0.3, interactionScale: 1.03, child: glass),
+    );
+  }
+
+  Widget _buildContent(BuildContext context, {required bool reduceMotion}) {
+    final colors = context.colors;
+    final dragging = _dragX != null;
+    final highlightedIndex = _hoveredIndex ?? widget.currentIndex;
+    final settleDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 380);
+    final feedbackDuration = reduceMotion
+        ? Duration.zero
+        : const Duration(milliseconds: 220);
+
+    return SizedBox(
+      height: LiquidGlassTabBar.height,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          _itemWidth =
+              (constraints.maxWidth - _inset * 2) / widget.items.length;
+          final restingLeft = _inset + _itemWidth * widget.currentIndex;
+          final indicatorLeft = dragging
+              ? (_dragX! - _itemWidth / 2).clamp(
+                  _inset,
+                  constraints.maxWidth - _inset - _itemWidth,
+                )
+              : restingLeft;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onLongPressStart: (d) => _startDrag(d.localPosition.dx),
+            onLongPressMoveUpdate: (d) => _updateDrag(d.localPosition.dx),
+            onLongPressEnd: (_) => _endDrag(),
+            onLongPressCancel: _cancelDrag,
+            onHorizontalDragStart: (d) => _startDrag(d.localPosition.dx),
+            onHorizontalDragUpdate: (d) => _updateDrag(d.localPosition.dx),
+            onHorizontalDragEnd: (_) => _endDrag(),
+            onHorizontalDragCancel: _cancelDrag,
+            child: Stack(
+              children: [
+                AnimatedPositioned(
+                  // 指に追従している間は遅延なく動かし、離したらタブの位置へ弾むように戻す
+                  duration: dragging ? Duration.zero : settleDuration,
+                  curve: Curves.easeOutBack,
+                  left: indicatorLeft,
+                  top: _inset,
+                  bottom: _inset,
+                  width: _itemWidth,
+                  child: AnimatedScale(
+                    scale: dragging && !reduceMotion ? 1.12 : 1,
+                    duration: feedbackDuration,
+                    curve: Curves.easeOutBack,
+                    child: AnimatedContainer(
+                      duration: feedbackDuration,
+                      decoration: BoxDecoration(
+                        color: dragging
+                            ? colors.tabIndicatorActive
+                            : colors.tabIndicator,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(
+                            LiquidGlassTabBar.height / 2 - _inset,
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: _inset,
-                          ),
-                          child: Row(
-                            children: [
-                              for (final (i, item) in widget.items.indexed)
-                                Expanded(
-                                  child: _TabButton(
-                                    item: item,
-                                    selected: i == highlightedIndex,
-                                    onTap: () => widget.onTap(i),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  );
-                },
-              ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: _inset),
+                  child: Row(
+                    children: [
+                      for (final (i, item) in widget.items.indexed)
+                        Expanded(
+                          child: _TabButton(
+                            item: item,
+                            selected: i == highlightedIndex,
+                            onTap: () => widget.onTap(i),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
