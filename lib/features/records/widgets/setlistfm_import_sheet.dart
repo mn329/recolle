@@ -46,6 +46,23 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
       [filterByDate.value, retryToken.value],
     );
     final snapshot = useFuture(future);
+    final isLocalizing = useState(false);
+
+    Future<void> pick(SetlistSummary setlist) async {
+      if (isLocalizing.value) return;
+      isLocalizing.value = true;
+      var songs = setlist.songs;
+      try {
+        final japanese = await ref
+            .read(itunesClientProvider)
+            .localizeSongTitles(artistName: artistName, titles: songs);
+        songs = [for (final s in songs) japanese[s] ?? s];
+      } catch (e) {
+        // 日本語化は補助機能なので、失敗しても元の表記で取り込む
+        debugPrint('Song title localization failed: $e');
+      }
+      if (context.mounted) Navigator.of(context).pop(songs);
+    }
 
     return ConstrainedBox(
       constraints: BoxConstraints(
@@ -74,9 +91,30 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
               ),
             ),
           ),
-          Flexible(
-            child: _buildBody(context, snapshot, filterByDate, retryToken),
-          ),
+          if (isLocalizing.value)
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  CircularProgressIndicator(color: AppColors.gold),
+                  SizedBox(height: 16),
+                  Text(
+                    '曲名を日本語表記に変換しています…',
+                    style: TextStyle(color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            )
+          else
+            Flexible(
+              child: _buildBody(
+                context,
+                snapshot,
+                filterByDate,
+                retryToken,
+                pick,
+              ),
+            ),
           const Padding(
             padding: EdgeInsets.fromLTRB(20, 8, 20, 20),
             child: Text(
@@ -94,6 +132,7 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
     AsyncSnapshot<List<SetlistSummary>> snapshot,
     ValueNotifier<bool> filterByDate,
     ValueNotifier<int> retryToken,
+    ValueChanged<SetlistSummary> onPick,
   ) {
     if (snapshot.connectionState != ConnectionState.done) {
       return const Padding(
@@ -127,10 +166,7 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         final s = setlists[index];
-        return _SetlistCard(
-          setlist: s,
-          onTap: () => Navigator.of(context).pop(s.songs),
-        );
+        return _SetlistCard(setlist: s, onTap: () => onPick(s));
       },
     );
   }

@@ -78,6 +78,72 @@ void main() {
     );
   });
 
+  group('localizeSongTitles', () {
+    ItunesClient clientWith({
+      required List<Map<String, Object>> jp,
+      required List<Map<String, Object>> us,
+      Map<String, List<Map<String, Object>>> individual = const {},
+    }) {
+      return ItunesClient(
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          if (q['attribute'] == 'artistTerm') {
+            return _json({'results': q['country'] == 'US' ? us : jp});
+          }
+          return _json({'results': individual[q['term']] ?? const []});
+        }),
+      );
+    }
+
+    test('米国ストアのローマ字名と日本ストアを trackId で突き合わせる', () async {
+      final client = clientWith(
+        jp: [
+          {'trackId': 1, 'trackName': '劇上', 'artistName': 'YOASOBI'},
+          {'trackId': 2, 'trackName': 'アイドル', 'artistName': 'YOASOBI'},
+          {'trackId': 3, 'trackName': 'Idol', 'artistName': 'YOASOBI'},
+        ],
+        us: [
+          {'trackId': 3, 'trackName': 'Idol', 'artistName': 'YOASOBI'},
+          {'trackId': 2, 'trackName': 'Idol', 'artistName': 'YOASOBI'},
+          {'trackId': 1, 'trackName': 'Gekijyo', 'artistName': 'YOASOBI'},
+        ],
+      );
+
+      final result = await client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Gekijyo', 'Idol', '夜に駆ける'],
+      );
+
+      expect(result, {'Gekijyo': '劇上', 'Idol': 'アイドル'});
+    });
+
+    test('突き合わせで見つからない曲は個別検索し、付記を落とす', () async {
+      final client = clientWith(
+        jp: const [],
+        us: const [],
+        individual: {
+          'YOASOBI Shukufuku': [
+            {
+              'trackId': 9,
+              'trackName': '祝福 - from CrosSing',
+              'artistName': 'YOASOBI',
+            },
+          ],
+          'YOASOBI Unknown': [
+            {'trackId': 8, 'trackName': '別の曲', 'artistName': 'Someone'},
+          ],
+        },
+      );
+
+      final result = await client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Shukufuku', 'Unknown'],
+      );
+
+      expect(result, {'Shukufuku': '祝福'});
+    });
+  });
+
   test('空の検索語ではリクエストしない', () async {
     final client = ItunesClient(
       httpClient: MockClient((_) async => fail('should not be called')),
