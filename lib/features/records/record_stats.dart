@@ -1,0 +1,137 @@
+import 'package:recolle/features/records/models/record.dart';
+import 'package:recolle/features/records/record_timeline.dart';
+
+/// ランキングの 1 行。
+typedef RankedItem = ({String label, int count});
+
+/// 振り返りの集計結果。対象は今日より前の記録（実際に行った・観たもの）だけ。
+class RecordStats {
+  const RecordStats({
+    required this.liveCount,
+    required this.countsByType,
+    required this.totalTicketPrice,
+    required this.pricedLiveCount,
+    required this.liveCountsByMonth,
+    required this.topArtists,
+    required this.topVenues,
+    required this.topSongs,
+  });
+
+  final int liveCount;
+  final Map<RecordType, int> countsByType;
+
+  /// チケット代を入力したライブの合計（円）。
+  final int totalTicketPrice;
+
+  /// チケット代を入力したライブの数。平均の分母に使う。
+  final int pricedLiveCount;
+
+  /// 1〜12 月のライブ数（添字 0 が 1 月）。年を指定しないときは全期間の月別合計。
+  final List<int> liveCountsByMonth;
+
+  final List<RankedItem> topArtists;
+  final List<RankedItem> topVenues;
+
+  /// セットリストに登場した回数の多い曲。
+  final List<RankedItem> topSongs;
+
+  int? get averageTicketPrice => pricedLiveCount == 0
+      ? null
+      : (totalTicketPrice / pricedLiveCount).round();
+
+  bool get isEmpty => countsByType.values.every((c) => c == 0);
+}
+
+/// 記録がある年を新しい順に返す（今日より前の記録のみ）。
+List<int> yearsWithRecords(Iterable<Record> records, DateTime now) {
+  final years = {for (final r in splitByDate(records, now).past) r.date.year};
+  return years.toList()..sort((a, b) => b.compareTo(a));
+}
+
+/// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
+RecordStats computeStats(
+  Iterable<Record> records, {
+  required DateTime now,
+  int? year,
+  int rankingLimit = 5,
+}) {
+  final past = splitByDate(
+    records,
+    now,
+  ).past.where((r) => year == null || r.date.year == year);
+  final lives = past.where((r) => r.type == RecordType.live).toList();
+
+  final countsByType = {for (final t in RecordType.values) t: 0};
+  for (final r in past) {
+    countsByType[r.type] = countsByType[r.type]! + 1;
+  }
+
+  final byMonth = List.filled(12, 0);
+  var total = 0;
+  var priced = 0;
+  final artists = _Counter();
+  final venues = _Counter();
+  final songs = _Counter();
+  for (final r in lives) {
+    byMonth[r.date.month - 1]++;
+    if (r.ticketPrice != null) {
+      total += r.ticketPrice!;
+      priced++;
+    }
+    artists.add(r.artistOrAuthor);
+    if (r.venue != null) venues.add(r.venue!);
+    // 同じ公演で 2 回演奏された曲（アンコール等）は 1 回として数える
+    final uniqueSongs = <String>{
+      for (final line in (r.setlist ?? '').split('\n'))
+        if (line.trim().isNotEmpty) line.trim(),
+    };
+    uniqueSongs.forEach(songs.add);
+  }
+
+  return RecordStats(
+    liveCount: lives.length,
+    countsByType: countsByType,
+    totalTicketPrice: total,
+    pricedLiveCount: priced,
+    liveCountsByMonth: byMonth,
+    topArtists: artists.top(rankingLimit),
+    topVenues: venues.top(rankingLimit),
+    topSongs: songs.top(rankingLimit),
+  );
+}
+
+/// 大文字小文字・前後の空白の違いをまとめて数え、いちばん多い表記で表示する。
+class _Counter {
+  final _counts = <String, int>{};
+  final _spellings = <String, Map<String, int>>{};
+
+  void add(String raw) {
+    final label = raw.trim();
+    if (label.isEmpty) return;
+    final key = label.toLowerCase();
+    _counts[key] = (_counts[key] ?? 0) + 1;
+    final spellings = _spellings.putIfAbsent(key, () => {});
+    spellings[label] = (spellings[label] ?? 0) + 1;
+  }
+
+  String _labelFor(String key) {
+    final entries = _spellings[key]!.entries.toList()
+      ..sort((a, b) {
+        final byCount = b.value.compareTo(a.value);
+        return byCount != 0 ? byCount : a.key.compareTo(b.key);
+      });
+    return entries.first.key;
+  }
+
+  List<RankedItem> top(int limit) {
+    final ranked =
+        [
+          for (final e in _counts.entries)
+            (label: _labelFor(e.key), count: e.value),
+        ]..sort((a, b) {
+          final byCount = b.count.compareTo(a.count);
+          return byCount != 0 ? byCount : a.label.compareTo(b.label);
+        });
+    return ranked.take(limit).toList();
+  }
+}
