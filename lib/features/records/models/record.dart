@@ -14,6 +14,22 @@ extension RecordTypeUi on RecordType {
         return 'その他';
     }
   }
+
+  /// 入力フォームでの [Record.title] の呼び方。
+  String get titleFieldLabel => switch (this) {
+    RecordType.live => '公演名・ツアー名',
+    RecordType.movie => '作品名',
+    RecordType.book => '書名',
+    RecordType.other => 'タイトル',
+  };
+
+  /// 入力フォームでの [Record.artistOrAuthor] の呼び方。
+  String get creatorFieldLabel => switch (this) {
+    RecordType.live => 'アーティスト',
+    RecordType.movie => '監督・出演',
+    RecordType.book => '著者',
+    RecordType.other => '出演・作者',
+  };
 }
 
 class Record {

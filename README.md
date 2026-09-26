@@ -73,6 +73,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **セットリスト取り込み**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索します（下記の設定が必要）。
+- **記録の作成・編集**: 入力内容をホームと同じチケット（`TicketFace`）でプレビューし、タップで券面画像を選びます。種別ごとに入力欄の呼び方が変わり、セットリスト・MC メモはライブのときだけ入力・保存します。部品は `features/records/widgets/record_form/`。
 
 ## プロジェクト構成（`lib/`）
 

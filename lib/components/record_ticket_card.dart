@@ -63,149 +63,159 @@ class _RecordTicketCardState extends State<RecordTicketCard>
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
         onTapCancel: _handleTapCancel,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: TicketFace(
+            title: widget.record.title,
+            artistOrAuthor: widget.record.artistOrAuthor,
+            date: widget.record.date,
+            background: LayoutBuilder(
+              builder: (context, constraints) {
+                return DecodedNetworkImage(
+                  url: widget.record.ticketImageUrl,
+                  logicalWidth: constraints.maxWidth,
+                  logicalHeight: constraints.maxHeight,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(color: AppColors.surfaceLight);
+                  },
+                );
+              },
+            ),
           ),
-          child: ClipPath(
-            clipper: TicketClipper(),
-            child: Container(
-              height: 120, // 少し高さを調整
-              decoration: const BoxDecoration(color: AppColors.surface),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // 1. Background Image with Dark Overlay
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return DecodedNetworkImage(
-                        url: widget.record.ticketImageUrl,
-                        logicalWidth: constraints.maxWidth,
-                        logicalHeight: constraints.maxHeight,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(color: AppColors.surfaceLight);
-                        },
-                      );
-                    },
+        ),
+      ),
+    );
+  }
+}
+
+/// 一覧に並ぶチケットの見た目。作成画面のプレビューとも共有する。
+class TicketFace extends StatelessWidget {
+  const TicketFace({
+    super.key,
+    required this.title,
+    required this.artistOrAuthor,
+    required this.date,
+    required this.background,
+  });
+
+  static const double height = 120;
+
+  final String title;
+  final String artistOrAuthor;
+  final DateTime date;
+
+  /// 券面いっぱいに敷く画像など。文字が読めるよう上に暗いグラデーションを重ねる。
+  final Widget background;
+
+  static const _textShadow = [
+    Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 2),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.5),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipPath(
+        clipper: TicketClipper(),
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              const ColoredBox(color: AppColors.surface),
+              background,
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.9),
+                      Colors.black.withValues(alpha: 0.6),
+                      Colors.black.withValues(alpha: 0.4),
+                    ],
+                    begin: Alignment.centerLeft,
+                    end: Alignment.centerRight,
                   ),
-                  // Dark Gradient Overlay to make text readable
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withValues(
-                            alpha: 0.9,
-                          ), // Left (Text side)
-                          Colors.black.withValues(alpha: 0.6), // Center
-                          Colors.black.withValues(alpha: 0.4), // Right
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 16,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            title,
+                            style: AppFonts.displayStyle(
+                              fontSize: 24,
+                              color: AppColors.gold,
+                              shadows: _textShadow,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            artistOrAuthor,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              shadows: _textShadow,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
                       ),
                     ),
-                  ),
-
-                  // 2. Content
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
+                    Container(
+                      width: 1,
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      child: CustomPaint(
+                        painter: DashedLinePainter(
+                          color: Colors.white.withValues(alpha: 0.3),
+                        ),
+                      ),
                     ),
-                    child: Row(
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        // Main Info (Left)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Title (Main)
-                              Text(
-                                widget.record.title,
-                                style: AppFonts.displayStyle(
-                                  fontSize: 24,
-                                  color: AppColors.gold,
-                                  shadows: const [
-                                    Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              // Artist Name
-                              Text(
-                                widget.record.artistOrAuthor,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                        Text(
+                          date.year.toString(),
+                          style: AppFonts.monoStyle(
+                            fontSize: 12,
+                            color: AppColors.gold.withValues(alpha: 0.8),
                           ),
                         ),
-
-                        // Dashed Line Divider
-                        Container(
-                          width: 1,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          child: CustomPaint(
-                            painter: DashedLinePainter(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
+                        Text(
+                          '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}',
+                          style: AppFonts.monoStyle(
+                            fontSize: 20,
+                            color: Colors.white,
                           ),
-                        ),
-
-                        // Date (Right)
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              widget.record.date.year.toString(),
-                              style: AppFonts.monoStyle(
-                                fontSize: 12,
-                                color: AppColors.gold.withValues(alpha: 0.8),
-                              ),
-                            ),
-                            Text(
-                              '${widget.record.date.month.toString().padLeft(2, '0')}.${widget.record.date.day.toString().padLeft(2, '0')}',
-                              style: AppFonts.monoStyle(
-                                fontSize: 20,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ],
                         ),
                       ],
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ),
         ),
       ),
