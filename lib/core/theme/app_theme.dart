@@ -58,7 +58,9 @@ class AppTheme {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.gold);
           }
-          return IconThemeData(color: AppColors.textPrimary.withValues(alpha: 0.5));
+          return IconThemeData(
+            color: AppColors.textPrimary.withValues(alpha: 0.5),
+          );
         }),
       ),
 

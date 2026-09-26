@@ -14,8 +14,7 @@ class NumberDatePickerSheet extends StatefulWidget {
   final ValueChanged<DateTime> onDateChanged;
 
   @override
-  State<NumberDatePickerSheet> createState() =>
-      _NumberDatePickerSheetState();
+  State<NumberDatePickerSheet> createState() => _NumberDatePickerSheetState();
 }
 
 class _NumberDatePickerSheetState extends State<NumberDatePickerSheet> {

@@ -5,5 +5,3 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 final authServiceProvider = Provider<AuthService>((ref) {
   return AuthService(Supabase.instance.client);
 });
-
-

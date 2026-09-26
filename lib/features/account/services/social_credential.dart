@@ -12,15 +12,15 @@ enum SocialProvider { apple, google }
 
 extension SocialProviderUi on SocialProvider {
   String get label => switch (this) {
-        SocialProvider.apple => 'Apple',
-        SocialProvider.google => 'Google',
-      };
+    SocialProvider.apple => 'Apple',
+    SocialProvider.google => 'Google',
+  };
 
   /// Supabase の `identities[].provider` の値。
   String get identityName => switch (this) {
-        SocialProvider.apple => 'apple',
-        SocialProvider.google => 'google',
-      };
+    SocialProvider.apple => 'apple',
+    SocialProvider.google => 'google',
+  };
 }
 
 /// ネイティブのサインインで得た、Supabase に渡す ID トークン一式。
@@ -42,9 +42,9 @@ class SocialCredential {
   final String? displayName;
 
   OAuthProvider get oauthProvider => switch (provider) {
-        SocialProvider.apple => OAuthProvider.apple,
-        SocialProvider.google => OAuthProvider.google,
-      };
+    SocialProvider.apple => OAuthProvider.apple,
+    SocialProvider.google => OAuthProvider.google,
+  };
 }
 
 /// ユーザーがサインイン画面を閉じた（エラー表示は不要）。
@@ -72,10 +72,10 @@ Future<SocialCredential> obtainAppleCredential(GoTrueClient auth) async {
     if (idToken == null) {
       throw const AuthException('Apple から認証情報を取得できませんでした。');
     }
-    final name = [credential.familyName, credential.givenName]
-        .whereType<String>()
-        .where((s) => s.trim().isNotEmpty)
-        .join(' ');
+    final name = [
+      credential.familyName,
+      credential.givenName,
+    ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' ');
     return SocialCredential(
       provider: SocialProvider.apple,
       idToken: idToken,
@@ -100,7 +100,9 @@ Future<void> _ensureGoogleInitialized(GoTrueClient auth) {
   return _googleInit ??= () async {
     final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'];
     if (webClientId == null || webClientId.isEmpty) {
-      throw StateError('.env に GOOGLE_WEB_CLIENT_ID が設定されていません（env.example を参照）');
+      throw StateError(
+        '.env に GOOGLE_WEB_CLIENT_ID が設定されていません（env.example を参照）',
+      );
     }
     final iosClientId = dotenv.env['GOOGLE_IOS_CLIENT_ID'];
     final rawNonce = auth.generateRawNonce();
@@ -121,8 +123,9 @@ Future<SocialCredential> obtainGoogleCredential(GoTrueClient auth) async {
     rethrow;
   }
   try {
-    final account =
-        await GoogleSignIn.instance.authenticate(scopeHint: _googleScopes);
+    final account = await GoogleSignIn.instance.authenticate(
+      scopeHint: _googleScopes,
+    );
     final idToken = account.authentication.idToken;
     if (idToken == null) {
       throw const AuthException('Google から認証情報を取得できませんでした。');

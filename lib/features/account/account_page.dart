@@ -47,7 +47,7 @@ class AccountPage extends HookConsumerWidget {
             title: '${provider.label} アカウントは登録済みです',
             message: wasAnonymous
                 ? 'この ${provider.label} アカウントで以前登録した記録に切り替えます。'
-                    'この端末で未登録のまま作った記録は引き継がれません。'
+                      'この端末で未登録のまま作った記録は引き継がれません。'
                 : 'この ${provider.label} アカウントに切り替えます。',
             okText: '切り替える',
             cancelText: 'キャンセル',
@@ -177,14 +177,14 @@ class _GuestPanel extends StatelessWidget {
                   onPressed: isBusy
                       ? null
                       : () => runGuarded(() async {
-                            await authService.signInAnonymously();
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('接続しました。思い出の記録を始められます。'),
-                              ),
-                            );
-                          }),
+                          await authService.signInAnonymously();
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('接続しました。思い出の記録を始められます。'),
+                            ),
+                          );
+                        }),
                   child: const Text('登録せずに使う'),
                 ),
               ],

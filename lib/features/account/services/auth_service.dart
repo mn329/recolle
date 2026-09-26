@@ -21,9 +21,9 @@ class AuthService {
 
   /// 連携済みの Apple / Google を表す provider 名。
   Set<String> get linkedProviders => {
-        for (final identity in currentUser?.identities ?? const <UserIdentity>[])
-          identity.provider,
-      };
+    for (final identity in currentUser?.identities ?? const <UserIdentity>[])
+      identity.provider,
+  };
 
   Future<void> updateDisplayName(String displayName) async {
     final trimmed = displayName.trim();
@@ -117,9 +117,7 @@ class AuthService {
       if (e.details is Map) {
         final m = e.details as Map<dynamic, dynamic>;
         final err = m['error'] ?? m['message'];
-        msg = err == null
-            ? 'アカウントの削除に失敗しました。'
-            : err.toString();
+        msg = err == null ? 'アカウントの削除に失敗しました。' : err.toString();
       } else {
         msg = e.details?.toString() ?? 'アカウントの削除に失敗しました。';
       }

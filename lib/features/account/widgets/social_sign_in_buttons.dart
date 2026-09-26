@@ -48,9 +48,9 @@ class _SocialButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Widget icon, String label) = switch (provider) {
       SocialProvider.apple => (
-          const Icon(Icons.apple, size: 22, color: Colors.black),
-          'Apple で続ける',
-        ),
+        const Icon(Icons.apple, size: 22, color: Colors.black),
+        'Apple で続ける',
+      ),
       SocialProvider.google => (const _GoogleMark(), 'Google で続ける'),
     };
 
@@ -104,7 +104,8 @@ class _GoogleMarkPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final stroke = size.width * 0.2;
-    final rect = Offset(stroke / 2, stroke / 2) &
+    final rect =
+        Offset(stroke / 2, stroke / 2) &
         Size(size.width - stroke, size.height - stroke);
     Paint arc(Color c) => Paint()
       ..color = c

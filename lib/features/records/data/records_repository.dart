@@ -9,8 +9,11 @@ class RecordsRepository {
   final SupabaseClient _client;
 
   Future<Record> insertRecord(Map<String, dynamic> row) async {
-    final inserted =
-        await _client.from('records').insert(row).select().single();
+    final inserted = await _client
+        .from('records')
+        .insert(row)
+        .select()
+        .single();
     final map = Map<String, dynamic>.from(inserted as Map);
     return Record.fromJson(map);
   }
@@ -20,7 +23,12 @@ class RecordsRepository {
   }
 
   Future<Record> updateRecord(String id, Map<String, dynamic> row) async {
-    final updated = await _client.from('records').update(row).eq('id', id).select().single();
+    final updated = await _client
+        .from('records')
+        .update(row)
+        .eq('id', id)
+        .select()
+        .single();
     final map = Map<String, dynamic>.from(updated as Map);
     return Record.fromJson(map);
   }

@@ -11,7 +11,9 @@ bool isConnectivityOnline(List<ConnectivityResult> results) {
   return !results.contains(ConnectivityResult.none);
 }
 
-final connectivityProvider = StreamProvider<List<ConnectivityResult>>((ref) async* {
+final connectivityProvider = StreamProvider<List<ConnectivityResult>>((
+  ref,
+) async* {
   yield await Connectivity().checkConnectivity();
   yield* Connectivity().onConnectivityChanged;
 });

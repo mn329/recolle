@@ -6,7 +6,9 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/home_screen.dart';
 
 void main() {
-  testWidgets('HomeScreen renders title and add button', (WidgetTester tester) async {
+  testWidgets('HomeScreen renders title and add button', (
+    WidgetTester tester,
+  ) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

@@ -54,8 +54,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               Icons.edit_outlined,
               color: readOnlyOffline ? AppColors.textDisabled : null,
             ),
-            tooltip:
-                readOnlyOffline ? 'オフラインでは編集できません' : '編集',
+            tooltip: readOnlyOffline ? 'オフラインでは編集できません' : '編集',
             onPressed: readOnlyOffline
                 ? null
                 : () async {
@@ -77,10 +76,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               Icons.delete_outline,
               color: readOnlyOffline ? AppColors.textDisabled : null,
             ),
-            tooltip:
-                readOnlyOffline ? 'オフラインでは削除できません' : '削除',
-            onPressed:
-                readOnlyOffline ? null : () => _confirmAndDelete(context, ref),
+            tooltip: readOnlyOffline ? 'オフラインでは削除できません' : '削除',
+            onPressed: readOnlyOffline
+                ? null
+                : () => _confirmAndDelete(context, ref),
           ),
         ],
       ),
@@ -108,10 +107,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                     onTap: record.ticketImageUrl.isEmpty
                         ? null
                         : () => FullscreenImageViewer.open(
-                              context,
-                              url: record.ticketImageUrl,
-                              heroTag: heroTag,
-                            ),
+                            context,
+                            url: record.ticketImageUrl,
+                            heroTag: heroTag,
+                          ),
                     child: Hero(
                       tag: heroTag,
                       child: DecodedNetworkImage(

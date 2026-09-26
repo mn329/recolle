@@ -5,6 +5,7 @@ abstract final class RecordFieldLimits {
   static const int title = 300;
   static const int artistOrAuthor = 300;
   static const int ticketSource = 80;
+
   /// セットリストを改行で結合したときの合計。
   static const int setlistTotal = 10000;
   static const int setlistSongLine = 200;

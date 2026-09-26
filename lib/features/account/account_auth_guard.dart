@@ -22,8 +22,9 @@ Future<void> runAccountAuthGuarded({
       'AuthException code=${e.code} statusCode=${e.statusCode} message=${e.message}',
     );
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(toUserFriendlyMessage(e))));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(toUserFriendlyMessage(e))));
   } catch (e) {
     debugPrint('Account action failed: $e');
     if (!context.mounted) return;

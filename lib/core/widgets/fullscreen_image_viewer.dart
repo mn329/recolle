@@ -45,13 +45,14 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer>
   @override
   void initState() {
     super.initState();
-    _zoomAnimation = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-    )..addListener(() {
-        final tween = _zoomTween;
-        if (tween != null) _transformController.value = tween.value;
-      });
+    _zoomAnimation =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 220),
+        )..addListener(() {
+          final tween = _zoomTween;
+          if (tween != null) _transformController.value = tween.value;
+        });
   }
 
   @override
@@ -77,8 +78,10 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer>
         )
         ..scaleByDouble(_doubleTapScale, _doubleTapScale, 1, 1);
     }
-    _zoomTween = Matrix4Tween(begin: _transformController.value, end: end)
-        .animate(CurvedAnimation(parent: _zoomAnimation, curve: Curves.easeOut));
+    _zoomTween = Matrix4Tween(
+      begin: _transformController.value,
+      end: end,
+    ).animate(CurvedAnimation(parent: _zoomAnimation, curve: Curves.easeOut));
     _zoomAnimation.forward(from: 0);
   }
 

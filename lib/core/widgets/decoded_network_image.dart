@@ -69,7 +69,7 @@ class DecodedNetworkImage extends StatelessWidget {
                   color: AppColors.gold,
                   value: loadingProgress.expectedTotalBytes != null
                       ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
+                            loadingProgress.expectedTotalBytes!
                       : null,
                 ),
               ),

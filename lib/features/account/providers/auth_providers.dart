@@ -20,5 +20,3 @@ final authUserProvider = StreamProvider<User?>((ref) async* {
     yield state.session?.user;
   }
 });
-
-

@@ -7,9 +7,7 @@ String formatJapaneseDate(
   final month = padMonthDay
       ? d.month.toString().padLeft(2, '0')
       : d.month.toString();
-  final day = padMonthDay
-      ? d.day.toString().padLeft(2, '0')
-      : d.day.toString();
+  final day = padMonthDay ? d.day.toString().padLeft(2, '0') : d.day.toString();
   final base = '${d.year}年$month月$day日';
   if (!includeWeekday) return base;
   const weekDays = ['月', '火', '水', '木', '金', '土', '日'];
