@@ -15,6 +15,8 @@ import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
+import 'package:recolle/features/records/record_timeline.dart';
+import 'package:recolle/features/records/widgets/next_event_card.dart';
 import 'package:recolle/features/search/screens/search_screen.dart';
 
 class HomeScreen extends HookConsumerWidget {
@@ -98,8 +100,24 @@ class HomeScreen extends HookConsumerWidget {
                     (selectedFavorite == null ||
                         artistMatches(r.artistOrAuthor, selectedFavorite.name)),
               );
+              final (:upcoming, :past) = splitByDate(visible, DateTime.now());
+              if (upcoming.isNotEmpty) {
+                return SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: NextEventCard(record: upcoming.first),
+                    ),
+                    _SectionHeader('これから・${upcoming.length}件'),
+                    SliverRecordTicketList(records: upcoming),
+                    if (past.isNotEmpty) ...[
+                      _SectionHeader('これまで・${past.length}件'),
+                      SliverRecordTicketList(records: past),
+                    ],
+                  ],
+                );
+              }
               return SliverRecordTicketList(
-                records: visible.toList(),
+                records: past,
                 emptyTitle: selectedFavorite == null
                     ? '${selectedType.value.japaneseLabel}の記録はまだありません'
                     : '${selectedFavorite.name} の記録はまだありません',
@@ -200,6 +218,29 @@ class _HomeFilterBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: context.colors.textSecondary,
+          ),
+        ),
+      ),
     );
   }
 }
