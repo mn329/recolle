@@ -135,10 +135,9 @@ class TicketStubCard extends StatelessWidget {
                             ja: '座席',
                             child: Text(
                               seat,
-                              style: AppFonts.displayStyle(
-                                fontSize: 26,
+                              style: AppFonts.titleStyle(
+                                fontSize: 22,
                                 color: colors.accent,
-                                letterSpacing: 1,
                               ),
                             ),
                           ),

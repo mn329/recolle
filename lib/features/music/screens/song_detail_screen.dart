@@ -115,8 +115,8 @@ class SongDetailScreen extends ConsumerWidget {
                     ),
                     child: Text(
                       artistName,
-                      style: AppFonts.displayStyle(
-                        fontSize: 20,
+                      style: AppFonts.titleStyle(
+                        fontSize: 18,
                         color: context.colors.accent,
                       ),
                     ),

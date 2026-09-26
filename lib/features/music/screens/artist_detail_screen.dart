@@ -109,8 +109,8 @@ class ArtistDetailScreen extends HookConsumerWidget {
                           artistName,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppFonts.displayStyle(
-                            fontSize: 30,
+                          style: AppFonts.titleStyle(
+                            fontSize: 24,
                             color: context.colors.textPrimary,
                           ),
                         ),

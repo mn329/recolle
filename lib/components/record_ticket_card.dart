@@ -151,8 +151,8 @@ class TicketFace extends StatelessWidget {
                       children: [
                         Text(
                           title,
-                          style: AppFonts.displayStyle(
-                            fontSize: 24,
+                          style: AppFonts.titleStyle(
+                            fontSize: 20,
                             color: colors.accent,
                             shadows: textShadow,
                           ),

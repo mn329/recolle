@@ -17,7 +17,8 @@ abstract final class AppFonts {
 
   static const List<String> _fallback = [body];
 
-  /// チケットタイトルなど、英字は Bebas Neue・和文は太字ゴシックで出す見出し。
+  /// ロゴ・日付・数字など固定の文字の見出し。英字は Bebas Neue・和文は太字ゴシック。
+  /// 入力された文字には大文字小文字を保つ [titleStyle] を使う。
   static TextStyle displayStyle({
     required double fontSize,
     Color? color,
@@ -34,6 +35,23 @@ abstract final class AppFonts {
       color: color,
       shadows: shadows,
     );
+  }
+
+  /// 公演名・アーティスト名・座席など、ユーザーが入力した文字の見出し。
+  /// Bebas Neue は小文字の字形がなく "sakanaction" も "SAKANACTION" になってしまうため、
+  /// 入力どおりの大文字小文字で出せる本文フォントの太字にする。
+  static TextStyle titleStyle({
+    required double fontSize,
+    Color? color,
+    double letterSpacing = 0,
+    List<Shadow>? shadows,
+  }) {
+    return displayStyle(
+      fontSize: fontSize,
+      color: color,
+      letterSpacing: letterSpacing,
+      shadows: shadows,
+    ).copyWith(fontFamily: body);
   }
 
   /// 日付・数字用。和文（年・月・曜日）が混ざっても本文フォントで表示される。

@@ -282,10 +282,9 @@ class _Header extends StatelessWidget {
             padding: const EdgeInsets.only(right: 8),
             child: Text(
               record.title,
-              style: AppFonts.displayStyle(
-                fontSize: 30,
+              style: AppFonts.titleStyle(
+                fontSize: 24,
                 color: colors.textPrimary,
-                letterSpacing: 0.8,
               ).copyWith(height: 1.2),
             ),
           ),

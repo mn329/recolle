@@ -103,8 +103,8 @@ class _TicketCard extends StatelessWidget {
             record.title,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: AppFonts.displayStyle(
-              fontSize: 34,
+            style: AppFonts.titleStyle(
+              fontSize: 28,
               color: c.accent,
             ).copyWith(height: 1.05),
           ),
