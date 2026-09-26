@@ -129,4 +129,37 @@ void main() {
     expect(find.text('アイドル'), findsOneWidget);
     expect(_navButton(tester, '保存').onPressed, isNotNull);
   });
+
+  testWidgets('メールを貼り付けると公演名・アーティスト・取得元を入力する', (tester) async {
+    await _pumpScreen(tester);
+
+    await tester.tap(find.text('メールから入力'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byType(CupertinoTextField).last,
+      'ローソンチケットです。\n公演名：YOASOBI DOME LIVE\n出演者：YOASOBI\n公演日：2026/05/03',
+    );
+    await tester.pump();
+    await tester.tap(find.text('読み取る'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('メールから入力'), findsOneWidget);
+    expect(find.text('YOASOBI DOME LIVE'), findsWidgets);
+    expect(find.text('YOASOBI'), findsWidgets);
+    expect(find.text('ローチケ'), findsOneWidget);
+    expect(_navButton(tester, '追加').onPressed, isNotNull);
+  });
+
+  testWidgets('読み取れないメールならシートに留まって案内する', (tester) async {
+    await _pumpScreen(tester);
+
+    await tester.tap(find.text('メールから入力'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(CupertinoTextField).last, 'こんにちは');
+    await tester.pump();
+    await tester.tap(find.text('読み取る'));
+    await tester.pump();
+
+    expect(find.textContaining('読み取れませんでした'), findsOneWidget);
+  });
 }

@@ -17,6 +17,7 @@ import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
+import 'package:recolle/features/records/widgets/ticket_mail_import_sheet.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/records/widgets/record_form/form_text_row.dart';
 import 'package:recolle/features/records/widgets/record_form/record_date_row.dart';
@@ -154,6 +155,36 @@ class CreateRecordScreen extends HookConsumerWidget {
     void removeImage() {
       selectedImage.value = null;
       removeSavedImage.value = true;
+    }
+
+    Future<void> importFromMail() async {
+      FocusScope.of(context).unfocus();
+      final info = await showTicketMailImportSheet(context);
+      if (info == null || !context.mounted) return;
+
+      void fill(TextEditingController c, String? value, int maxLength) {
+        if (value == null) return;
+        c.text = value.length > maxLength
+            ? value.substring(0, maxLength)
+            : value;
+      }
+
+      fill(titleController, info.title, RecordFieldLimits.title);
+      fill(artistController, info.artist, RecordFieldLimits.artistOrAuthor);
+      fill(sourceController, info.ticketSource, RecordFieldLimits.ticketSource);
+      if (info.date != null) date.value = info.date!;
+      artistTypedSincePick.value = false;
+
+      final filled = [
+        if (info.title != null) type.value.titleFieldLabel,
+        if (info.artist != null) type.value.creatorFieldLabel,
+        if (info.date != null) isLive ? '公演日' : '日付',
+        if (info.ticketSource != null) '取得元',
+      ];
+      AppToast.show(
+        '${filled.join('・')}を入力しました',
+        icon: CupertinoIcons.envelope_open_fill,
+      );
     }
 
     Future<void> save() async {
@@ -329,6 +360,30 @@ class CreateRecordScreen extends HookConsumerWidget {
               ),
               FormSection(
                 header: '基本情報',
+                trailing: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: importFromMail,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        CupertinoIcons.envelope,
+                        size: 15,
+                        color: context.colors.accent,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'メールから入力',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: context.colors.accent,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
                 footer: missingLabels.isEmpty
                     ? null
                     : '${missingLabels.join('と')}は必須です。',
