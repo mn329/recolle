@@ -72,7 +72,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
                       .route
                       .branches[index]
                       .navigatorKey
-                      ?.currentState
+                      .currentState
                       ?.popUntil((route) => route.isFirst);
                 }
                 navigationShell.goBranch(index, initialLocation: isCurrent);
