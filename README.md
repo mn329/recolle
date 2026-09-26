@@ -78,7 +78,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **セットリスト取り込み**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索します（下記の設定が必要）。
 - **公演・チケット情報**: ライブの記録には開場・開演・終演の時刻、会場・座席・チケット代を残せます（`records` の `open_time` / `start_time` / `end_time` / `venue` / `seat` / `ticket_price`）。終演が開演より前の時刻なら翌日（オールナイトなど）とみなします。
 - **これから / これまで**: ホームは「これから」と「これまで」に分けます（終演時刻があれば終演した時点で、なければ日付が変わった時点で「これまで」へ）。直近の公演は、開場まで → 開演まで → 公演中・終演までと段階的に秒単位でカウントダウンし、これからの記録の詳細画面にも同じカウントダウンを出します（`features/records/record_timeline.dart`、`widgets/event_countdown.dart`）。
-- **振り返り**: 記録のカレンダーと、年別の件数・よく行ったアーティスト／会場・チケット代合計などの集計（`record_calendar.dart` / `record_stats.dart`）。上のチップ（またはランキングの行）でアーティストを選ぶと、カレンダーも集計もそのアーティストだけになり、初めて・最後に行った日、次の公演、よく聴いた曲、行ったライブの一覧を出します。カレンダーは月の記録を下に一覧し、日を押すとその日に絞ります。
+- **振り返り**: 記録のカレンダーと、年別の件数・よく行ったアーティスト／会場・チケット代合計などの集計（`record_calendar.dart` / `record_stats.dart`）。ホームと同じお気に入りアーティストのチップ（`favorite_artist_chips.dart`）か、ランキングの行でアーティストを選ぶと、カレンダーも集計もそのアーティストだけになり、初めて・最後に行った日、次の公演、よく聴いた曲、行ったライブの一覧を出します。カレンダーは月の記録を下に一覧し、日を押すとその日に絞ります。
 - **シェア画像**: 詳細画面の共有ボタンから、チケット風・レシート風の画像（幅 1080px の PNG）を iOS の共有シートへ渡します。
 - **ホーム画面ウィジェット（iOS 17 以降）**: 次の公演までの日数を表示します。アプリは記録が変わるたびに近い順 5 件を App Group `group.com.ishidaminato.recolle` へ書き込み（[home_widget](https://pub.dev/packages/home_widget)、`features/records/home_widget_sync.dart`）、`ios/RecolleWidget/`（WidgetKit 拡張）が読み取ります。実機で動かすには Apple Developer で App Group を作成し、アプリとウィジェット（`com.ishidaminato.recolle.RecolleWidget`）の両方の App ID に割り当ててください。
 - **記録の作成・編集**: 入力内容をホームと同じチケット（`TicketFace`）でプレビューし、タップで券面画像を選びます。種別ごとに入力欄の呼び方が変わり、セットリスト・MC メモはライブのときだけ入力・保存します。部品は `features/records/widgets/record_form/`。

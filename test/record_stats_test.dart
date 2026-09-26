@@ -79,16 +79,12 @@ void main() {
     expect(stats.totalTicketPrice, 27000);
   });
 
-  test('アーティストを記録の多い順に並べ、コラボ表記の記録も含めて絞り込む', () {
+  test('アーティストで絞り込み、コラボ表記の記録も含める', () {
     final withCollab = [
       ...records,
       _live('collab', DateTime(2026, 6, 1), artist: 'Vaundy × YOASOBI'),
     ];
 
-    expect(artistsByCount(records).map((a) => (a.label, a.count)), [
-      ('YOASOBI', 3),
-      ('Vaundy', 2),
-    ]);
     expect(filterByArtist(withCollab, 'Vaundy').map((r) => r.id), [
       '3',
       '4',
@@ -154,12 +150,9 @@ void main() {
     expect(find.text('T3'), findsOneWidget);
     expect(find.text('T4'), findsOneWidget);
 
-    await tester.scrollUntilVisible(
-      find.text('すべてのアーティスト'),
-      -200,
-      scrollable: page,
-    );
-    await tester.tap(find.text('すべてのアーティスト'));
+    // お気に入りにないアーティストでも、選んだ間はチップが出て「すべて」で戻せる
+    expect(find.widgetWithText(CapsuleChip, 'Vaundy'), findsOneWidget);
+    await tester.tap(find.widgetWithText(CapsuleChip, 'すべて'));
     await tester.pumpAndSettle();
     expect(find.text('よく行ったアーティスト'), findsOneWidget);
   });

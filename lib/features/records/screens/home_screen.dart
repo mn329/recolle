@@ -11,7 +11,7 @@ import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
-import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
+import 'package:recolle/features/favorites/widgets/favorite_artist_chips.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
@@ -30,11 +30,11 @@ class HomeScreen extends HookConsumerWidget {
         ref.watch(favoriteArtistsProvider).asData?.value ??
         const <FavoriteArtist>[];
     final selectedType = useState(RecordType.live);
-    final selectedFavoriteId = useState<String?>(null);
+    final selectedArtistName = useState<String?>(null);
 
     // 選択中のお気に入りが削除されたら絞り込みを解除する
     final selectedFavorite = favorites
-        .where((f) => f.id == selectedFavoriteId.value)
+        .where((f) => f.name == selectedArtistName.value)
         .firstOrNull;
 
     void openEditor() => openRecordEditor(
@@ -85,8 +85,8 @@ class HomeScreen extends HookConsumerWidget {
           selectedType: selectedType.value,
           onTypeChanged: (t) => selectedType.value = t,
           favorites: favorites,
-          selectedFavoriteId: selectedFavorite?.id,
-          onFavoriteSelected: (id) => selectedFavoriteId.value = id,
+          selectedArtistName: selectedFavorite?.name,
+          onArtistSelected: (name) => selectedArtistName.value = name,
         ),
         onRefresh: () => ref.refresh(recordsProvider.future),
         slivers: [
@@ -152,22 +152,22 @@ class _HomeFilterBar extends StatelessWidget implements PreferredSizeWidget {
     required this.selectedType,
     required this.onTypeChanged,
     required this.favorites,
-    required this.selectedFavoriteId,
-    required this.onFavoriteSelected,
+    required this.selectedArtistName,
+    required this.onArtistSelected,
   });
 
   final RecordType selectedType;
   final ValueChanged<RecordType> onTypeChanged;
   final List<FavoriteArtist> favorites;
-  final String? selectedFavoriteId;
-  final ValueChanged<String?> onFavoriteSelected;
+  final String? selectedArtistName;
+  final ValueChanged<String?> onArtistSelected;
 
   static const double _segmentHeight = 48;
-  static const double _chipsHeight = 44;
 
   @override
-  Size get preferredSize =>
-      Size.fromHeight(_segmentHeight + (favorites.isEmpty ? 0 : _chipsHeight));
+  Size get preferredSize => Size.fromHeight(
+    _segmentHeight + (favorites.isEmpty ? 0 : FavoriteArtistChips.height),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -186,36 +186,10 @@ class _HomeFilterBar extends StatelessWidget implements PreferredSizeWidget {
           ),
         ),
         if (favorites.isNotEmpty)
-          SizedBox(
-            height: _chipsHeight,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-              itemCount: favorites.length + 1,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
-              itemBuilder: (context, index) {
-                if (index == 0) {
-                  return CapsuleChip(
-                    label: 'すべて',
-                    selected: selectedFavoriteId == null,
-                    onTap: () => onFavoriteSelected(null),
-                  );
-                }
-                final artist = favorites[index - 1];
-                return CapsuleChip(
-                  label: artist.name,
-                  selected: selectedFavoriteId == artist.id,
-                  avatar: ArtistAvatar(
-                    name: artist.name,
-                    artworkUrl: artist.artworkUrl,
-                    size: 22,
-                  ),
-                  onTap: () => onFavoriteSelected(
-                    selectedFavoriteId == artist.id ? null : artist.id,
-                  ),
-                );
-              },
-            ),
+          FavoriteArtistChips(
+            favorites: favorites,
+            selectedName: selectedArtistName,
+            onSelected: onArtistSelected,
           ),
       ],
     );

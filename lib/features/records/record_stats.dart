@@ -59,15 +59,6 @@ List<int> yearsWithRecords(Iterable<Record> records, DateTime now) {
   return years.toList()..sort((a, b) => b.compareTo(a));
 }
 
-/// ライブの記録があるアーティストを、記録の多い順に返す（これからの予定も含む）。
-List<RankedItem> artistsByCount(Iterable<Record> records) {
-  final counter = _Counter();
-  for (final r in records) {
-    if (r.type == RecordType.live) counter.add(r.artistOrAuthor);
-  }
-  return counter.top(counter.length);
-}
-
 /// [artist] の記録だけに絞る。コラボ表記（「A × B」など）の記録も含める。null なら絞らない。
 List<Record> filterByArtist(Iterable<Record> records, String? artist) => [
   for (final r in records)
@@ -131,8 +122,6 @@ RecordStats computeStats(
 class _Counter {
   final _counts = <String, int>{};
   final _spellings = <String, Map<String, int>>{};
-
-  int get length => _counts.length;
 
   void add(String raw) {
     final label = raw.trim();

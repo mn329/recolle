@@ -8,6 +8,9 @@ import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/utils/yen_format.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/favorites/models/favorite_artist.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/favorites/widgets/favorite_artist_chips.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
@@ -26,7 +29,8 @@ enum InsightsView {
 
 /// 「振り返り」タブ。カレンダーと、年ごとの参戦回数・チケット代・ランキングを切り替える。
 ///
-/// 上のチップでアーティストを選ぶと、カレンダーも集計もそのアーティストの記録だけになる。
+/// ホームと同じお気に入りアーティストのチップ（または集計のランキング）でアーティストを選ぶと、
+/// カレンダーも集計もそのアーティストの記録だけになる。
 class InsightsScreen extends HookConsumerWidget {
   const InsightsScreen({super.key});
 
@@ -36,34 +40,29 @@ class InsightsScreen extends HookConsumerWidget {
     final view = useState(InsightsView.calendar);
     final selectedYear = useState<int?>(DateTime.now().year);
     final selectedArtist = useState<String?>(null);
+    final favorites =
+        ref.watch(favoriteArtistsProvider).asData?.value ??
+        const <FavoriteArtist>[];
 
     return Scaffold(
       backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: '振り返り',
-        bottom: _ViewSwitcher(
-          value: view.value,
-          onChanged: (v) => view.value = v,
+        bottom: _InsightsFilterBar(
+          view: view.value,
+          onViewChanged: (v) => view.value = v,
+          favorites: favorites,
+          selectedArtist: selectedArtist.value,
+          onArtistSelected: (a) => selectedArtist.value = a,
         ),
         onRefresh: () => ref.refresh(recordsProvider.future),
         slivers: [
           recordsAsync.when(
             data: (records) {
-              final artists = artistsByCount(records);
-              // 記録を消すなどして選択中のアーティストがいなくなったら全体に戻す
-              final artist = artists.any((a) => a.label == selectedArtist.value)
-                  ? selectedArtist.value
-                  : null;
+              final artist = selectedArtist.value;
               final filtered = filterByArtist(records, artist);
               return SliverList.list(
                 children: [
-                  if (artists.length > 1)
-                    _ChipRow<String>(
-                      allLabel: 'すべてのアーティスト',
-                      items: [for (final a in artists) (a.label, a.label)],
-                      selected: artist,
-                      onSelected: (a) => selectedArtist.value = a,
-                    ),
                   if (view.value == InsightsView.calendar)
                     RecordCalendarView(records: filtered)
                   else
@@ -156,24 +155,56 @@ class InsightsScreen extends HookConsumerWidget {
   }
 }
 
-class _ViewSwitcher extends StatelessWidget implements PreferredSizeWidget {
-  const _ViewSwitcher({required this.value, required this.onChanged});
+/// ナビゲーションバーの下に固定する、表示の切り替えとアーティストの絞り込み（ホームと同じチップ）。
+class _InsightsFilterBar extends StatelessWidget
+    implements PreferredSizeWidget {
+  const _InsightsFilterBar({
+    required this.view,
+    required this.onViewChanged,
+    required this.favorites,
+    required this.selectedArtist,
+    required this.onArtistSelected,
+  });
 
-  final InsightsView value;
-  final ValueChanged<InsightsView> onChanged;
+  final InsightsView view;
+  final ValueChanged<InsightsView> onViewChanged;
+  final List<FavoriteArtist> favorites;
+  final String? selectedArtist;
+  final ValueChanged<String?> onArtistSelected;
+
+  static const double _segmentHeight = 48;
+
+  bool get _showsChips =>
+      FavoriteArtistChips.isVisible(favorites, selectedArtist);
 
   @override
-  Size get preferredSize => const Size.fromHeight(48);
+  Size get preferredSize => Size.fromHeight(
+    _segmentHeight + (_showsChips ? FavoriteArtistChips.height : 0),
+  );
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: IosSegmentedControl<InsightsView>(
-        value: value,
-        segments: {for (final v in InsightsView.values) v: v.label},
-        onChanged: onChanged,
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: _segmentHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: IosSegmentedControl<InsightsView>(
+              value: view,
+              segments: {for (final v in InsightsView.values) v: v.label},
+              onChanged: onViewChanged,
+            ),
+          ),
+        ),
+        if (_showsChips)
+          FavoriteArtistChips(
+            favorites: favorites,
+            selectedName: selectedArtist,
+            onSelected: onArtistSelected,
+          ),
+      ],
     );
   }
 }
