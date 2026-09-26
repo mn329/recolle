@@ -71,7 +71,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **ライト / ダーク**: 端末の外観設定（`ThemeMode.system`）に合わせて自動で切り替わります。アクセントはシャンパンゴールドです。色は `core/theme/app_colors.dart` の `AppPalette`（`ThemeExtension`）にライト・ダークの 2 セットで定義し、ウィジェットからは `context.colors.accent` のように参照します。色を直接書かず、足りない色はパレットに追加してください。
 - **タブ UI**: 下部ナビで **ホーム（`/`）**・**振り返り（`/insights`）**・**お気に入り（`/favorites`）**・**アカウント（`/account`）** の 4 タブ。router はトップレベル変数なので、ブランチを増減したらホットリロードではなくアプリを再起動してください。認証状態は Supabase の `onAuthStateChange` と再認証中フラグを GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
 
-- **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。追加シートで候補を選ぶとアーティスト詳細を開くだけで、登録は詳細の ☆ で行います（見たいだけのアーティストが登録されないように）。
+- **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。追加シートで候補を選ぶとアーティスト詳細を開くだけで、登録は詳細の ☆ で行います（見たいだけのアーティストが登録されないように）。ライブを記録すると、そのアーティスト（対バン・フェスはお目当ての 1 組）を自動でお気に入りに追加します。編集では新しく加わったアーティストだけを追加し、自分で外したお気に入りは戻しません（`features/favorites/auto_favorite.dart`）。
 - **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **メールから入力**: 作成画面の「メールから入力」に e+・ローチケ・チケットぴあなどの購入／当選メール本文を貼ると、公演名・出演者・公演日・取得元を入力欄に入れます（`features/records/ticket_mail_parser.dart`）。各社とも公開 API がなく、サイトの自動取得は利用規約に抵触しうるため、本文を端末内で読み取る方式にしています。

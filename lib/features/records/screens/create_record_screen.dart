@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
@@ -15,6 +16,8 @@ import 'package:recolle/core/utils/ticket_image_compress.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/favorites/auto_favorite.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/setlist_localization.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
@@ -489,7 +492,34 @@ class CreateRecordScreen extends HookConsumerWidget {
           isEditMode ? '記録を更新しました' : '記録を保存しました',
           icon: CupertinoIcons.checkmark_circle_fill,
         );
+        final favoritesNotifier = ref.read(favoriteArtistsProvider.notifier);
+        final itunes = ref.read(itunesClientProvider);
+        final favorites = ref.read(favoriteArtistsProvider).asData?.value;
         if (context.mounted) Navigator.of(context).pop(saved);
+        if (favorites != null) {
+          final names = artistsToAutoFavorite(
+            saved,
+            previous: editingRecord,
+            favorites: favorites,
+          );
+          // 画面を閉じた後に追加する（画像の検索で保存の完了を待たせないため）
+          if (names.isNotEmpty) {
+            unawaited(
+              addAutoFavorites(
+                names,
+                add: (name, artworkUrl) =>
+                    favoritesNotifier.add(name: name, artworkUrl: artworkUrl),
+                findArtwork: itunes.findArtistArtwork,
+              ).then((added) {
+                if (added.isEmpty) return;
+                AppToast.show(
+                  '「${added.join('」「')}」をお気に入りに追加しました',
+                  icon: CupertinoIcons.star_fill,
+                );
+              }),
+            );
+          }
+        }
       } catch (e, stackTrace) {
         debugPrint('Error saving record: $e\n$stackTrace');
         AppToast.error(toUserFriendlyMessage(e));
@@ -727,7 +757,7 @@ class CreateRecordScreen extends HookConsumerWidget {
                             color: context.colors.textSecondary,
                           ),
                         ),
-                  footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになります。',
+                  footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになり、お気に入りにも追加されます。',
                   wrapInCard: false,
                   children: [
                     ActsEditor(
