@@ -4,12 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
-import 'package:recolle/core/utils/japanese_date_format.dart';
-import 'package:recolle/core/utils/yen_format.dart';
+import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/favorites/widgets/favorite_artist_toggle_button.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
@@ -18,6 +19,7 @@ import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_timeline.dart';
 import 'package:recolle/features/records/share/share_record_sheet.dart';
 import 'package:recolle/features/records/widgets/event_countdown.dart';
+import 'package:recolle/features/records/widgets/ticket_stub_card.dart';
 
 enum _MoreAction { delete }
 
@@ -90,6 +92,20 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         .map((s) => s.trim())
         .where((s) => s.isNotEmpty)
         .toList();
+    final mcMemo = record.mcMemo?.trim() ?? '';
+    final impressions = record.impressions?.trim() ?? '';
+    final missing = [
+      if (isLive && songs.isEmpty) 'セットリスト',
+      if (isLive && mcMemo.isEmpty) 'MCメモ',
+      if (impressions.isEmpty) '感想',
+    ];
+    final artworkUrl = ref
+        .watch(favoriteArtistsProvider)
+        .asData
+        ?.value
+        .where((f) => artistMatches(record.artistOrAuthor, f.name))
+        .firstOrNull
+        ?.artworkUrl;
 
     return Scaffold(
       backgroundColor: context.colors.background,
@@ -118,68 +134,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         ),
         children: [
           _TicketImage(record: record),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        record.typeLabel,
-                        style: AppFonts.monoStyle(
-                          fontSize: 12,
-                          color: context.colors.accent,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        record.title,
-                        style: TextStyle(
-                          color: context.colors.textPrimary,
-                          fontSize: 26,
-                          fontWeight: FontWeight.w700,
-                          height: 1.25,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      // iTunes のカタログは音楽のみなので、ライブのときだけ詳細へ飛べる
-                      CupertinoButton(
-                        padding: EdgeInsets.zero,
-                        minimumSize: Size.zero,
-                        onPressed: isLive ? _openArtist : null,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                record.artistOrAuthor,
-                                style: TextStyle(
-                                  color: isLive
-                                      ? context.colors.accent
-                                      : context.colors.textSecondary,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            if (isLive)
-                              Icon(
-                                CupertinoIcons.chevron_forward,
-                                size: 16,
-                                color: context.colors.accent,
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
-              ],
-            ),
+          _Header(
+            record: record,
+            artworkUrl: artworkUrl,
+            onArtistTap: isLive ? _openArtist : null,
           ),
           if (isUpcoming)
             Padding(
@@ -197,87 +155,297 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                 child: EventCountdown(record: record),
               ),
             ),
-          InsetGroupedSection(
-            hasLeading: false,
-            children: [
-              GroupedRow(
-                title: isLive ? '公演日' : '日付',
-                additionalInfo: Text(
-                  formatJapaneseDate(record.date, includeWeekday: true),
-                  style: AppFonts.monoStyle(
-                    fontSize: 15,
-                    color: context.colors.textSecondary,
-                  ),
-                ),
-              ),
-              for (final (title, time) in [
-                ('開場', record.openTime),
-                (record.type.startTimeLabel, record.startTime),
-                (record.type.endTimeLabel, record.endTime),
-              ])
-                if (time != null)
-                  _InfoRow(
-                    title: title,
-                    value: time.format(),
-                    monospaced: true,
-                  ),
-              if (record.venue != null)
-                _InfoRow(
-                  title: record.type.venueLabel ?? '会場',
-                  value: record.venue!,
-                ),
-              if (record.seat != null)
-                _InfoRow(title: '座席', value: record.seat!),
-              if (record.ticketPrice != null)
-                _InfoRow(
-                  title: record.type.priceLabel,
-                  value: formatYen(record.ticketPrice!),
-                  monospaced: true,
-                ),
-              if (record.ticketSource != null)
-                _InfoRow(
-                  title: record.type.sourceLabel,
-                  value: record.ticketSource!,
-                ),
-            ],
-          ),
-          if (isLive) ...[
-            const SizedBox(height: 16),
-            if (songs.isEmpty)
-              const _TextSection(header: 'セットリスト', text: null)
-            else
-              InsetGroupedSection(
-                header: 'セットリスト・${songs.length}曲',
-                children: [
-                  for (final (i, song) in songs.indexed)
-                    GroupedRow(
-                      leading: Text(
-                        (i + 1).toString().padLeft(2, '0'),
-                        style: AppFonts.monoStyle(
-                          fontSize: 14,
-                          color: context.colors.accent,
-                        ),
+          TicketStubCard(record: record),
+          if (songs.isNotEmpty) ...[
+            _SectionHeading(
+              en: 'SETLIST',
+              ja: 'セットリスト',
+              trailing: '${songs.length}曲',
+            ),
+            InsetGroupedSection(
+              children: [
+                for (final (i, song) in songs.indexed)
+                  GroupedRow(
+                    leading: Text(
+                      (i + 1).toString().padLeft(2, '0'),
+                      style: AppFonts.monoStyle(
+                        fontSize: 14,
+                        color: context.colors.accent,
                       ),
-                      title: song,
-                      onTap: () => Navigator.push(
-                        context,
-                        CupertinoPageRoute<void>(
-                          builder: (_) => SongDetailScreen(
-                            artistName: record.artistOrAuthor,
-                            title: song,
-                          ),
+                    ),
+                    title: song,
+                    onTap: () => Navigator.push(
+                      context,
+                      CupertinoPageRoute<void>(
+                        builder: (_) => SongDetailScreen(
+                          artistName: record.artistOrAuthor,
+                          title: song,
                         ),
                       ),
                     ),
-                ],
-              ),
-            const SizedBox(height: 16),
-            _TextSection(header: 'MCメモ', text: record.mcMemo),
+                  ),
+              ],
+            ),
           ],
-          const SizedBox(height: 16),
-          _TextSection(header: '感想', text: record.impressions),
+          if (isLive && mcMemo.isNotEmpty)
+            _NoteSection(
+              en: 'MC MEMO',
+              ja: 'MCメモ',
+              icon: CupertinoIcons.chat_bubble_2,
+              text: mcMemo,
+            ),
+          if (impressions.isNotEmpty)
+            _NoteSection(
+              en: 'NOTES',
+              ja: '感想',
+              icon: CupertinoIcons.pencil_outline,
+              text: impressions,
+            ),
+          if (missing.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(32, 24, 32, 0),
+              child: Text(
+                '${missing.join('・')}は右上の「編集」から追加できます',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.colors.textDisabled,
+                ),
+              ),
+            ),
         ],
       ),
+    );
+  }
+}
+
+/// 種別・タイトル・アーティスト。ライブならアーティスト名から詳細へ飛べる。
+class _Header extends StatelessWidget {
+  const _Header({
+    required this.record,
+    required this.artworkUrl,
+    required this.onArtistTap,
+  });
+
+  final Record record;
+  final String? artworkUrl;
+  final VoidCallback? onArtistTap;
+
+  static IconData _iconFor(RecordType type) => switch (type) {
+    RecordType.live => CupertinoIcons.music_mic,
+    RecordType.movie => CupertinoIcons.film,
+    RecordType.book => CupertinoIcons.book,
+    RecordType.other => CupertinoIcons.tickets,
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final isLive = record.type == RecordType.live;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 20, 12, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(8, 4, 10, 4),
+            decoration: BoxDecoration(
+              color: colors.accent.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(_iconFor(record.type), size: 13, color: colors.accent),
+                const SizedBox(width: 5),
+                Text(
+                  record.type.name.toUpperCase(),
+                  style: AppFonts.monoStyle(
+                    fontSize: 11,
+                    color: colors.accent,
+                  ).copyWith(letterSpacing: 1.6),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  record.typeLabel,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: colors.accent,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Text(
+              record.title,
+              style: AppFonts.displayStyle(
+                fontSize: 30,
+                color: colors.textPrimary,
+                letterSpacing: 0.8,
+              ).copyWith(height: 1.2),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: onArtistTap,
+                  child: Row(
+                    children: [
+                      ArtistAvatar(
+                        name: record.artistOrAuthor,
+                        artworkUrl: artworkUrl,
+                        size: 32,
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          record.artistOrAuthor,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: isLive
+                                ? colors.accent
+                                : colors.textSecondary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      if (onArtistTap != null)
+                        Icon(
+                          CupertinoIcons.chevron_forward,
+                          size: 15,
+                          color: colors.accent,
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// セトリやメモの上に置く、英字と和名の見出し。
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.en, required this.ja, this.trailing});
+
+  final String en;
+  final String ja;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 28, 20, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            en,
+            style: AppFonts.displayStyle(
+              fontSize: 20,
+              color: colors.accent,
+              letterSpacing: 1.6,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(ja, style: TextStyle(fontSize: 12, color: colors.textSecondary)),
+          const Spacer(),
+          if (trailing != null)
+            Text(
+              trailing!,
+              style: AppFonts.monoStyle(
+                fontSize: 13,
+                color: colors.textSecondary,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// MCメモ・感想のカード。左端のアクセントの線で本文を引き立てる。
+class _NoteSection extends StatelessWidget {
+  const _NoteSection({
+    required this.en,
+    required this.ja,
+    required this.icon,
+    required this.text,
+  });
+
+  final String en;
+  final String ja;
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SectionHeading(en: en, ja: ja),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: colors.card,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ColoredBox(
+                  color: colors.accent.withValues(alpha: 0.7),
+                  child: const SizedBox(width: 3),
+                ),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 14, 16, 16),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Icon(icon, size: 16, color: colors.accent),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: SelectableText(
+                            text,
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 16,
+                              height: 1.7,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -336,74 +504,6 @@ class _TicketImage extends StatelessWidget {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// 見出し付きの文章カード。未入力なら薄く「未入力」と出す。
-class _TextSection extends StatelessWidget {
-  const _TextSection({required this.header, required this.text});
-
-  final String header;
-  final String? text;
-
-  @override
-  Widget build(BuildContext context) {
-    final content = text?.trim() ?? '';
-    return InsetGroupedSection(
-      header: header,
-      hasLeading: false,
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: SelectableText(
-            content.isEmpty ? '未入力' : content,
-            style: TextStyle(
-              color: content.isEmpty
-                  ? context.colors.textDisabled
-                  : context.colors.textPrimary,
-              fontSize: 16,
-              height: 1.6,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// 詳細の情報行。長い会場名などは右側で省略する。
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.title,
-    required this.value,
-    this.monospaced = false,
-  });
-
-  final String title;
-  final String value;
-  final bool monospaced;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = context.colors.textSecondary;
-    return GroupedRow(
-      title: title,
-      additionalInfo: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.55,
-        ),
-        child: Text(
-          value,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.right,
-          style: monospaced
-              ? AppFonts.monoStyle(fontSize: 15, color: color)
-              : TextStyle(fontSize: 15, color: color),
         ),
       ),
     );
