@@ -323,9 +323,11 @@ void main() {
       expect(find.text('これからの公演を探す'), findsNothing);
     });
 
-    testWidgets('入力した文字で候補を絞り込む', (tester) async {
+    testWidgets('入力した文字で候補を絞り込み、一致があれば setlist.fm は呼ばない', (tester) async {
+      final client = _FakeSetlistFmClient(const {});
       await _pumpScreen(
         tester,
+        setlistFmClient: client,
         setlists: [
           setlist,
           SetlistSummary(
@@ -341,10 +343,12 @@ void main() {
       );
       await tester.enterText(_field('アーティスト'), 'King Gnu');
       await tester.enterText(_field('公演名・ツアー名'), 'zepp');
+      await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
       expect(find.text('CEREMONY'), findsOneWidget);
       expect(find.text('ARENA TOUR 2025'), findsNothing);
+      expect(client.tourQueries, isEmpty);
     });
 
     testWidgets('直近の公演にないツアーも、入力した名前で setlist.fm から探す', (tester) async {
@@ -363,13 +367,13 @@ void main() {
       });
       await _pumpScreen(tester, setlists: [setlist], setlistFmClient: client);
       await tester.enterText(_field('アーティスト'), 'King Gnu');
-      await tester.enterText(_field('公演名・ツアー名'), 'd');
+      await tester.enterText(_field('公演名・ツアー名'), 'do');
       await tester.pumpAndSettle();
       await tester.enterText(_field('公演名・ツアー名'), 'dome');
-      await tester.pump(const Duration(milliseconds: 700));
+      await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
 
-      // 1 文字では検索せず、名前に「dome」を含まない結果も setlist.fm の一致として出す
+      // 2 文字では検索せず、名前に「dome」を含まない結果も setlist.fm の一致として出す
       expect(client.tourQueries, ['dome']);
       expect(find.text('Sympa Tour'), findsOneWidget);
       expect(find.text('ARENA TOUR 2025'), findsNothing);

@@ -252,25 +252,32 @@ class ConcertSuggestions extends HookConsumerWidget {
     final upcoming = discoveryRequested.value ? ref.watch(discovery) : null;
     final setlists = ref.watch(recentSetlistsProvider(artist));
     final setlistFm = ref.watch(setlistFmClientProvider);
-    // 直近の公演にないツアーも、入力した名前で setlist.fm から探す
-    final searched = useDebouncedSearch<SetlistSummary>(
-      query,
-      (q) =>
-          setlistFm.search(artistName: artist, tourName: q, includeEmpty: true),
-      delay: const Duration(milliseconds: 600),
-      minLength: 2,
-    );
     final records =
         ref.watch(recordsProvider).asData?.value ?? const <Record>[];
 
-    final candidates = buildConcertCandidates(
+    List<ConcertCandidate> build([
+      Iterable<SetlistSummary> searched = const [],
+    ]) => buildConcertCandidates(
       query: query,
       artist: artist,
       upcoming: upcoming?.asData?.value.concerts ?? const [],
       setlists: setlists.asData?.value ?? const [],
-      searchedSetlists: searched.data ?? const [],
+      searchedSetlists: searched,
       records: records,
     );
+
+    // setlist.fm の上限は全ユーザー共有なので、手元の候補に見つからないときだけ
+    // 入力した名前で直近にないツアーを探す
+    final local = build();
+    final needsSearch = local.isEmpty && !setlists.isLoading;
+    final searched = useDebouncedSearch<SetlistSummary>(
+      needsSearch ? query : '',
+      (q) =>
+          setlistFm.search(artistName: artist, tourName: q, includeEmpty: true),
+      delay: const Duration(milliseconds: 800),
+      minLength: 3,
+    );
+    final candidates = searched.hasData ? build(searched.data!) : local;
     final errors = {
       if (upcoming?.error case final e?) toUserFriendlyMessage(e),
       if (setlists.error case final e?) toUserFriendlyMessage(e),

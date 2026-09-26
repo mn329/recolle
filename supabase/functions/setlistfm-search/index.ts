@@ -16,6 +16,16 @@ const MAX_ARTIST_NAME_LENGTH = 100
 const MAX_TOUR_NAME_LENGTH = 200
 const MAX_RESULTS = 20
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/
+// 上限は API キー単位で全ユーザー共有のため、同じ検索は 1 日 1 回までにする
+const CACHE_TTL_MS = 24 * 60 * 60 * 1000
+
+/**
+ * キャッシュのキー用。全角半角・大文字小文字・連続した空白の違いをまとめる。
+ * setlist.fm は単語単位で一致させるので、単語の区切り（空白）自体は残す。
+ */
+function normalizeKey(value: string): string {
+  return value.normalize("NFKC").toLowerCase().trim().replace(/\s+/g, " ")
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -91,6 +101,53 @@ Deno.serve(async (req) => {
     return json({ error: "invalid_tour_name" }, 400)
   }
 
+  const respond = (all: any[]) =>
+    json({
+      setlists: all
+        .filter((s: any) => includeEmpty || s.songs.length > 0)
+        .slice(0, MAX_RESULTS),
+    })
+
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  )
+  const cacheKey = [
+    normalizeKey(artistName),
+    date,
+    normalizeKey(tourName),
+  ].join("|")
+  const { data: cached, error: cacheError } = await admin
+    .from("setlistfm_cache")
+    .select("setlists, fetched_at")
+    .eq("cache_key", cacheKey)
+    .maybeSingle()
+  if (cacheError) {
+    console.error("setlistfm cache read failed", cacheError)
+  }
+  if (
+    cached &&
+    Date.now() - new Date(cached.fetched_at).getTime() < CACHE_TTL_MS
+  ) {
+    return respond(cached.setlists ?? [])
+  }
+
+  /** 該当なしも含めて保存し、同じ検索で setlist.fm を呼ばないようにする。 */
+  async function saveCache(setlists: any[]) {
+    const { error } = await admin.from("setlistfm_cache").upsert({
+      cache_key: cacheKey,
+      setlists,
+      fetched_at: new Date().toISOString(),
+    })
+    if (error) console.error("setlistfm cache write failed", error)
+    const expired = new Date(Date.now() - CACHE_TTL_MS).toISOString()
+    const { error: purgeError } = await admin
+      .from("setlistfm_cache")
+      .delete()
+      .lt("fetched_at", expired)
+    if (purgeError) console.error("setlistfm cache purge failed", purgeError)
+  }
+
   const params = new URLSearchParams({ artistName, p: "1" })
   if (tourName) params.set("tourName", tourName)
   if (date) {
@@ -112,7 +169,8 @@ Deno.serve(async (req) => {
 
     // 該当なしは 404 で返ってくる
     if (res.status === 404) {
-      return json({ setlists: [] })
+      await saveCache([])
+      return respond([])
     }
     if (res.status === 429) {
       return json({ error: "setlistfm_rate_limited" }, 429)
@@ -134,10 +192,10 @@ Deno.serve(async (req) => {
         url: s?.url ? String(s.url) : null,
         songs: flattenSongs(s),
       }))
-      .filter((s: any) => s.id && (includeEmpty || s.songs.length > 0))
-      .slice(0, MAX_RESULTS)
+      .filter((s: any) => s.id)
 
-    return json({ setlists })
+    await saveCache(setlists)
+    return respond(setlists)
   } catch (e) {
     const timedOut = e instanceof DOMException && e.name === "TimeoutError"
     console.error("setlist.fm fetch failed", e)
