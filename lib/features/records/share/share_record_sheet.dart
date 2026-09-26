@@ -32,6 +32,7 @@ class _ShareRecordSheet extends HookWidget {
   @override
   Widget build(BuildContext context) {
     final style = useState(ShareCardStyle.ticket);
+    final theme = useState(ShareCardTheme.gold);
     final boundaryKey = useMemoized(GlobalKey.new);
     final isSharing = useState(false);
 
@@ -52,7 +53,10 @@ class _ShareRecordSheet extends HookWidget {
 
         final dir = await getTemporaryDirectory();
         final file = File(
-          p.join(dir.path, 'recolle_${record.id}_${style.value.name}.png'),
+          p.join(
+            dir.path,
+            'recolle_${record.id}_${style.value.name}_${theme.value.name}.png',
+          ),
         );
         await file.writeAsBytes(bytes.buffer.asUint8List(), flush: true);
 
@@ -98,6 +102,10 @@ class _ShareRecordSheet extends HookWidget {
                 onChanged: (s) => style.value = s,
               ),
             ),
+            _ThemePicker(
+              selected: theme.value,
+              onSelected: (t) => theme.value = t,
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -108,6 +116,7 @@ class _ShareRecordSheet extends HookWidget {
                       child: RecordShareCard(
                         record: record,
                         style: style.value,
+                        theme: theme.value,
                       ),
                     ),
                   ),
@@ -145,6 +154,62 @@ class _ShareRecordSheet extends HookWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// シェア画像の差し色を選ぶ丸い見本の列。
+class _ThemePicker extends StatelessWidget {
+  const _ThemePicker({required this.selected, required this.onSelected});
+
+  final ShareCardTheme selected;
+  final ValueChanged<ShareCardTheme> onSelected;
+
+  static const double _swatch = 30;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+        itemCount: ShareCardTheme.values.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final t = ShareCardTheme.values[index];
+          final isSelected = t == selected;
+          return Semantics(
+            button: true,
+            selected: isSelected,
+            label: '${t.label}の色',
+            excludeSemantics: true,
+            child: GestureDetector(
+              onTap: () => onSelected(t),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: _swatch + 8,
+                padding: const EdgeInsets.all(3),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: isSelected
+                        ? context.colors.textPrimary
+                        : const Color(0x00000000),
+                    width: 2,
+                  ),
+                ),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: t.onDark,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
