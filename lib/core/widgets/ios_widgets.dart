@@ -195,9 +195,21 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
             },
           ),
         ...widget.slivers,
-        // タブバーの裏に最後の要素が隠れないようにする
-        SliverToBoxAdapter(
-          child: SizedBox(height: MediaQuery.paddingOf(context).bottom + 24),
+        SliverLayoutBuilder(
+          builder: (context, constraints) {
+            // タブバーの裏に最後の要素が隠れないようにする
+            var height = MediaQuery.paddingOf(context).bottom + 24;
+            // 切り替える画面では、内容が短くてもラージタイトルを縮めた位置まで
+            // スクロールできるようにする。足りないと切り替えのたびにタイトルが開き、内容が上下に跳ねる
+            if (widget.contentKey != null) {
+              final untilCollapsed =
+                  constraints.viewportMainAxisExtent +
+                  _largeTitleExtent -
+                  constraints.precedingScrollExtent;
+              if (untilCollapsed > height) height = untilCollapsed;
+            }
+            return SliverToBoxAdapter(child: SizedBox(height: height));
+          },
         ),
       ],
     );

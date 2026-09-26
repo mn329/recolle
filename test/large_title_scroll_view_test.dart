@@ -4,6 +4,16 @@ import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 
 void main() {
+  setUp(() {
+    // 横向きではラージタイトルが出ないので、iPhone の縦向きで確かめる
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.implicitView!;
+    view
+      ..physicalSize = const Size(1170, 2532)
+      ..devicePixelRatio = 3;
+    addTearDown(view.reset);
+  });
+
   Widget buildView(String key, {required int itemCount}) => MaterialApp(
     theme: AppTheme.darkTheme,
     home: Scaffold(
