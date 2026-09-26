@@ -64,7 +64,11 @@ class InlinePickerPanel extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        SizedBox(height: pickerHeight, child: picker),
+        // 外側のスクロールが onDrag でフォーカスを外し、ホイールが閉じてしまうので伝えない
+        NotificationListener<ScrollNotification>(
+          onNotification: (_) => true,
+          child: SizedBox(height: pickerHeight, child: picker),
+        ),
         Align(
           alignment: Alignment.centerRight,
           child: CupertinoButton(

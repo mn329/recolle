@@ -10,7 +10,13 @@ Future<void> _pump(WidgetTester tester, Widget row) {
   return tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.darkTheme,
-      home: Scaffold(body: SingleChildScrollView(child: row)),
+      // 作成画面と同じく、ドラッグでキーボードを閉じるスクロールの中に置く
+      home: Scaffold(
+        body: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: row,
+        ),
+      ),
     ),
   );
 }
@@ -39,6 +45,28 @@ void main() {
     expect(find.byType(CupertinoDatePicker), findsNothing);
     expect(find.text('完了'), findsNothing);
     expect(date, DateTime(2024, 10, 31));
+  });
+
+  testWidgets('ホイールを回しても閉じず、回した値を反映する', (tester) async {
+    var date = DateTime(2024, 10, 31);
+    await _pump(
+      tester,
+      StatefulBuilder(
+        builder: (context, setState) => RecordDateRow(
+          label: '公演日',
+          date: date,
+          onChanged: (d) => setState(() => date = d),
+        ),
+      ),
+    );
+    await tester.tap(find.text('公演日'));
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(CupertinoDatePicker), const Offset(0, -40));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(CupertinoDatePicker), findsOneWidget);
+    expect(date, isNot(DateTime(2024, 10, 31)));
   });
 
   group('別の項目にフォーカスが移ると閉じる', () {
