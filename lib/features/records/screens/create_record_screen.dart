@@ -160,6 +160,14 @@ class CreateRecordScreen extends HookConsumerWidget {
     // 対バン・フェスではお目当て（いなければ先頭）の出演者で公演名の候補やセトリを引く
     final headline = isMultiAct ? Record.headlineFor(namedActs) : artist;
     final lookupArtist = isMultiAct ? leadAct?.artist ?? '' : artist;
+    final dayCount = isFestival
+        ? Record.dayCountBetween(date.value, endDate.value)
+        : 1;
+    final festivalDays = [
+      if (dayCount > 1)
+        for (var i = 0; i < dayCount; i++)
+          DateTime(date.value.year, date.value.month, date.value.day + i),
+    ];
     final titleLabel = isMultiAct
         ? 'イベント名・${eventFormat.value.label}名'
         : kind.titleFieldLabel;
@@ -451,7 +459,14 @@ class CreateRecordScreen extends HookConsumerWidget {
           endDate: isFestival && (endDate.value?.isAfter(date.value) ?? false)
               ? endDate.value
               : null,
-          acts: isMultiAct ? namedActs : const [],
+          acts: isMultiAct
+              ? [
+                  for (final a in namedActs)
+                    a.withDay(
+                      dayCount > 1 ? (a.day ?? 1).clamp(1, dayCount) : null,
+                    ),
+                ]
+              : const [],
           ticketImageUrl: ticketImageUrl,
           ticketSource: nullIfEmpty(sourceController),
           venue: hasVenue ? nullIfEmpty(venueController) : null,
@@ -716,8 +731,13 @@ class CreateRecordScreen extends HookConsumerWidget {
                   wrapInCard: false,
                   children: [
                     ActsEditor(
-                      key: ValueKey(actsEditorGeneration.value),
+                      // 日数が変わったら日ごとの欄を作り直す
+                      key: ValueKey((actsEditorGeneration.value, dayCount)),
                       initialActs: acts.value,
+                      minimumActs: eventFormat.value == EventFormat.taiban
+                          ? 2
+                          : 1,
+                      days: festivalDays,
                       scrollPadding: _fieldScrollPadding,
                       onChanged: (next) => acts.value = next,
                     ),

@@ -79,6 +79,16 @@ class _FakeItunesClient extends ItunesClient {
         if (japaneseTitles[t] case final ja?) t: ja,
     };
   }
+
+  @override
+  Future<ItunesArtist?> findArtist(String artistName, {int? artistId}) async =>
+      ItunesArtist(id: 1, name: artistName);
+
+  @override
+  Future<List<ItunesSong>> topSongs(int artistId, {int limit = 10}) async => [
+    const ItunesSong(id: 11, title: 'アイドル', artistName: 'YOASOBI'),
+    const ItunesSong(id: 12, title: '夜に駆ける', artistName: 'YOASOBI'),
+  ];
 }
 
 Future<void> _pumpScreen(
@@ -346,6 +356,20 @@ void main() {
     );
   });
 
+  testWidgets('セトリの 1 曲目の欄に触れると、入力前でもアーティストの人気曲を候補に出す', (tester) async {
+    await _pumpScreen(tester);
+    await tester.enterText(_field('アーティスト'), 'YOASOBI');
+    await tester.pump();
+
+    await tester.ensureVisible(_field('1曲目の曲名を入力'));
+    await tester.pumpAndSettle();
+    await tester.showKeyboard(_field('1曲目の曲名を入力'));
+    await tester.pumpAndSettle();
+
+    expect(find.widgetWithText(CupertinoButton, 'アイドル'), findsOneWidget);
+    expect(find.widgetWithText(CupertinoButton, '夜に駆ける'), findsOneWidget);
+  });
+
   group('対バン・フェス', () {
     testWidgets('対バンにすると、入力済みのアーティストとセトリをお目当ての出演者として引き継ぐ', (tester) async {
       await _pumpScreen(tester);
@@ -353,6 +377,9 @@ void main() {
       await tester.enterText(_field('1曲目の曲名を入力'), 'Lovers');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
+      // 入力欄に残るフォーカスで人気曲の候補が出て、画面がそちらへスクロールするため外す
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
 
       await tester.ensureVisible(find.text('対バン'));
       await tester.pumpAndSettle();
@@ -365,11 +392,28 @@ void main() {
       expect(firstAct.controller!.text, 'sumika');
       expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
       expect(find.text('1曲'), findsOneWidget);
+      // 対バンは最初から 2 組分の欄を出す
+      expect(_field('2組目の出演者'), findsOneWidget);
 
       await tester.ensureVisible(find.text('出演者を追加'));
       await tester.tap(find.text('出演者を追加'));
       await tester.pumpAndSettle();
-      expect(_field('2組目の出演者'), findsOneWidget);
+      expect(_field('3組目の出演者'), findsOneWidget);
+    });
+
+    testWidgets('出演者のセトリはカードの中で開閉する', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.text('対バン'));
+      await tester.pumpAndSettle();
+      expect(_field('1曲目の曲名を入力'), findsNothing);
+
+      await tester.tap(find.text('セットリスト').first);
+      await tester.pumpAndSettle();
+      expect(_field('1曲目の曲名を入力'), findsOneWidget);
+
+      await tester.tap(find.text('セットリスト').first);
+      await tester.pumpAndSettle();
+      expect(_field('1曲目の曲名を入力'), findsNothing);
     });
 
     testWidgets('出演者の名前がなければ「出演者」を必須として案内する', (tester) async {
@@ -400,8 +444,8 @@ void main() {
           ticketImageUrl: '',
           eventFormat: EventFormat.festival,
           acts: const [
-            RecordAct(artist: 'サカナクション', songs: ['新宝島'], isMain: true),
-            RecordAct(artist: 'sumika'),
+            RecordAct(artist: 'サカナクション', songs: ['新宝島'], isMain: true, day: 1),
+            RecordAct(artist: 'sumika', day: 2),
           ],
         ),
       );
@@ -412,6 +456,11 @@ void main() {
       expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
       expect(find.text('最終日'), findsOneWidget);
       expect(find.text('2026年08月02日 (日)'), findsOneWidget);
+      // 2 日間なので日ごとに出演者を分ける
+      expect(find.text('DAY 1'), findsOneWidget);
+      expect(find.text('DAY 2'), findsOneWidget);
+      expect(find.text('1日目の出演者を追加'), findsOneWidget);
+      expect(find.text('2日目の出演者を追加'), findsOneWidget);
 
       await tester.tap(find.text('キャンセル'));
       await tester.pumpAndSettle();

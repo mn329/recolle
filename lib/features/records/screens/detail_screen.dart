@@ -80,6 +80,35 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     );
   }
 
+  Widget _actSection(RecordAct act) {
+    return InsetGroupedSection(
+      children: [
+        GroupedRow(
+          leading: Icon(
+            act.isMain ? CupertinoIcons.star_fill : CupertinoIcons.music_mic,
+            size: 20,
+            color: act.isMain
+                ? context.colors.accent
+                : context.colors.textSecondary,
+          ),
+          title: act.artist,
+          titleColor: act.isMain ? context.colors.accent : null,
+          additionalInfo: act.songs.isEmpty
+              ? null
+              : Text(
+                  '${act.songs.length}曲',
+                  style: AppFonts.monoStyle(
+                    fontSize: 13,
+                    color: context.colors.textSecondary,
+                  ),
+                ),
+          onTap: () => _openArtist(act.artist),
+        ),
+        ..._songRows(context, artistName: act.artist, songs: act.songs),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final record = _record;
@@ -161,39 +190,22 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ja: '出演者',
               trailing: '${acts.length}組',
             ),
-            for (final act in acts)
-              InsetGroupedSection(
-                children: [
-                  GroupedRow(
-                    leading: Icon(
-                      act.isMain
-                          ? CupertinoIcons.star_fill
-                          : CupertinoIcons.music_mic,
-                      size: 20,
-                      color: act.isMain
-                          ? context.colors.accent
-                          : context.colors.textSecondary,
-                    ),
-                    title: act.artist,
-                    titleColor: act.isMain ? context.colors.accent : null,
-                    additionalInfo: act.songs.isEmpty
-                        ? null
-                        : Text(
-                            '${act.songs.length}曲',
-                            style: AppFonts.monoStyle(
-                              fontSize: 13,
-                              color: context.colors.textSecondary,
-                            ),
-                          ),
-                    onTap: () => _openArtist(act.artist),
+            if (record.dayCount > 1)
+              for (var day = 1; day <= record.dayCount; day++) ...[
+                _DaySubheading(
+                  day: day,
+                  date: DateTime(
+                    record.date.year,
+                    record.date.month,
+                    record.date.day + day - 1,
                   ),
-                  ..._songRows(
-                    context,
-                    artistName: act.artist,
-                    songs: act.songs,
-                  ),
-                ],
-              ),
+                ),
+                for (final act in acts)
+                  if ((act.day ?? 1).clamp(1, record.dayCount) == day)
+                    _actSection(act),
+              ]
+            else
+              for (final act in acts) _actSection(act),
           ] else if (songs.isNotEmpty) ...[
             _SectionHeading(
               en: 'SETLIST',
@@ -377,6 +389,28 @@ class _Header extends StatelessWidget {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 複数日のフェスの出演者を日ごとに分ける小見出し。
+class _DaySubheading extends StatelessWidget {
+  const _DaySubheading({required this.day, required this.date});
+
+  static const _weekdays = ['月', '火', '水', '木', '金', '土', '日'];
+
+  final int day;
+  final DateTime date;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 12, 20, 6),
+      child: Text(
+        'DAY $day　${date.month}月${date.day}日 (${_weekdays[date.weekday - 1]})',
+        style: AppFonts.monoStyle(fontSize: 12, color: colors.accent),
       ),
     );
   }

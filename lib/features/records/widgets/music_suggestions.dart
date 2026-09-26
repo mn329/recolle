@@ -110,10 +110,17 @@ class SongSuggestions extends HookConsumerWidget {
     required this.query,
     required this.alreadyAdded,
     required this.onPick,
+    this.showPopularWhenEmpty = false,
   });
+
+  /// 空欄の入力欄にフォーカスがあるときに出す人気曲の数。
+  static const int popularCount = 6;
 
   final String artistName;
   final String query;
+
+  /// 未入力のときに、アーティストの人気曲を候補に出すか。
+  final bool showPopularWhenEmpty;
 
   /// 既にセトリにある曲は候補から外す。
   final Iterable<String> alreadyAdded;
@@ -126,17 +133,39 @@ class SongSuggestions extends HookConsumerWidget {
       query,
       (q) => itunes.searchSongs(artistName: artistName, term: q),
     );
+    final artist = artistName.trim();
+    final popular =
+        showPopularWhenEmpty && query.trim().isEmpty && artist.isNotEmpty;
+    final artistAsync = popular
+        ? ref.watch(itunesArtistProvider((name: artist, itunesArtistId: null)))
+        : null;
+    final artistId = artistAsync?.asData?.value?.id;
+    final topAsync = artistId == null
+        ? null
+        : ref.watch(topSongsProvider(artistId));
+    // 人気曲は補助なので、取れなければ何も出さない
+    final source = !popular
+        ? snapshot
+        : artistAsync!.isLoading || (topAsync?.isLoading ?? false)
+        ? const AsyncSnapshot<List<ItunesSong>>.waiting()
+        : AsyncSnapshot.withData(
+            ConnectionState.done,
+            topAsync?.asData?.value ?? const <ItunesSong>[],
+          );
+
     final added = {for (final t in alreadyAdded) normalizeArtistName(t)};
-    final songs = (snapshot.data ?? const <ItunesSong>[])
-        .where((s) => !added.contains(normalizeArtistName(s.title)))
-        .toList();
+    final matches = (source.data ?? const <ItunesSong>[]).where(
+      (s) => !added.contains(normalizeArtistName(s.title)),
+    );
+    final songs = (popular ? matches.take(popularCount) : matches).toList();
 
     return _SuggestionPanel(
-      snapshot: snapshot,
+      snapshot: source,
       isEmpty: songs.isEmpty,
       children: [
-        for (final song in songs)
+        for (final (i, song) in songs.indexed)
           _SuggestionRow(
+            revealOnShow: i == 0,
             leading: song.artworkUrl == null
                 ? null
                 : ArtistAvatar(
@@ -415,6 +444,7 @@ class _SuggestionRow extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.leading,
+    this.revealOnShow = false,
   });
 
   final IconData icon;
@@ -423,8 +453,16 @@ class _SuggestionRow extends StatelessWidget {
   final Widget? leading;
   final VoidCallback onTap;
 
+  /// 出たときにこの行まで画面をスクロールする（キーボードの裏に隠れないように）。
+  final bool revealOnShow;
+
   @override
   Widget build(BuildContext context) {
+    final row = _buildRow(context);
+    return revealOnShow ? _RevealOnShow(child: row) : row;
+  }
+
+  Widget _buildRow(BuildContext context) {
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: Size.zero,
@@ -477,4 +515,34 @@ class _SuggestionRow extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 初めて表示されたときに、自分が見える位置まで親のスクロールを動かす。
+class _RevealOnShow extends StatefulWidget {
+  const _RevealOnShow({required this.child});
+
+  final Widget child;
+
+  @override
+  State<_RevealOnShow> createState() => _RevealOnShowState();
+}
+
+class _RevealOnShowState extends State<_RevealOnShow> {
+  @override
+  void initState() {
+    super.initState();
+    // 候補の枠が開くアニメーションを待ってから位置を測る
+    Future<void>.delayed(const Duration(milliseconds: 200), () {
+      if (!mounted) return;
+      Scrollable.ensureVisible(
+        context,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }

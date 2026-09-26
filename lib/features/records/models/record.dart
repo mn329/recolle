@@ -34,6 +34,7 @@ class RecordAct {
     required this.artist,
     this.songs = const [],
     this.isMain = false,
+    this.day,
   });
 
   final String artist;
@@ -42,12 +43,19 @@ class RecordAct {
   /// お目当ての出演者か。
   final bool isMain;
 
+  /// 複数日のフェスで出演した日（1 始まり）。1 日だけの公演では null。
+  final int? day;
+
   RecordAct copyWith({String? artist, List<String>? songs, bool? isMain}) =>
       RecordAct(
         artist: artist ?? this.artist,
         songs: songs ?? this.songs,
         isMain: isMain ?? this.isMain,
+        day: day,
       );
+
+  RecordAct withDay(int? day) =>
+      RecordAct(artist: artist, songs: songs, isMain: isMain, day: day);
 
   factory RecordAct.fromJson(Map<String, dynamic> json) => RecordAct(
     artist: (json['artist'] as String? ?? '').trim(),
@@ -56,12 +64,14 @@ class RecordAct {
         if (song is String && song.trim().isNotEmpty) song.trim(),
     ],
     isMain: json['is_main'] as bool? ?? false,
+    day: (json['day'] as num?)?.toInt(),
   );
 
   Map<String, dynamic> toJson() => {
     'artist': artist,
     'songs': songs,
     'is_main': isMain,
+    if (day != null) 'day': day,
   };
 
   @override
@@ -69,10 +79,11 @@ class RecordAct {
       other is RecordAct &&
       other.artist == artist &&
       other.isMain == isMain &&
+      other.day == day &&
       _sameStrings(other.songs, songs);
 
   @override
-  int get hashCode => Object.hash(artist, isMain, Object.hashAll(songs));
+  int get hashCode => Object.hash(artist, isMain, day, Object.hashAll(songs));
 }
 
 bool _sameStrings(List<String> a, List<String> b) {
@@ -331,6 +342,20 @@ class Record {
   DateTime get lastDate => endDate ?? date;
 
   bool get isMultiDay => endDate != null && endDate!.isAfter(date);
+
+  /// 開催日数（1 日だけなら 1）。
+  int get dayCount => dayCountBetween(date, endDate);
+
+  /// [start] から [end] までの日数。[end] が null か [start] 以前なら 1。
+  static int dayCountBetween(DateTime start, DateTime? end) {
+    if (end == null) return 1;
+    final days = DateTime.utc(
+      end.year,
+      end.month,
+      end.day,
+    ).difference(DateTime.utc(start.year, start.month, start.day)).inDays;
+    return days < 1 ? 1 : days + 1;
+  }
 
   String get typeLabel => type.japaneseLabel;
 

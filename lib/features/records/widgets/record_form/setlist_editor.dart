@@ -25,9 +25,13 @@ class SetlistEditor extends HookWidget {
     required this.artistName,
     required this.onChanged,
     this.scrollPadding = const EdgeInsets.all(20),
+    this.embedded = false,
   });
 
   final List<String> initialSongs;
+
+  /// 出演者のカードなど、角丸の背景を持つ親の中に置くとき true（自前の枠を描かない）。
+  final bool embedded;
 
   /// 曲名候補の検索に使う。
   final String artistName;
@@ -46,6 +50,7 @@ class SetlistEditor extends HookWidget {
     final inputController = useTextEditingController();
     final inputText = useValueListenable(inputController).text;
     final inputFocusNode = useFocusNode();
+    useListenable(inputFocusNode);
     final inputKey = useMemoized(GlobalKey.new);
 
     void commit(List<_SetlistLine> next) {
@@ -98,85 +103,95 @@ class SetlistEditor extends HookWidget {
       );
     }
 
+    final rows = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (lines.value.isNotEmpty)
+          ReorderableListView(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            buildDefaultDragHandles: false,
+            padding: EdgeInsets.zero,
+            proxyDecorator: (child, _, _) => Material(
+              color: context.colors.cardPressed,
+              elevation: 8,
+              shadowColor: CupertinoColors.black,
+              borderRadius: BorderRadius.circular(10),
+              child: child,
+            ),
+            onReorder: (oldIndex, newIndex) {
+              final items = [...lines.value];
+              if (newIndex > oldIndex) newIndex--;
+              items.insert(newIndex, items.removeAt(oldIndex));
+              HapticFeedback.selectionClick();
+              commit(items);
+            },
+            children: [
+              for (final (index, line) in lines.value.indexed)
+                Dismissible(
+                  key: ValueKey(line.id),
+                  direction: DismissDirection.endToStart,
+                  background: const _DeleteBackground(),
+                  onDismissed: (_) => removeAt(index),
+                  child: _SongRow(
+                    number: index + 1,
+                    index: index,
+                    text: line.text,
+                    scrollPadding: scrollPadding,
+                    onChanged: (text) => commit([
+                      for (final e in lines.value)
+                        if (e.id == line.id)
+                          _SetlistLine(id: e.id, text: text)
+                        else
+                          e,
+                    ]),
+                  ),
+                ),
+            ],
+          ),
+        _AddSongInput(
+          key: inputKey,
+          controller: inputController,
+          focusNode: inputFocusNode,
+          nextNumber: lines.value.length + 1,
+          hasSongs: lines.value.isNotEmpty,
+          scrollPadding: scrollPadding,
+          onSubmit: addSong,
+        ),
+      ],
+    );
+    final suggestions = SongSuggestions(
+      artistName: artistName,
+      query: inputText,
+      showPopularWhenEmpty: inputFocusNode.hasFocus,
+      alreadyAdded: lines.value.map((e) => e.text),
+      onPick: (song) {
+        inputController.text = song.title;
+        addSong();
+      },
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         // 各曲の行が自分の下に区切り線を引くので、FormCard の自動の区切り線は使わない
-        ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: ColoredBox(
-            color: context.colors.card,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (lines.value.isNotEmpty)
-                  ReorderableListView(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    padding: EdgeInsets.zero,
-                    proxyDecorator: (child, _, _) => Material(
-                      color: context.colors.cardPressed,
-                      elevation: 8,
-                      shadowColor: CupertinoColors.black,
-                      borderRadius: BorderRadius.circular(10),
-                      child: child,
-                    ),
-                    onReorder: (oldIndex, newIndex) {
-                      final items = [...lines.value];
-                      if (newIndex > oldIndex) newIndex--;
-                      items.insert(newIndex, items.removeAt(oldIndex));
-                      HapticFeedback.selectionClick();
-                      commit(items);
-                    },
-                    children: [
-                      for (final (index, line) in lines.value.indexed)
-                        Dismissible(
-                          key: ValueKey(line.id),
-                          direction: DismissDirection.endToStart,
-                          background: const _DeleteBackground(),
-                          onDismissed: (_) => removeAt(index),
-                          child: _SongRow(
-                            number: index + 1,
-                            index: index,
-                            text: line.text,
-                            scrollPadding: scrollPadding,
-                            onChanged: (text) => commit([
-                              for (final e in lines.value)
-                                if (e.id == line.id)
-                                  _SetlistLine(id: e.id, text: text)
-                                else
-                                  e,
-                            ]),
-                          ),
-                        ),
-                    ],
-                  ),
-                _AddSongInput(
-                  key: inputKey,
-                  controller: inputController,
-                  focusNode: inputFocusNode,
-                  nextNumber: lines.value.length + 1,
-                  hasSongs: lines.value.isNotEmpty,
-                  scrollPadding: scrollPadding,
-                  onSubmit: addSong,
-                ),
-              ],
-            ),
+        if (embedded)
+          rows
+        else
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: ColoredBox(color: context.colors.card, child: rows),
           ),
-        ),
-        SongSuggestions(
-          artistName: artistName,
-          query: inputText,
-          alreadyAdded: lines.value.map((e) => e.text),
-          onPick: (song) {
-            inputController.text = song.title;
-            addSong();
-          },
-        ),
+        if (embedded)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: suggestions,
+          )
+        else
+          suggestions,
         if (lines.value.length > 1)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            padding: EdgeInsets.fromLTRB(16, 8, 16, embedded ? 12 : 0),
             child: Text(
               '右端のつまみで並び替え、左にスワイプで削除できます。',
               style: TextStyle(

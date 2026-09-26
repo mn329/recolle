@@ -54,6 +54,25 @@ void main() {
       expect(restored.acts, _taibanActs);
     });
 
+    test('複数日のフェスでは出演した日も往復する', () {
+      final acts = [
+        const RecordAct(artist: 'サカナクション', day: 1),
+        const RecordAct(artist: 'sumika', day: 2),
+      ];
+      final record = _record(
+        format: EventFormat.festival,
+        date: DateTime(2026, 8, 1),
+        endDate: DateTime(2026, 8, 3),
+        acts: acts,
+      );
+
+      final restored = Record.fromJson({...record.toJson(), 'id': 'r'});
+
+      expect(restored.acts, acts);
+      expect(restored.dayCount, 3);
+      expect(Record.dayCountBetween(DateTime(2026, 8, 1), null), 1);
+    });
+
     test('形式や出演者のない従来の記録はワンマンとして読む', () {
       final restored = Record.fromJson({
         'id': 'old',
