@@ -15,8 +15,10 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/features/records/providers/work_search_provider.dart';
 
 /// お気に入りアーティストをワンタップで入力するチップ列。未登録なら何も出さない。
 class FavoriteArtistQuickPick extends ConsumerWidget {
@@ -181,6 +183,70 @@ class SongSuggestions extends HookConsumerWidget {
           ),
       ],
     );
+  }
+}
+
+/// 映画・本の題名候補。[query] が空なら何も出さない。
+///
+/// 検索結果は種別ごとに違うので、呼び出し側は種別を切り替えたら作り直すこと（`key` に種別を渡す）。
+class WorkSuggestions extends HookConsumerWidget {
+  const WorkSuggestions({
+    super.key,
+    required this.type,
+    required this.query,
+    required this.onPick,
+  }) : assert(type == RecordType.movie || type == RecordType.book);
+
+  final RecordType type;
+  final String query;
+  final ValueChanged<WorkSuggestion> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(workSearchClientProvider);
+    final isBook = type == RecordType.book;
+    final snapshot = useDebouncedSearch<WorkSuggestion>(
+      query,
+      (q) => isBook ? client.searchBooks(q) : client.searchMovies(q),
+      minLength: 2,
+    );
+    final typed = query.trim();
+    final works = (snapshot.data ?? const <WorkSuggestion>[])
+        .where((w) => w.title != typed)
+        .toList();
+
+    return _SuggestionPanel(
+      snapshot: snapshot,
+      isEmpty: works.isEmpty,
+      children: [
+        for (final work in works)
+          _SuggestionRow(
+            leading: work.artworkUrl == null
+                ? null
+                : ArtistAvatar(
+                    name: work.title,
+                    artworkUrl: work.artworkUrl,
+                    size: 32,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+            icon: isBook ? CupertinoIcons.book : CupertinoIcons.film,
+            title: work.title,
+            subtitle: _subtitle(work),
+            onTap: () => onPick(work),
+          ),
+      ],
+    );
+  }
+
+  static String? _subtitle(WorkSuggestion w) {
+    final parts = [
+      ?w.creator,
+      // 説明文に年が入っていれば重ねない
+      if (w.year != null && !(w.description?.contains('${w.year}') ?? false))
+        '${w.year}年',
+      ?w.description,
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
   }
 }
 

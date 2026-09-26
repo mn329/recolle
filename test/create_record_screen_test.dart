@@ -9,8 +9,10 @@ import 'package:recolle/features/music/data/concert_discovery_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/features/records/providers/work_search_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
@@ -91,6 +93,22 @@ class _FakeItunesClient extends ItunesClient {
   ];
 }
 
+class _FakeWorkSearchClient extends WorkSearchClient {
+  @override
+  Future<List<WorkSuggestion>> searchBooks(
+    String term, {
+    int limit = 5,
+  }) async => const [
+    WorkSuggestion(title: 'ノルウェイの森', creator: '村上春樹', year: 2018),
+  ];
+
+  @override
+  Future<List<WorkSuggestion>> searchMovies(
+    String term, {
+    int limit = 5,
+  }) async => const [];
+}
+
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Record? recordToEdit,
@@ -120,6 +138,7 @@ Future<void> _pumpScreen(
         concertDiscoveryClientProvider.overrideWithValue(
           discoveryClient ?? _FakeDiscoveryClient(const []),
         ),
+        workSearchClientProvider.overrideWithValue(_FakeWorkSearchClient()),
       ],
       child: MaterialApp(
         home: Builder(
@@ -184,6 +203,32 @@ void main() {
     expect(find.text('購入情報'), findsOneWidget);
     expect(_field('価格'), findsOneWidget);
     expect(_field('座席（G-12 など）'), findsNothing);
+  });
+
+  testWidgets('本の書名を入力すると候補を出し、選ぶと書名と著者を入れる', (tester) async {
+    await _pumpScreen(tester);
+    await tester.tap(find.text('本'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(_field('書名'));
+    await tester.enterText(_field('書名'), 'ノルウェイ');
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    expect(find.text('村上春樹 · 2018年'), findsOneWidget);
+    await tester.tap(find.text('ノルウェイの森'));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<CupertinoTextField>(_field('ノルウェイの森')).controller!.text,
+      'ノルウェイの森',
+    );
+    expect(
+      tester.widget<CupertinoTextField>(_field('村上春樹')).controller!.text,
+      '村上春樹',
+    );
+    // 選んだ後は同じ候補を出し直さない
+    expect(find.text('村上春樹 · 2018年'), findsNothing);
   });
 
   testWidgets('映画の編集では、保存済みの映画館・座席・料金・上映時刻を表示する', (tester) async {

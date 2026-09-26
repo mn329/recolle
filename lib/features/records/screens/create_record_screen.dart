@@ -21,6 +21,7 @@ import 'package:recolle/features/favorites/providers/favorite_artists_provider.d
 import 'package:recolle/features/music/data/setlist_localization.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
@@ -144,7 +145,7 @@ class CreateRecordScreen extends HookConsumerWidget {
     final artistTypedSincePick = useState(false);
     final titleFocusNode = useFocusNode();
     useListenable(titleFocusNode);
-    final concertPicked = useState(false);
+    final titlePicked = useState(false);
     // 候補から取り込んだセトリを反映するため、セトリ欄を作り直す
     final setlistEditorGeneration = useState(0);
 
@@ -215,6 +216,23 @@ class CreateRecordScreen extends HookConsumerWidget {
       artistFocusNode.unfocus();
     }
 
+    void pickWork(WorkSuggestion work) {
+      final picked = work.title.length > RecordFieldLimits.title
+          ? work.title.substring(0, RecordFieldLimits.title)
+          : work.title;
+      titleController.value = TextEditingValue(
+        text: picked,
+        selection: TextSelection.collapsed(offset: picked.length),
+      );
+      final creator = work.creator;
+      if (creator != null &&
+          creator.length <= RecordFieldLimits.artistOrAuthor) {
+        artistController.text = creator;
+      }
+      titlePicked.value = true;
+      titleFocusNode.unfocus();
+    }
+
     void changeFormat(EventFormat next) {
       final previous = eventFormat.value;
       if (next == previous) return;
@@ -255,7 +273,7 @@ class CreateRecordScreen extends HookConsumerWidget {
         text: title,
         selection: TextSelection.collapsed(offset: title.length),
       );
-      concertPicked.value = true;
+      titlePicked.value = true;
       titleFocusNode.unfocus();
 
       final filled = [titleLabel];
@@ -577,18 +595,30 @@ class CreateRecordScreen extends HookConsumerWidget {
           enLabel: 'TITLE',
           maxLength: RecordFieldLimits.title,
           scrollPadding: _fieldScrollPadding,
-          onChanged: (_) => concertPicked.value = false,
+          onChanged: (_) => titlePicked.value = false,
         ),
         if (isLive &&
             lookupArtist.isNotEmpty &&
             titleFocusNode.hasFocus &&
-            !concertPicked.value)
+            !titlePicked.value)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: ConcertSuggestions(
               artist: lookupArtist,
               query: titleController.text,
               onPick: pickConcert,
+            ),
+          ),
+        if ((kind == RecordType.movie || kind == RecordType.book) &&
+            titleFocusNode.hasFocus &&
+            !titlePicked.value)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: WorkSuggestions(
+              key: ValueKey(kind),
+              type: kind,
+              query: titleController.text,
+              onPick: pickWork,
             ),
           ),
       ],
