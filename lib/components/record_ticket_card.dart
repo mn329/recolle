@@ -69,6 +69,7 @@ class _RecordTicketCardState extends State<RecordTicketCard>
             title: widget.record.title,
             artistOrAuthor: widget.record.artistOrAuthor,
             date: widget.record.date,
+            endDate: widget.record.isMultiDay ? widget.record.lastDate : null,
             background: LayoutBuilder(
               builder: (context, constraints) {
                 return DecodedNetworkImage(
@@ -89,6 +90,9 @@ class _RecordTicketCardState extends State<RecordTicketCard>
   }
 }
 
+String _monthDay(DateTime d) =>
+    '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
 /// 一覧に並ぶチケットの見た目。作成画面のプレビューとも共有する。
 class TicketFace extends StatelessWidget {
   const TicketFace({
@@ -97,6 +101,7 @@ class TicketFace extends StatelessWidget {
     required this.artistOrAuthor,
     required this.date,
     required this.background,
+    this.endDate,
   });
 
   static const double height = 120;
@@ -104,6 +109,9 @@ class TicketFace extends StatelessWidget {
   final String title;
   final String artistOrAuthor;
   final DateTime date;
+
+  /// 複数日の公演の最終日。
+  final DateTime? endDate;
 
   /// 券面いっぱいに敷く画像など。文字が読めるよう上に紙色のグラデーションを重ねる。
   final Widget background;
@@ -193,12 +201,20 @@ class TicketFace extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}',
+                        _monthDay(date),
                         style: AppFonts.monoStyle(
                           fontSize: 20,
                           color: colors.ticketText,
                         ),
                       ),
+                      if (endDate case final end?)
+                        Text(
+                          '– ${_monthDay(end)}',
+                          style: AppFonts.monoStyle(
+                            fontSize: 13,
+                            color: colors.ticketText,
+                          ),
+                        ),
                     ],
                   ),
                 ],

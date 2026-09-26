@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
@@ -21,6 +22,7 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:recolle/features/records/widgets/ticket_mail_import_sheet.dart';
+import 'package:recolle/features/records/widgets/record_form/acts_editor.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/records/widgets/record_form/form_text_row.dart';
 import 'package:recolle/features/records/widgets/record_form/record_date_row.dart';
@@ -77,6 +79,14 @@ class CreateRecordScreen extends HookConsumerWidget {
 
     final type = useState(startType);
     final date = useState(initialDate);
+    final startFormat = editingRecord?.eventFormat ?? EventFormat.oneman;
+    final eventFormat = useState(startFormat);
+    final initialEndDate = editingRecord?.endDate;
+    final endDate = useState(initialEndDate);
+    final initialActs = editingRecord?.acts ?? const <RecordAct>[];
+    final acts = useState(initialActs);
+    // 形式の切り替えや候補の取り込みで出演者を差し替えたときに、出演者欄を作り直す
+    final actsEditorGeneration = useState(0);
     final initialOpenTime = editingRecord?.openTime ?? draft?.openTime;
     final initialStartTime = editingRecord?.startTime ?? draft?.startTime;
     final initialEndTime = editingRecord?.endTime ?? draft?.endTime;
@@ -139,6 +149,20 @@ class CreateRecordScreen extends HookConsumerWidget {
     final artist = artistController.text.trim();
     final isLive = type.value == RecordType.live;
     final kind = type.value;
+    final isMultiAct = isLive && eventFormat.value.hasMultipleActs;
+    final isFestival = isLive && eventFormat.value == EventFormat.festival;
+    final namedActs = [
+      for (final a in acts.value)
+        if (a.artist.trim().isNotEmpty) a.copyWith(artist: a.artist.trim()),
+    ];
+    final leadAct =
+        namedActs.where((a) => a.isMain).firstOrNull ?? namedActs.firstOrNull;
+    // 対バン・フェスではお目当て（いなければ先頭）の出演者で公演名の候補やセトリを引く
+    final headline = isMultiAct ? Record.headlineFor(namedActs) : artist;
+    final lookupArtist = isMultiAct ? leadAct?.artist ?? '' : artist;
+    final titleLabel = isMultiAct
+        ? 'イベント名・${eventFormat.value.label}名'
+        : kind.titleFieldLabel;
     final hasVenue = kind.venueLabel != null;
     final hasSeat = kind.seatPlaceholder != null;
     final savedImageUrl = removeSavedImage.value
@@ -148,6 +172,9 @@ class CreateRecordScreen extends HookConsumerWidget {
     final isDirty =
         type.value != startType ||
         date.value != initialDate ||
+        eventFormat.value != startFormat ||
+        endDate.value != initialEndDate ||
+        !listEquals(acts.value, initialActs) ||
         openTime.value != initialOpenTime ||
         startTime.value != initialStartTime ||
         endTime.value != initialEndTime ||
@@ -160,8 +187,11 @@ class CreateRecordScreen extends HookConsumerWidget {
         ].any((changed) => changed);
 
     final missingLabels = [
-      if (artist.isEmpty) type.value.creatorFieldLabel,
-      if (title.isEmpty) type.value.titleFieldLabel,
+      if (isMultiAct && namedActs.isEmpty)
+        '出演者'
+      else if (!isMultiAct && artist.isEmpty)
+        type.value.creatorFieldLabel,
+      if (title.isEmpty) titleLabel,
     ];
     final canSave = missingLabels.isEmpty && !isSaving.value;
 
@@ -172,6 +202,38 @@ class CreateRecordScreen extends HookConsumerWidget {
       );
       artistTypedSincePick.value = false;
       artistFocusNode.unfocus();
+    }
+
+    void changeFormat(EventFormat next) {
+      final previous = eventFormat.value;
+      if (next == previous) return;
+      // 入力済みのアーティストとセトリは、形式を変えても引き継ぐ
+      if (next.hasMultipleActs && !previous.hasMultipleActs) {
+        if (namedActs.isEmpty &&
+            (artist.isNotEmpty || songs.value.isNotEmpty)) {
+          acts.value = [
+            RecordAct(artist: artist, songs: songs.value, isMain: true),
+          ];
+          actsEditorGeneration.value++;
+        }
+      } else if (!next.hasMultipleActs && previous.hasMultipleActs) {
+        final lead = leadAct;
+        if (artist.isEmpty && lead != null) {
+          artistController.text = lead.artist;
+          if (songs.value.isEmpty && lead.songs.isNotEmpty) {
+            songs.value = lead.songs;
+            setlistEditorGeneration.value++;
+          }
+        }
+      }
+      if (next != EventFormat.festival) endDate.value = null;
+      eventFormat.value = next;
+    }
+
+    void changeDate(DateTime d) {
+      date.value = d;
+      final end = endDate.value;
+      if (end != null && !end.isAfter(d)) endDate.value = null;
     }
 
     Future<void> pickConcert(ConcertCandidate c) async {
@@ -185,10 +247,10 @@ class CreateRecordScreen extends HookConsumerWidget {
       concertPicked.value = true;
       titleFocusNode.unfocus();
 
-      final filled = [kind.titleFieldLabel];
+      final filled = [titleLabel];
       if (c.fillsDetails) {
         if (c.date case final d?) {
-          date.value = d;
+          changeDate(d);
           filled.add('公演日');
         }
         if (c.venue case final v? when hasVenue) {
@@ -209,17 +271,33 @@ class CreateRecordScreen extends HookConsumerWidget {
       HapticFeedback.selectionClick();
 
       // 入力済みのセトリは上書きしない
-      if (c.fillsDetails && c.songs.isNotEmpty && songs.value.isEmpty) {
+      final lead = leadAct;
+      final targetEmpty = isMultiAct
+          ? lead != null && lead.songs.isEmpty
+          : songs.value.isEmpty;
+      if (c.fillsDetails && c.songs.isNotEmpty && targetEmpty) {
         final localized = await localizeSetlistSongs(
           ref.read(itunesClientProvider),
-          artistName: artistController.text.trim(),
+          artistName: lookupArtist,
           songs: c.songs,
         );
         if (!context.mounted) return;
-        // 日本語化を待つ間に手で入れた曲も上書きしない
         final fits =
             localized.join('\n').length <= RecordFieldLimits.setlistTotal;
-        if (songs.value.isEmpty && fits) {
+        // 日本語化を待つ間に手で入れた曲も上書きしない
+        if (fits && isMultiAct && lead != null) {
+          final index = acts.value.indexWhere(
+            (a) => a.artist.trim() == lead.artist && a.songs.isEmpty,
+          );
+          if (index >= 0) {
+            acts.value = [
+              for (final (i, a) in acts.value.indexed)
+                i == index ? a.copyWith(songs: localized) : a,
+            ];
+            actsEditorGeneration.value++;
+            filled.add('${lead.artist}のセットリスト');
+          }
+        } else if (fits && !isMultiAct && songs.value.isEmpty) {
           songs.value = localized;
           setlistEditorGeneration.value++;
           filled.add('セットリスト');
@@ -264,9 +342,24 @@ class CreateRecordScreen extends HookConsumerWidget {
       }
 
       fill(titleController, info.title, RecordFieldLimits.title);
-      fill(artistController, info.artist, RecordFieldLimits.artistOrAuthor);
+      if (isMultiAct) {
+        final name = info.artist?.trim() ?? '';
+        final truncated = name.length > RecordFieldLimits.artistOrAuthor
+            ? name.substring(0, RecordFieldLimits.artistOrAuthor)
+            : name;
+        if (truncated.isNotEmpty &&
+            namedActs.every((a) => a.artist != truncated)) {
+          acts.value = [
+            ...namedActs,
+            RecordAct(artist: truncated, isMain: true),
+          ];
+          actsEditorGeneration.value++;
+        }
+      } else {
+        fill(artistController, info.artist, RecordFieldLimits.artistOrAuthor);
+      }
       fill(sourceController, info.ticketSource, RecordFieldLimits.ticketSource);
-      if (info.date != null) date.value = info.date!;
+      if (info.date != null) changeDate(info.date!);
       final priceFits =
           info.ticketPrice != null &&
           info.ticketPrice! <= RecordFieldLimits.ticketPriceMax;
@@ -284,8 +377,8 @@ class CreateRecordScreen extends HookConsumerWidget {
       artistTypedSincePick.value = false;
 
       final filled = [
-        if (info.title != null) kind.titleFieldLabel,
-        if (info.artist != null) kind.creatorFieldLabel,
+        if (info.title != null) titleLabel,
+        if (info.artist != null) isMultiAct ? '出演者' : kind.creatorFieldLabel,
         if (info.date != null) isLive ? '公演日' : '日付',
         if (useOpen) '開場',
         if (useStart) kind.startTimeLabel,
@@ -305,7 +398,7 @@ class CreateRecordScreen extends HookConsumerWidget {
       if (!canSave) return;
       FocusScope.of(context).unfocus();
 
-      final setlist = isLive && songs.value.isNotEmpty
+      final setlist = isLive && !isMultiAct && songs.value.isNotEmpty
           ? songs.value.join('\n')
           : null;
       if (setlist != null && setlist.length > RecordFieldLimits.setlistTotal) {
@@ -352,8 +445,13 @@ class CreateRecordScreen extends HookConsumerWidget {
           id: editingRecord?.id ?? '',
           type: type.value,
           title: title,
-          artistOrAuthor: artist,
+          artistOrAuthor: headline,
           date: date.value,
+          eventFormat: isLive ? eventFormat.value : EventFormat.oneman,
+          endDate: isFestival && (endDate.value?.isAfter(date.value) ?? false)
+              ? endDate.value
+              : null,
+          acts: isMultiAct ? namedActs : const [],
           ticketImageUrl: ticketImageUrl,
           ticketSource: nullIfEmpty(sourceController),
           venue: hasVenue ? nullIfEmpty(venueController) : null,
@@ -424,7 +522,7 @@ class CreateRecordScreen extends HookConsumerWidget {
         FormTextRow(
           controller: titleController,
           focusNode: titleFocusNode,
-          placeholder: type.value.titleFieldLabel,
+          placeholder: titleLabel,
           icon: switch (type.value) {
             RecordType.live => CupertinoIcons.music_note_2,
             RecordType.movie => CupertinoIcons.film,
@@ -437,13 +535,13 @@ class CreateRecordScreen extends HookConsumerWidget {
           onChanged: (_) => concertPicked.value = false,
         ),
         if (isLive &&
-            artist.isNotEmpty &&
+            lookupArtist.isNotEmpty &&
             titleFocusNode.hasFocus &&
             !concertPicked.value)
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: ConcertSuggestions(
-              artist: artist,
+              artist: lookupArtist,
               query: titleController.text,
               onPick: pickConcert,
             ),
@@ -526,12 +624,21 @@ class CreateRecordScreen extends HookConsumerWidget {
                 },
                 onChanged: (t) => type.value = t,
               ),
+              if (isLive) ...[
+                const SizedBox(height: 10),
+                IosSegmentedControl<EventFormat>(
+                  value: eventFormat.value,
+                  segments: {for (final f in EventFormat.values) f: f.label},
+                  onChanged: changeFormat,
+                ),
+              ],
               const SizedBox(height: 20),
               TicketPreviewPicker(
                 type: type.value,
                 title: title,
-                artistOrAuthor: artist,
+                artistOrAuthor: headline,
                 date: date.value,
+                endDate: isFestival ? endDate.value : null,
                 localImage: selectedImage.value,
                 remoteImageUrl: savedImageUrl,
                 onPickImage: pickImage,
@@ -568,16 +675,54 @@ class CreateRecordScreen extends HookConsumerWidget {
                     : '${missingLabels.join('と')}は必須です。',
                 children: [
                   // ライブはアーティストから決めることが多く、候補や setlist.fm もそこから引く
-                  ...isLive ? [artistBlock, titleRow] : [titleRow, artistBlock],
+                  if (isMultiAct)
+                    titleRow
+                  else
+                    ...isLive
+                        ? [artistBlock, titleRow]
+                        : [titleRow, artistBlock],
                   RecordDateRow(
-                    label: isLive ? '公演日' : '日付',
+                    label: isFestival ? '開催日' : (isLive ? '公演日' : '日付'),
                     icon: CupertinoIcons.calendar,
                     enLabel: 'DATE',
                     date: date.value,
-                    onChanged: (d) => date.value = d,
+                    onChanged: changeDate,
                   ),
+                  if (isFestival)
+                    RecordDateRow(
+                      label: '最終日',
+                      icon: CupertinoIcons.calendar_badge_plus,
+                      enLabel: 'LAST DAY',
+                      date: endDate.value ?? date.value,
+                      minimumDate: date.value,
+                      onChanged: (d) =>
+                          endDate.value = d.isAfter(date.value) ? d : null,
+                    ),
                 ],
               ),
+              if (isMultiAct)
+                FormSection(
+                  header: '出演者',
+                  trailing: namedActs.isEmpty
+                      ? null
+                      : Text(
+                          '${namedActs.length}組',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                  footer: '★ を付けた出演者がお目当てとしてチケットの見出しになります。',
+                  wrapInCard: false,
+                  children: [
+                    ActsEditor(
+                      key: ValueKey(actsEditorGeneration.value),
+                      initialActs: acts.value,
+                      scrollPadding: _fieldScrollPadding,
+                      onChanged: (next) => acts.value = next,
+                    ),
+                  ],
+                ),
               FormSection(
                 header: kind.detailsSectionLabel,
                 children: [
@@ -649,7 +794,7 @@ class CreateRecordScreen extends HookConsumerWidget {
                   sourceRow,
                 ],
               ),
-              if (isLive)
+              if (isLive && !isMultiAct)
                 FormSection(
                   header: 'セットリスト',
                   trailing: songs.value.isEmpty

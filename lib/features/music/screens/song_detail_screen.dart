@@ -38,9 +38,7 @@ class SongDetailScreen extends ConsumerWidget {
     final resolved = songAsync.asData?.value;
     final heardRecords = (ref.watch(recordsProvider).asData?.value ?? const [])
         .where(
-          (r) =>
-              artistMatches(r.artistOrAuthor, artistName) &&
-              setlistContainsSong(r.setlist, title),
+          (r) => setlistContainsSong(r.songsBy(artistName).join('\n'), title),
         )
         .toList();
 

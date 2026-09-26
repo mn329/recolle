@@ -98,11 +98,7 @@ List<ConcertCandidate> buildConcertCandidates({
   final fromRecords = [
     for (final r
         in records
-            .where(
-              (r) =>
-                  r.type == RecordType.live &&
-                  artistMatches(r.artistOrAuthor, artist),
-            )
+            .where((r) => r.type == RecordType.live && r.features(artist))
             .toList()
           ..sort((a, b) => b.date.compareTo(a.date)))
       if (pastTitles.add(normalizeArtistName(r.title)))

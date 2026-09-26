@@ -32,20 +32,22 @@ List<RecordSearchHit> searchRecords(List<Record> records, String query) {
   final primary = <RecordSearchHit>[];
   final secondary = <RecordSearchHit>[];
   for (final record in records) {
+    final performances = record.performances;
+    final artistText = [for (final a in performances) a.artist].join('\n');
     final fields = <(String, String?)>[
-      ('セトリ', record.setlist),
+      ('セトリ', [for (final a in performances) ...a.songs].join('\n')),
       ('MCメモ', record.mcMemo),
       ('感想', record.impressions),
       ('取得元', record.ticketSource),
     ];
     final allText = [
       record.title,
-      record.artistOrAuthor,
+      artistText,
       for (final (_, value) in fields) ?value,
     ].join('\n');
     if (!_containsAll(allText, tokens)) continue;
 
-    if (_containsAll('${record.title}\n${record.artistOrAuthor}', tokens)) {
+    if (_containsAll('${record.title}\n$artistText', tokens)) {
       primary.add(RecordSearchHit(record: record));
       continue;
     }
@@ -97,21 +99,25 @@ List<LocalArtist> searchLocalArtists({
   for (final f in favorites) {
     byKey[normalizeArtistName(f.name)] = LocalArtist(
       name: f.name,
-      recordCount: records
-          .where((r) => artistMatches(r.artistOrAuthor, f.name))
-          .length,
+      recordCount: records.where((r) => r.features(f.name)).length,
       favorite: f,
     );
   }
-  for (final r in records.where((r) => r.type == RecordType.live)) {
-    final key = normalizeArtistName(r.artistOrAuthor);
-    if (key.isEmpty || byKey.containsKey(key)) continue;
-    byKey[key] = LocalArtist(
-      name: r.artistOrAuthor.trim(),
-      recordCount: records
-          .where((x) => normalizeArtistName(x.artistOrAuthor) == key)
-          .length,
-    );
+  final liveRecords = records.where((r) => r.type == RecordType.live);
+  final performerCounts = <String, int>{};
+  final performerNames = <String, String>{};
+  for (final r in liveRecords) {
+    final keys = <String>{};
+    for (final a in r.performances) {
+      final key = normalizeArtistName(a.artist);
+      if (key.isEmpty || !keys.add(key)) continue;
+      performerNames.putIfAbsent(key, () => a.artist.trim());
+      performerCounts[key] = (performerCounts[key] ?? 0) + 1;
+    }
+  }
+  for (final MapEntry(:key, value: count) in performerCounts.entries) {
+    if (byKey.containsKey(key)) continue;
+    byKey[key] = LocalArtist(name: performerNames[key]!, recordCount: count);
   }
 
   return byKey.values.where((a) => _containsAll(a.name, tokens)).toList()
@@ -143,25 +149,22 @@ List<LocalSong> searchLocalSongs(List<Record> records, String query) {
   final byKey = <(String, String), LocalSong>{};
 
   for (final r in records.where((r) => r.type == RecordType.live)) {
-    final lines = (r.setlist ?? '')
-        .split('\n')
-        .map((l) => l.trim())
-        .where((l) => l.isNotEmpty)
-        .toSet();
-    for (final title in lines) {
-      final key = (
-        normalizeArtistName(r.artistOrAuthor),
-        normalizeArtistName(title),
-      );
-      final existing = byKey[key];
-      byKey[key] = LocalSong(
-        title: existing?.title ?? title,
-        artistName: existing?.artistName ?? r.artistOrAuthor.trim(),
-        timesHeard: (existing?.timesHeard ?? 0) + 1,
-        lastHeard: existing == null || r.date.isAfter(existing.lastHeard)
-            ? r.date
-            : existing.lastHeard,
-      );
+    for (final act in r.performances) {
+      for (final title in act.songs.toSet()) {
+        final key = (
+          normalizeArtistName(act.artist),
+          normalizeArtistName(title),
+        );
+        final existing = byKey[key];
+        byKey[key] = LocalSong(
+          title: existing?.title ?? title,
+          artistName: existing?.artistName ?? act.artist.trim(),
+          timesHeard: (existing?.timesHeard ?? 0) + 1,
+          lastHeard: existing == null || r.date.isAfter(existing.lastHeard)
+              ? r.date
+              : existing.lastHeard,
+        );
+      }
     }
   }
 

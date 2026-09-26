@@ -19,7 +19,11 @@ class NextEventCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final details = [
-      formatJapaneseDate(record.date, includeWeekday: true),
+      formatJapaneseDateRange(
+        record.date,
+        record.endDate,
+        includeWeekday: true,
+      ),
       ?formatEventTimes(record),
       ?record.venue,
     ].join('・');

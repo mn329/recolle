@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
-import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
@@ -94,7 +93,7 @@ class FavoritesScreen extends ConsumerWidget {
               itemBuilder: (context, index) {
                 final artist = favorites[index];
                 final count = records
-                    .where((r) => artistMatches(r.artistOrAuthor, artist.name))
+                    .where((r) => r.features(artist.name))
                     .length;
                 return _FavoriteArtistCard(
                   artist: artist,

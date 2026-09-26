@@ -14,11 +14,15 @@ class RecordDateRow extends StatefulWidget {
     required this.onChanged,
     this.icon,
     this.enLabel,
+    this.minimumDate,
   });
 
   final String label;
   final IconData? icon;
   final String? enLabel;
+
+  /// これより前の日は選べない（フェスの最終日など）。
+  final DateTime? minimumDate;
   final DateTime date;
   final ValueChanged<DateTime> onChanged;
 
@@ -96,6 +100,7 @@ class _RecordDateRowState extends State<RecordDateRow>
                     mode: CupertinoDatePickerMode.date,
                     dateOrder: DatePickerDateOrder.ymd,
                     initialDateTime: widget.date,
+                    minimumDate: widget.minimumDate,
                     minimumYear: _minimumYear,
                     maximumYear: _maximumYear,
                     onDateTimeChanged: (d) =>

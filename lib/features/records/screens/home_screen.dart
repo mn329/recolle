@@ -6,7 +6,6 @@ import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
-import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
@@ -99,7 +98,7 @@ class HomeScreen extends HookConsumerWidget {
                 (r) =>
                     r.type == selectedType.value &&
                     (selectedFavorite == null ||
-                        artistMatches(r.artistOrAuthor, selectedFavorite.name)),
+                        r.features(selectedFavorite.name)),
               );
               final (:upcoming, :past) = splitByDate(visible, DateTime.now());
               if (upcoming.isNotEmpty) {

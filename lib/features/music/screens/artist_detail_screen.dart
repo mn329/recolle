@@ -44,7 +44,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final records = (ref.watch(recordsProvider).asData?.value ?? const [])
-        .where((r) => artistMatches(r.artistOrAuthor, artistName))
+        .where((r) => r.features(artistName))
         .toList();
     final readOnlyOffline = ref.watch(isOfflineReadOnlyProvider);
     final artistAsync = ref.watch(
@@ -162,6 +162,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
             const SliverToBoxAdapter(child: SectionTitle('POPULAR', '人気曲')),
             _PopularSongsSliver(
               artistAsync: artistAsync,
+              artistName: artistName,
               records: records,
               showAll: showAllSongs.value,
               collapsedCount: _collapsedSongCount,
@@ -191,6 +192,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
 class _PopularSongsSliver extends ConsumerWidget {
   const _PopularSongsSliver({
     required this.artistAsync,
+    required this.artistName,
     required this.records,
     required this.showAll,
     required this.collapsedCount,
@@ -198,6 +200,9 @@ class _PopularSongsSliver extends ConsumerWidget {
   });
 
   final AsyncValue<ItunesArtist?> artistAsync;
+
+  /// 記録の出演者名と突き合わせる名前（iTunes の表記とは違うことがある）。
+  final String artistName;
   final List<Record> records;
   final bool showAll;
   final int collapsedCount;
@@ -226,7 +231,10 @@ class _PopularSongsSliver extends ConsumerWidget {
                       rank: i + 1,
                       song: song,
                       heardLive: records.any(
-                        (r) => setlistContainsSong(r.setlist, song.title),
+                        (r) => setlistContainsSong(
+                          r.songsBy(artistName).join('\n'),
+                          song.title,
+                        ),
                       ),
                     ),
                   if (songs.length > collapsedCount)

@@ -70,11 +70,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     if (deleted && mounted) Navigator.of(context).pop();
   }
 
-  void _openArtist() {
+  void _openArtist([String? name]) {
     Navigator.push(
       context,
       CupertinoPageRoute<void>(
-        builder: (_) => ArtistDetailScreen(artistName: _record.artistOrAuthor),
+        builder: (_) =>
+            ArtistDetailScreen(artistName: name ?? _record.artistOrAuthor),
       ),
     );
   }
@@ -87,15 +88,12 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final isUpcoming = splitByDate([
       record,
     ], DateTime.now()).upcoming.isNotEmpty;
-    final songs = (record.setlist ?? '')
-        .split('\n')
-        .map((s) => s.trim())
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final songs = splitSetlist(record.setlist);
+    final acts = record.acts;
     final mcMemo = record.mcMemo?.trim() ?? '';
     final impressions = record.impressions?.trim() ?? '';
     final missing = [
-      if (isLive && songs.isEmpty) 'セットリスト',
+      if (isLive && record.performances.every((a) => a.songs.isEmpty)) 'セットリスト',
       if (isLive && mcMemo.isEmpty) 'MCメモ',
       if (impressions.isEmpty) '感想',
     ];
@@ -137,7 +135,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
           _Header(
             record: record,
             artworkUrl: artworkUrl,
-            onArtistTap: isLive ? _openArtist : null,
+            // 対バン・フェスは出演者ごとの欄から各アーティストへ飛ぶ
+            onArtistTap: isLive && acts.isEmpty ? _openArtist : null,
           ),
           if (isUpcoming)
             Padding(
@@ -156,35 +155,57 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
             ),
           TicketStubCard(record: record),
-          if (songs.isNotEmpty) ...[
+          if (acts.isNotEmpty) ...[
+            _SectionHeading(
+              en: 'LINEUP',
+              ja: '出演者',
+              trailing: '${acts.length}組',
+            ),
+            for (final act in acts)
+              InsetGroupedSection(
+                children: [
+                  GroupedRow(
+                    leading: Icon(
+                      act.isMain
+                          ? CupertinoIcons.star_fill
+                          : CupertinoIcons.music_mic,
+                      size: 20,
+                      color: act.isMain
+                          ? context.colors.accent
+                          : context.colors.textSecondary,
+                    ),
+                    title: act.artist,
+                    titleColor: act.isMain ? context.colors.accent : null,
+                    additionalInfo: act.songs.isEmpty
+                        ? null
+                        : Text(
+                            '${act.songs.length}曲',
+                            style: AppFonts.monoStyle(
+                              fontSize: 13,
+                              color: context.colors.textSecondary,
+                            ),
+                          ),
+                    onTap: () => _openArtist(act.artist),
+                  ),
+                  ..._songRows(
+                    context,
+                    artistName: act.artist,
+                    songs: act.songs,
+                  ),
+                ],
+              ),
+          ] else if (songs.isNotEmpty) ...[
             _SectionHeading(
               en: 'SETLIST',
               ja: 'セットリスト',
               trailing: '${songs.length}曲',
             ),
             InsetGroupedSection(
-              children: [
-                for (final (i, song) in songs.indexed)
-                  GroupedRow(
-                    leading: Text(
-                      (i + 1).toString().padLeft(2, '0'),
-                      style: AppFonts.monoStyle(
-                        fontSize: 14,
-                        color: context.colors.accent,
-                      ),
-                    ),
-                    title: song,
-                    onTap: () => Navigator.push(
-                      context,
-                      CupertinoPageRoute<void>(
-                        builder: (_) => SongDetailScreen(
-                          artistName: record.artistOrAuthor,
-                          title: song,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              children: _songRows(
+                context,
+                artistName: record.artistOrAuthor,
+                songs: songs,
+              ),
             ),
           ],
           if (isLive && mcMemo.isNotEmpty)
@@ -218,6 +239,27 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     );
   }
 }
+
+List<Widget> _songRows(
+  BuildContext context, {
+  required String artistName,
+  required List<String> songs,
+}) => [
+  for (final (i, song) in songs.indexed)
+    GroupedRow(
+      leading: Text(
+        (i + 1).toString().padLeft(2, '0'),
+        style: AppFonts.monoStyle(fontSize: 14, color: context.colors.accent),
+      ),
+      title: song,
+      onTap: () => Navigator.push(
+        context,
+        CupertinoPageRoute<void>(
+          builder: (_) => SongDetailScreen(artistName: artistName, title: song),
+        ),
+      ),
+    ),
+];
 
 /// 種別・タイトル・アーティスト。ライブならアーティスト名から詳細へ飛べる。
 class _Header extends StatelessWidget {
@@ -267,7 +309,9 @@ class _Header extends StatelessWidget {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  record.typeLabel,
+                  record.eventFormat.hasMultipleActs
+                      ? '${record.typeLabel}・${record.eventFormat.label}'
+                      : record.typeLabel,
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -328,7 +372,8 @@ class _Header extends StatelessWidget {
                   ),
                 ),
               ),
-              FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
+              if (record.acts.isEmpty)
+                FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
             ],
           ),
         ],

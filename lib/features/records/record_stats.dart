@@ -59,10 +59,11 @@ List<int> yearsWithRecords(Iterable<Record> records, DateTime now) {
   return years.toList()..sort((a, b) => b.compareTo(a));
 }
 
-/// [artist] の記録だけに絞る。コラボ表記（「A × B」など）の記録も含める。null なら絞らない。
+/// [artist] の記録だけに絞る。対バン・フェスやコラボ表記（「A × B」など）の記録も含める。
+/// null なら絞らない。
 List<Record> filterByArtist(Iterable<Record> records, String? artist) => [
   for (final r in records)
-    if (artist == null || artistMatches(r.artistOrAuthor, artist)) r,
+    if (artist == null || r.features(artist)) r,
 ];
 
 /// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
@@ -95,13 +96,15 @@ RecordStats computeStats(
       total += r.ticketPrice!;
       priced++;
     }
-    artists.add(r.artistOrAuthor);
+    // 対バン・フェスは出演者全員を「観た」として数える
+    final performers = {
+      for (final a in r.performances)
+        if (a.artist.trim().isNotEmpty) normalizeArtistName(a.artist): a.artist,
+    };
+    performers.values.forEach(artists.add);
     if (r.venue != null) venues.add(r.venue!);
     // 同じ公演で 2 回演奏された曲（アンコール等）は 1 回として数える
-    final uniqueSongs = <String>{
-      for (final line in (r.setlist ?? '').split('\n'))
-        if (line.trim().isNotEmpty) line.trim(),
-    };
+    final uniqueSongs = {for (final a in r.performances) ...a.songs};
     uniqueSongs.forEach(songs.add);
   }
 

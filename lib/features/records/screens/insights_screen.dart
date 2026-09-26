@@ -307,7 +307,7 @@ class _History extends StatelessWidget {
           MediaListTile(
             title: r.title,
             subtitle: [
-              formatJapaneseDate(r.date, includeWeekday: true),
+              formatJapaneseDateRange(r.date, r.endDate, includeWeekday: true),
               ?r.venue,
             ].join('・'),
             onTap: () => openRecordDetail(context, r),

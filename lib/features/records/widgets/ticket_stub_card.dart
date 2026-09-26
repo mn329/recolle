@@ -205,9 +205,9 @@ class _DateBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final d = record.date;
-    final date =
-        '${d.year}.${d.month.toString().padLeft(2, '0')}.'
-        '${d.day.toString().padLeft(2, '0')}';
+    String two(int n) => n.toString().padLeft(2, '0');
+    final date = '${d.year}.${two(d.month)}.${two(d.day)}';
+    final last = record.isMultiDay ? record.lastDate : null;
     final daysAgo = DateTime(
       now.year,
       now.month,
@@ -215,7 +215,9 @@ class _DateBlock extends StatelessWidget {
     ).difference(DateTime(d.year, d.month, d.day)).inDays;
     return _Field(
       en: 'DATE',
-      ja: record.type == RecordType.live ? '公演日' : '日付',
+      ja: last != null
+          ? '開催日'
+          : (record.type == RecordType.live ? '公演日' : '日付'),
       trailing: daysAgo > 0 ? '$daysAgo日前' : null,
       child: FittedBox(
         fit: BoxFit.scaleDown,
@@ -238,6 +240,22 @@ class _DateBlock extends StatelessWidget {
               TicketStubCard._weekdays[d.weekday - 1],
               style: AppFonts.monoStyle(fontSize: 15, color: colors.accent),
             ),
+            if (last != null) ...[
+              const SizedBox(width: 10),
+              Text(
+                '– ${two(last.month)}.${two(last.day)}',
+                style: AppFonts.displayStyle(
+                  fontSize: 28,
+                  color: colors.textPrimary,
+                  letterSpacing: 1.5,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                TicketStubCard._weekdays[last.weekday - 1],
+                style: AppFonts.monoStyle(fontSize: 15, color: colors.accent),
+              ),
+            ],
           ],
         ),
       ),

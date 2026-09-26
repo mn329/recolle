@@ -26,11 +26,10 @@ class RecordShareCard extends StatelessWidget {
   /// 載せる曲数の上限。多いと縦に長くなりすぎる。
   static const int maxSongs = 12;
 
-  List<String> get _songs => (record.setlist ?? '')
-      .split('\n')
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toList();
+  /// 対バン・フェスはセトリの代わりに出演者を載せる（お目当てには ★ を付ける）。
+  List<String> get _items => record.acts.isNotEmpty
+      ? [for (final a in record.acts) a.isMain ? '★ ${a.artist}' : a.artist]
+      : splitSetlist(record.setlist);
 
   @override
   Widget build(BuildContext context) {
@@ -38,19 +37,30 @@ class RecordShareCard extends StatelessWidget {
       child: SizedBox(
         width: width,
         child: switch (style) {
-          ShareCardStyle.ticket => _TicketCard(record: record, songs: _songs),
-          ShareCardStyle.receipt => _ReceiptCard(record: record, songs: _songs),
+          ShareCardStyle.ticket => _TicketCard(record: record, songs: _items),
+          ShareCardStyle.receipt => _ReceiptCard(record: record, songs: _items),
         },
       ),
     );
   }
 }
 
-String _date(DateTime d) {
+String _date(Record record) {
   const weekdays = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
   String two(int n) => n.toString().padLeft(2, '0');
-  return '${d.year}.${two(d.month)}.${two(d.day)} ${weekdays[d.weekday - 1]}';
+  final d = record.date;
+  final first =
+      '${d.year}.${two(d.month)}.${two(d.day)} ${weekdays[d.weekday - 1]}';
+  if (!record.isMultiDay) return first;
+  final l = record.lastDate;
+  return '$first – ${two(l.month)}.${two(l.day)} ${weekdays[l.weekday - 1]}';
 }
+
+/// セトリか出演者か。見出しと単位を切り替える。
+({String heading, String unit, String countLabel}) _listLabels(Record record) =>
+    record.acts.isNotEmpty
+    ? (heading: 'LINEUP', unit: '組', countLabel: 'ACTS')
+    : (heading: 'SETLIST', unit: '曲', countLabel: 'SONGS');
 
 class _TicketCard extends StatelessWidget {
   const _TicketCard({required this.record, required this.songs});
@@ -62,7 +72,7 @@ class _TicketCard extends StatelessWidget {
   Widget build(BuildContext context) {
     const c = AppPalette.dark;
     final details = [
-      ('DATE', _date(record.date)),
+      ('DATE', _date(record)),
       if (record.openTime != null) ('OPEN', record.openTime!.format()),
       if (record.startTime != null) ('START', record.startTime!.format()),
       if (record.venue != null) ('VENUE', record.venue!),
@@ -152,7 +162,7 @@ class _TicketCard extends StatelessWidget {
             _Dashes(color: c.ticketDivider),
             const SizedBox(height: 14),
             Text(
-              'SETLIST',
+              _listLabels(record).heading,
               style: AppFonts.monoStyle(fontSize: 11, color: c.accent),
             ),
             const SizedBox(height: 8),
@@ -188,7 +198,7 @@ class _TicketCard extends StatelessWidget {
               ),
             if (songs.length > shown.length)
               Text(
-                'ほか ${songs.length - shown.length} 曲',
+                'ほか ${songs.length - shown.length} ${_listLabels(record).unit}',
                 style: TextStyle(
                   fontFamily: AppFonts.body,
                   fontSize: 12,
@@ -281,7 +291,7 @@ class _ReceiptCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             [
-              _date(record.date),
+              _date(record),
               if (record.openTime != null) 'OPEN ${record.openTime!.format()}',
               if (record.startTime != null)
                 'START ${record.startTime!.format()}',
@@ -305,12 +315,15 @@ class _ReceiptCard extends StatelessWidget {
           for (final (i, song) in shown.indexed)
             line('${(i + 1).toString().padLeft(2, '0')} $song', '1'),
           if (songs.length > shown.length)
-            line('ほか ${songs.length - shown.length} 曲', ''),
+            line(
+              'ほか ${songs.length - shown.length} ${_listLabels(record).unit}',
+              '',
+            ),
           if (songs.isNotEmpty) ...[
             const SizedBox(height: 8),
             const _Dashes(color: _faded),
             const SizedBox(height: 10),
-            line('SONGS', '${songs.length}'),
+            line(_listLabels(record).countLabel, '${songs.length}'),
           ],
           if (record.seat != null) line('SEAT', record.seat!),
           if (record.ticketPrice != null)

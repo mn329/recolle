@@ -3,11 +3,18 @@ import 'package:recolle/features/records/models/record.dart';
 /// 日付だけ（時刻 0:00）にそろえる。
 DateTime dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
 
-/// 日ごとの記録。同じ日の中は開演の早い順。
+/// 日ごとの記録。複数日の公演は期間中の毎日に入れる。同じ日の中は開演の早い順。
 Map<DateTime, List<Record>> recordsByDay(Iterable<Record> records) {
   final map = <DateTime, List<Record>>{};
   for (final r in records) {
-    map.putIfAbsent(dayOf(r.date), () => []).add(r);
+    final last = dayOf(r.lastDate);
+    for (
+      var day = dayOf(r.date);
+      !day.isAfter(last);
+      day = DateTime(day.year, day.month, day.day + 1)
+    ) {
+      map.putIfAbsent(day, () => []).add(r);
+    }
   }
   for (final list in map.values) {
     list.sort((a, b) => a.startsAt.compareTo(b.startsAt));

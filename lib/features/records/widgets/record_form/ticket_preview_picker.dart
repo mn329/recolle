@@ -21,12 +21,16 @@ class TicketPreviewPicker extends StatelessWidget {
     required this.onRemoveImage,
     this.localImage,
     this.remoteImageUrl,
+    this.endDate,
   });
 
   final RecordType type;
   final String title;
   final String artistOrAuthor;
   final DateTime date;
+
+  /// 複数日の公演の最終日。
+  final DateTime? endDate;
 
   /// 新しく選んだ画像。[remoteImageUrl] より優先して表示する。
   final File? localImage;
@@ -90,6 +94,7 @@ class TicketPreviewPicker extends StatelessWidget {
                       ? type.creatorFieldLabel
                       : trimmedArtist,
                   date: date,
+                  endDate: endDate,
                   background: _buildBackground(),
                 ),
                 Positioned(

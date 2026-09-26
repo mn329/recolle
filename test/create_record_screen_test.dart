@@ -316,15 +316,16 @@ void main() {
     expect(_navButton(tester, '追加').onPressed, isNotNull);
   });
 
-  testWidgets('時刻のホイールを開いたまま会場をタップすると、ホイールを閉じて会場を入力できる', (
-    tester,
-  ) async {
+  testWidgets('時刻のホイールを開いたまま会場をタップすると、ホイールを閉じて会場を入力できる', (tester) async {
     await _pumpScreen(tester);
     await tester.tap(find.text('終演'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoDatePicker), findsOneWidget);
 
-    await Scrollable.ensureVisible(tester.element(_field('会場')), alignment: 0.5);
+    await Scrollable.ensureVisible(
+      tester.element(_field('会場')),
+      alignment: 0.5,
+    );
     await tester.pumpAndSettle();
     await tester.tap(_field('会場'));
     await tester.pumpAndSettle();
@@ -345,6 +346,79 @@ void main() {
     );
   });
 
+  group('対バン・フェス', () {
+    testWidgets('対バンにすると、入力済みのアーティストとセトリをお目当ての出演者として引き継ぐ', (tester) async {
+      await _pumpScreen(tester);
+      await tester.enterText(_field('アーティスト'), 'sumika');
+      await tester.enterText(_field('1曲目の曲名を入力'), 'Lovers');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pump();
+
+      await tester.ensureVisible(find.text('対バン'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('対バン'));
+      await tester.pumpAndSettle();
+
+      expect(_field('アーティスト'), findsNothing);
+      expect(_field('イベント名・対バン名'), findsOneWidget);
+      final firstAct = tester.widget<CupertinoTextField>(_field('1組目の出演者'));
+      expect(firstAct.controller!.text, 'sumika');
+      expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
+      expect(find.text('1曲'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('出演者を追加'));
+      await tester.tap(find.text('出演者を追加'));
+      await tester.pumpAndSettle();
+      expect(_field('2組目の出演者'), findsOneWidget);
+    });
+
+    testWidgets('出演者の名前がなければ「出演者」を必須として案内する', (tester) async {
+      await _pumpScreen(tester);
+      await tester.tap(find.text('フェス'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('出演者とイベント名・フェス名は必須です。'), findsOneWidget);
+      expect(find.text('最終日'), findsOneWidget);
+
+      await tester.enterText(_field('1組目の出演者'), 'サカナクション');
+      await tester.enterText(_field('イベント名・フェス名'), 'ROCK IN JAPAN');
+      await tester.pump();
+      expect(find.textContaining('必須です'), findsNothing);
+      expect(_navButton(tester, '追加').onPressed, isNotNull);
+    });
+
+    testWidgets('フェスの編集では出演者・お目当て・最終日を表示し、読み込んだだけでは未変更のまま', (tester) async {
+      await _pumpScreen(
+        tester,
+        recordToEdit: Record(
+          id: 'f1',
+          type: RecordType.live,
+          title: 'ROCK IN JAPAN',
+          artistOrAuthor: 'サカナクション',
+          date: DateTime(2026, 8, 1),
+          endDate: DateTime(2026, 8, 2),
+          ticketImageUrl: '',
+          eventFormat: EventFormat.festival,
+          acts: const [
+            RecordAct(artist: 'サカナクション', songs: ['新宝島'], isMain: true),
+            RecordAct(artist: 'sumika'),
+          ],
+        ),
+      );
+
+      expect(find.text('2組'), findsOneWidget);
+      expect(find.text('サカナクション'), findsWidgets);
+      expect(find.text('sumika'), findsOneWidget);
+      expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
+      expect(find.text('最終日'), findsOneWidget);
+      expect(find.text('2026年08月02日 (日)'), findsOneWidget);
+
+      await tester.tap(find.text('キャンセル'));
+      await tester.pumpAndSettle();
+      expect(find.text('open'), findsOneWidget);
+    });
+  });
+
   group('公演名の候補', () {
     final setlist = SetlistSummary(
       id: 's1',
@@ -363,9 +437,7 @@ void main() {
         field.controller?.text,
     ];
 
-    testWidgets('setlist.fm の公演を選ぶと公演名・日付・会場・日本語化したセトリを入れる', (
-      tester,
-    ) async {
+    testWidgets('setlist.fm の公演を選ぶと公演名・日付・会場・日本語化したセトリを入れる', (tester) async {
       final itunes = _FakeItunesClient(const {'Hikoutei': '飛行艇'});
       await _pumpScreen(tester, setlists: [setlist], itunesClient: itunes);
       await tester.enterText(_field('アーティスト'), 'King Gnu');

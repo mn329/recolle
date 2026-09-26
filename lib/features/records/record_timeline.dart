@@ -2,7 +2,8 @@ import 'package:recolle/features/records/models/record.dart';
 
 /// 記録を「これから」と「これまで」に分ける。
 ///
-/// 終演時刻があれば終演した時点で「これまで」へ移す。なければ当日のうちは「これから」に残す。
+/// 終演時刻があれば終演した時点で「これまで」へ移す。なければ当日（複数日なら最終日）のうちは
+/// 「これから」に残す。
 /// これからは近い順、これまでは新しい順に並べる。
 ({List<Record> upcoming, List<Record> past}) splitByDate(
   Iterable<Record> records,
@@ -15,7 +16,11 @@ import 'package:recolle/features/records/models/record.dart';
     final endsAt = r.endsAt;
     final isPast = endsAt != null
         ? !endsAt.isAfter(now)
-        : DateTime(r.date.year, r.date.month, r.date.day).isBefore(today);
+        : DateTime(
+            r.lastDate.year,
+            r.lastDate.month,
+            r.lastDate.day,
+          ).isBefore(today);
     (isPast ? past : upcoming).add(r);
   }
   upcoming.sort((a, b) => a.startsAt.compareTo(b.startsAt));
