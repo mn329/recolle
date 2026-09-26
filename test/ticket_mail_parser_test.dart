@@ -23,7 +23,9 @@ void main() {
     expect(info.date, DateTime(2026, 11, 3));
     expect(info.ticketSource, 'e+');
     expect(info.venue, 'さいたまスーパーアリーナ');
+    expect(info.openTime?.format(), '17:00');
     expect(info.startTime?.format(), '18:00');
+    expect(info.endTime, isNull);
   });
 
   test('座席・料金・開演ラベルを読み取る（合計金額より券面の料金を優先）', () {
@@ -38,10 +40,21 @@ void main() {
 合計金額：14,080円
 ''';
     final info = parseTicketMail(mail, now: now);
+    expect(info.openTime?.format(), '16:30');
     expect(info.startTime?.format(), '17:30');
     expect(info.venue, '横浜アリーナ');
     expect(info.seat, 'アリーナ A5ブロック 12列 34番');
     expect(info.ticketPrice, 12800);
+  });
+
+  test('「開場 17:00 開演 18:00」の並びや終演予定も読む', () {
+    final info = parseTicketMail(
+      '公演日時：2026年11月3日 開場 17:00 開演 18:00\n終演予定：20:30',
+      now: now,
+    );
+    expect(info.openTime?.format(), '17:00');
+    expect(info.startTime?.format(), '18:00');
+    expect(info.endTime?.format(), '20:30');
   });
 
   test('「開演：18:00」だけの行からも開演を読む', () {

@@ -12,7 +12,9 @@ class TicketMailInfo {
     this.venue,
     this.seat,
     this.ticketPrice,
+    this.openTime,
     this.startTime,
+    this.endTime,
   });
 
   final String? title;
@@ -22,7 +24,9 @@ class TicketMailInfo {
   final String? venue;
   final String? seat;
   final int? ticketPrice;
+  final ClockTime? openTime;
   final ClockTime? startTime;
+  final ClockTime? endTime;
 
   bool get isEmpty =>
       title == null &&
@@ -32,7 +36,9 @@ class TicketMailInfo {
       venue == null &&
       seat == null &&
       ticketPrice == null &&
-      startTime == null;
+      openTime == null &&
+      startTime == null &&
+      endTime == null;
 }
 
 /// e+・ローチケ・チケットぴあなどのメール本文を、端末内だけで読み取る。
@@ -47,6 +53,9 @@ TicketMailInfo parseTicketMail(String text, {DateTime? now}) {
       .toList(growable: false);
 
   final dateText = _valueFor(lines, _dateLabels);
+  final openLabeled = _valueFor(lines, _openTimeLabels);
+  final startLabeled = _valueFor(lines, _startTimeLabels);
+  final endLabeled = _valueFor(lines, _endTimeLabels);
   return TicketMailInfo(
     title: _cleanValue(_valueFor(lines, _titleLabels)),
     artist: _cleanValue(_valueFor(lines, _artistLabels)),
@@ -55,7 +64,19 @@ TicketMailInfo parseTicketMail(String text, {DateTime? now}) {
     venue: _cleanValue(_valueFor(lines, _venueLabels)),
     seat: _cleanValue(_valueFor(lines, _seatLabels)),
     ticketPrice: _parsePrice(_valueFor(lines, _priceLabels)),
-    startTime: _parseStartTime(dateText, _valueFor(lines, _startTimeLabels)),
+    openTime: _parseTime(
+      '開場',
+      [dateText, openLabeled],
+      openLabeled,
+      pickLast: false,
+    ),
+    startTime: _parseTime(
+      '開演',
+      [dateText, startLabeled],
+      startLabeled,
+      pickLast: true,
+    ),
+    endTime: _parseTime('終演', [dateText, endLabeled], endLabeled),
   );
 }
 
@@ -67,7 +88,9 @@ const _venueLabels = ['会場名', '会場'];
 const _seatLabels = ['座席番号', '座席', 'お座席'];
 // 「合計金額」は手数料込みなので、券面の料金を優先して拾う
 const _priceLabels = ['チケット代金', 'チケット料金', '券種・料金', '席種・料金', '料金', '金額'];
+const _openTimeLabels = ['開場/開演', '開場・開演', '開場時間', '開場'];
 const _startTimeLabels = ['開場/開演', '開場・開演', '開演時間', '開演'];
+const _endTimeLabels = ['終演予定時刻', '終演予定', '終演時間', '終演'];
 
 /// メールの差出人や本文に出る表記と、取得元欄に入れる名前。
 const _sources = [
@@ -173,26 +196,38 @@ int? _parsePrice(String? text) {
   return int.tryParse((m.group(1) ?? m.group(2)!).replaceAll(',', ''));
 }
 
-final _startTimeMarked = RegExp(
-  r'(\d{1,2})[:時](\d{2})\s*分?\s*開演|開演\s*[:：]?\s*(\d{1,2})[:時](\d{2})',
-);
 final _anyTime = RegExp(r'(\d{1,2})[:時](\d{2})');
+final _anyMarker = RegExp('開場|開演|終演');
 
-/// 「17:00開場／18:00開演」のような行から開演を拾う。
-/// 開演ラベルの行（[labeled]）は時刻だけのことが多く、2 つあれば後ろを開演とみなす。
-ClockTime? _parseStartTime(String? dateText, String? labeled) {
-  for (final text in [dateText, labeled].whereType<String>()) {
-    final m = _startTimeMarked.firstMatch(text);
-    if (m != null) {
-      return ClockTime.tryParse(
-        '${m.group(1) ?? m.group(3)}:${m.group(2) ?? m.group(4)}',
-      );
-    }
+/// 「17:00開場／18:00開演」のように [marker]（開場・開演・終演）が付いた時刻を拾う。
+///
+/// 見つからなければラベルの行（[labeled]）の時刻を使う。「開場/開演：16:30/17:30」のように
+/// 時刻が 2 つ並ぶ行では、[pickLast] が true なら後ろ、false なら前、null なら使わない。
+ClockTime? _parseTime(
+  String marker,
+  List<String?> texts,
+  String? labeled, {
+  bool? pickLast,
+}) {
+  final timeFirst = RegExp('(\\d{1,2})[:時](\\d{2})\\s*分?\\s*$marker');
+  final markerFirst = RegExp(
+    '$marker\\s*(?:予定)?\\s*[:：]?\\s*(\\d{1,2})[:時](\\d{2})',
+  );
+  for (final text in texts.whereType<String>()) {
+    // 「開場 17:00 開演 18:00」で開演の前の 17:00 を拾わないよう、行の書き方を先に見分ける
+    final firstTime = _anyTime.firstMatch(text)?.start;
+    final firstMarker = _anyMarker.firstMatch(text)?.start;
+    final markerComesFirst =
+        firstTime != null && firstMarker != null && firstMarker < firstTime;
+    final m = (markerComesFirst ? markerFirst : timeFirst).firstMatch(text);
+    if (m != null) return ClockTime.tryParse('${m.group(1)}:${m.group(2)}');
   }
   if (labeled == null) return null;
   final times = _anyTime.allMatches(labeled).toList();
   if (times.isEmpty) return null;
-  return ClockTime.tryParse('${times.last.group(1)}:${times.last.group(2)}');
+  if (times.length > 1 && pickLast == null) return null;
+  final m = pickLast ?? true ? times.last : times.first;
+  return ClockTime.tryParse('${m.group(1)}:${m.group(2)}');
 }
 
 String? _detectSource(String text) {

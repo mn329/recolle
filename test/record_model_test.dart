@@ -44,6 +44,23 @@ void main() {
     expect(out['start_time'], '18:00');
   });
 
+  test('開場・終演を JSON で往復でき、開演より前の終演は翌日とみなす', () {
+    final record = Record.fromJson({
+      'id': 'r1',
+      'type': 'live',
+      'title': 'ALL NIGHT',
+      'artist_or_author': 'DJ',
+      'date': '2026-05-03',
+      'open_time': '21:30:00',
+      'start_time': '22:00:00',
+      'end_time': '05:00:00',
+    });
+    expect(record.opensAt, DateTime(2026, 5, 3, 21, 30));
+    expect(record.endsAt, DateTime(2026, 5, 4, 5));
+    expect(record.toJson()['open_time'], '21:30');
+    expect(record.toJson()['end_time'], '05:00');
+  });
+
   test('新しい項目がない古いデータも読める', () {
     final record = Record.fromJson({
       'id': 'r1',
@@ -55,6 +72,8 @@ void main() {
     expect(record.venue, isNull);
     expect(record.ticketPrice, isNull);
     expect(record.startTime, isNull);
+    expect(record.opensAt, isNull);
+    expect(record.endsAt, isNull);
     expect(record.startsAt, DateTime(2026));
   });
 

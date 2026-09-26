@@ -63,6 +63,7 @@ class _TicketCard extends StatelessWidget {
     const c = AppPalette.dark;
     final details = [
       ('DATE', _date(record.date)),
+      if (record.openTime != null) ('OPEN', record.openTime!.format()),
       if (record.startTime != null) ('START', record.startTime!.format()),
       if (record.venue != null) ('VENUE', record.venue!),
       if (record.seat != null) ('SEAT', record.seat!),
@@ -281,7 +282,9 @@ class _ReceiptCard extends StatelessWidget {
           Text(
             [
               _date(record.date),
-              if (record.startTime != null) record.startTime!.format(),
+              if (record.openTime != null) 'OPEN ${record.openTime!.format()}',
+              if (record.startTime != null)
+                'START ${record.startTime!.format()}',
             ].join('  '),
             textAlign: TextAlign.center,
             style: mono(12, color: _faded),

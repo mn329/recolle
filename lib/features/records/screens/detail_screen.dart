@@ -15,7 +15,9 @@ import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/record_actions.dart';
+import 'package:recolle/features/records/record_timeline.dart';
 import 'package:recolle/features/records/share/share_record_sheet.dart';
+import 'package:recolle/features/records/widgets/event_countdown.dart';
 
 enum _MoreAction { delete }
 
@@ -80,6 +82,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final record = _record;
     final readOnlyOffline = ref.watch(isOfflineReadOnlyProvider);
     final isLive = record.type == RecordType.live;
+    final isUpcoming = splitByDate([
+      record,
+    ], DateTime.now()).upcoming.isNotEmpty;
     final songs = (record.setlist ?? '')
         .split('\n')
         .map((s) => s.trim())
@@ -176,6 +181,22 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ],
             ),
           ),
+          if (isUpcoming)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+                decoration: BoxDecoration(
+                  color: context.colors.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: context.colors.accent.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: EventCountdown(record: record),
+              ),
+            ),
           InsetGroupedSection(
             hasLeading: false,
             children: [
@@ -189,12 +210,17 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   ),
                 ),
               ),
-              if (record.startTime != null)
-                _InfoRow(
-                  title: '開演',
-                  value: record.startTime!.format(),
-                  monospaced: true,
-                ),
+              for (final (title, time) in [
+                ('開場', record.openTime),
+                ('開演', record.startTime),
+                ('終演', record.endTime),
+              ])
+                if (time != null)
+                  _InfoRow(
+                    title: title,
+                    value: time.format(),
+                    monospaced: true,
+                  ),
               if (record.venue != null)
                 _InfoRow(title: '会場', value: record.venue!),
               if (record.seat != null)

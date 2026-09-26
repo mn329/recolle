@@ -68,7 +68,9 @@ class CreateRecordScreen extends HookConsumerWidget {
 
     final type = useState(startType);
     final date = useState(initialDate);
+    final openTime = useState(editingRecord?.openTime);
     final startTime = useState(editingRecord?.startTime);
+    final endTime = useState(editingRecord?.endTime);
     final songs = useState(initialSongs);
     final selectedImage = useState<File?>(null);
     final removeSavedImage = useState(false);
@@ -126,7 +128,9 @@ class CreateRecordScreen extends HookConsumerWidget {
     final isDirty =
         type.value != startType ||
         date.value != initialDate ||
+        openTime.value != editingRecord?.openTime ||
         startTime.value != editingRecord?.startTime ||
+        endTime.value != editingRecord?.endTime ||
         selectedImage.value != null ||
         removeSavedImage.value ||
         !_sameList(songs.value, initialSongs) ||
@@ -193,7 +197,9 @@ class CreateRecordScreen extends HookConsumerWidget {
             info.ticketPrice! <= RecordFieldLimits.ticketPriceMax) {
           priceController.text = '${info.ticketPrice}';
         }
+        if (info.openTime != null) openTime.value = info.openTime;
         if (info.startTime != null) startTime.value = info.startTime;
+        if (info.endTime != null) endTime.value = info.endTime;
       }
       artistTypedSincePick.value = false;
 
@@ -201,7 +207,9 @@ class CreateRecordScreen extends HookConsumerWidget {
         if (info.title != null) type.value.titleFieldLabel,
         if (info.artist != null) type.value.creatorFieldLabel,
         if (info.date != null) isLive ? '公演日' : '日付',
+        if (isLive && info.openTime != null) '開場',
         if (isLive && info.startTime != null) '開演',
+        if (isLive && info.endTime != null) '終演',
         if (isLive && info.venue != null) '会場',
         if (isLive && info.seat != null) '座席',
         if (isLive && info.ticketPrice != null) 'チケット代',
@@ -228,6 +236,16 @@ class CreateRecordScreen extends HookConsumerWidget {
       final price = int.tryParse(priceController.text.trim());
       if (isLive && price != null && price > RecordFieldLimits.ticketPriceMax) {
         AppToast.error('チケット代が大きすぎます。金額を確認してください。');
+        return;
+      }
+
+      final open = openTime.value;
+      final start = startTime.value;
+      if (isLive &&
+          open != null &&
+          start != null &&
+          open.compareTo(start) > 0) {
+        AppToast.error('開場は開演より前の時刻にしてください。');
         return;
       }
 
@@ -261,7 +279,9 @@ class CreateRecordScreen extends HookConsumerWidget {
           venue: isLive ? nullIfEmpty(venueController) : null,
           seat: isLive ? nullIfEmpty(seatController) : null,
           ticketPrice: isLive ? price : null,
+          openTime: isLive ? openTime.value : null,
           startTime: isLive ? startTime.value : null,
+          endTime: isLive ? endTime.value : null,
           setlist: setlist,
           mcMemo: isLive ? nullIfEmpty(mcMemoController) : null,
           impressions: nullIfEmpty(impressionsController),
@@ -446,9 +466,27 @@ class CreateRecordScreen extends HookConsumerWidget {
                   header: '公演・チケット',
                   children: [
                     RecordTimeRow(
+                      label: '開場',
+                      time: openTime.value,
+                      defaultTime:
+                          _shift(startTime.value, -60) ??
+                          const ClockTime(17, 0),
+                      onChanged: (t) => openTime.value = t,
+                    ),
+                    RecordTimeRow(
                       label: '開演',
                       time: startTime.value,
+                      defaultTime:
+                          _shift(openTime.value, 60) ?? const ClockTime(18, 0),
                       onChanged: (t) => startTime.value = t,
+                    ),
+                    RecordTimeRow(
+                      label: '終演',
+                      time: endTime.value,
+                      defaultTime:
+                          _shift(startTime.value, 120) ??
+                          const ClockTime(20, 0),
+                      onChanged: (t) => endTime.value = t,
                     ),
                     FormTextRow(
                       controller: venueController,
@@ -540,5 +578,12 @@ class CreateRecordScreen extends HookConsumerWidget {
       if (a[i] != b[i]) return false;
     }
     return true;
+  }
+
+  /// 未設定の時刻行を開いたときの初期値に使う。開演の 1 時間前を開場、2 時間後を終演とする。
+  static ClockTime? _shift(ClockTime? time, int minutes) {
+    if (time == null) return null;
+    final total = (time.hour * 60 + time.minute + minutes) % (24 * 60);
+    return ClockTime(total ~/ 60, total % 60);
   }
 }

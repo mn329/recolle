@@ -16,7 +16,7 @@ const _dataKey = 'upcoming_events';
 /// ウィジェットに渡す件数。公演が過ぎてもアプリを開くまで次の公演へ進めるよう、数件先まで渡す。
 const _maxEvents = 5;
 
-/// ウィジェットに渡す「これから」の記録（近い順）。日時はエポックミリ秒。
+/// ウィジェットに渡す「これから」の記録（近い順）。日時はエポックミリ秒で、開場・終演は未入力なら null。
 List<Map<String, Object?>> upcomingEventsPayload(
   Iterable<Record> records,
   DateTime now,
@@ -28,6 +28,8 @@ List<Map<String, Object?>> upcomingEventsPayload(
         'artist': r.artistOrAuthor,
         'startsAt': r.startsAt.millisecondsSinceEpoch,
         'hasStartTime': r.startTime != null,
+        'opensAt': r.opensAt?.millisecondsSinceEpoch,
+        'endsAt': r.endsAt?.millisecondsSinceEpoch,
         'venue': r.venue,
         'isLive': r.type == RecordType.live,
       },

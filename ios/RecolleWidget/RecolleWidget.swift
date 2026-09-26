@@ -7,10 +7,29 @@ struct UpcomingEvent: Decodable {
   let artist: String
   let startsAt: Double
   let hasStartTime: Bool
+  let opensAt: Double?
+  let endsAt: Double?
   let venue: String?
   let isLive: Bool
 
   var date: Date { Date(timeIntervalSince1970: startsAt / 1000) }
+  var openDate: Date? { opensAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
+  var endDate: Date? { endsAt.map { Date(timeIntervalSince1970: $0 / 1000) } }
+
+  /// 終演時刻があれば終演で、なければ日付が変わった時点で終わったとみなす（アプリの splitByDate と同じ）。
+  func isFinished(at now: Date) -> Bool {
+    if let end = endDate { return end <= now }
+    let calendar = Calendar.current
+    return calendar.startOfDay(for: date) < calendar.startOfDay(for: now)
+  }
+
+  /// 当日の、まだ来ていない最初の区切り（開場・開演・終演）。
+  func nextMilestone(after now: Date) -> (label: String, date: Date)? {
+    if let open = openDate, open > now { return ("開場まで", open) }
+    if hasStartTime, date > now { return ("開演まで", date) }
+    if let end = endDate, end > now { return ("公演中・終演まで", end) }
+    return nil
+  }
 }
 
 private let appGroupId = "group.com.ishidaminato.recolle"
@@ -30,6 +49,8 @@ struct Provider: TimelineProvider {
         artist: "Artist",
         startsAt: Date().addingTimeInterval(86400 * 12).timeIntervalSince1970 * 1000,
         hasStartTime: true,
+        opensAt: nil,
+        endsAt: nil,
         venue: "さいたまスーパーアリーナ",
         isLive: true
       )
@@ -40,17 +61,19 @@ struct Provider: TimelineProvider {
     completion(context.isPreview ? placeholder(in: context) : entry(at: Date()))
   }
 
-  /// 公演が当日を過ぎたら次の公演へ切り替わるよう、各公演の翌日 0 時にもエントリを置く。
+  /// 開場・開演・終演と、各公演の翌日 0 時にもエントリを置き、表示を次の段階・次の公演へ切り替える。
   func getTimeline(in context: Context, completion: @escaping (Timeline<EventEntry>) -> Void) {
     let now = Date()
     let calendar = Calendar.current
-    var dates = [now]
+    var dates: Set<Date> = [now]
     for event in loadEvents() {
-      if let nextDay = calendar.date(
-        byAdding: .day, value: 1, to: calendar.startOfDay(for: event.date)),
-        nextDay > now
-      {
-        dates.append(nextDay)
+      let nextDay = calendar.date(
+        byAdding: .day, value: 1, to: calendar.startOfDay(for: event.date))
+      let candidates: [Date?] = [
+        event.openDate, event.hasStartTime ? event.date : nil, event.endDate, nextDay,
+      ]
+      for case let date? in candidates where date > now {
+        dates.insert(date)
       }
     }
     let entries = dates.sorted().map { entry(at: $0) }
@@ -58,8 +81,7 @@ struct Provider: TimelineProvider {
   }
 
   private func entry(at date: Date) -> EventEntry {
-    let today = Calendar.current.startOfDay(for: date)
-    let next = loadEvents().first { Calendar.current.startOfDay(for: $0.date) >= today }
+    let next = loadEvents().first { !$0.isFinished(at: date) }
     return EventEntry(date: date, event: next)
   }
 
@@ -106,31 +128,34 @@ struct RecolleWidgetView: View {
   }
 
   private func eventView(_ event: UpcomingEvent) -> some View {
-    let isToday = Calendar.current.isDate(event.date, inSameDayAs: entry.date)
     let days =
       Calendar.current.dateComponents(
         [.day],
         from: Calendar.current.startOfDay(for: entry.date),
         to: Calendar.current.startOfDay(for: event.date)
       ).day ?? 0
+    // 日付をまたぐ公演（オールナイトなど）は、翌日も終演までは当日として扱う
+    let isToday = days <= 0
+
+    let kind = event.isLive ? "公演" : "予定"
+    let milestone = isToday ? event.nextMilestone(after: entry.date) : nil
 
     return VStack(alignment: .leading, spacing: 4) {
-      Text(event.isLive ? "次の公演まで" : "次の予定まで")
+      Text(milestone?.label ?? "次の\(kind)まで")
         .font(.caption2.weight(.semibold))
         .foregroundStyle(Palette.accent)
 
-      if isToday {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-          Text("今日")
-            .font(.system(size: 30, weight: .heavy))
-            .foregroundStyle(Palette.accent)
-          if event.hasStartTime && event.date > entry.date {
-            // 開演まではシステムが秒単位で進めてくれる
-            Text(event.date, style: .timer)
-              .font(.system(.callout, design: .monospaced))
-              .foregroundStyle(.secondary)
-          }
-        }
+      if let milestone {
+        // 区切りの時刻までシステムが秒単位で進めてくれる
+        Text(milestone.date, style: .timer)
+          .font(.system(size: 30, weight: .heavy, design: .monospaced))
+          .foregroundStyle(Palette.accent)
+          .minimumScaleFactor(0.6)
+          .lineLimit(1)
+      } else if isToday {
+        Text("今日")
+          .font(.system(size: 30, weight: .heavy))
+          .foregroundStyle(Palette.accent)
       } else {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
           Text("\(days)")

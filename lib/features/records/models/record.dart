@@ -85,8 +85,14 @@ class Record {
   /// チケット代（円）。
   final int? ticketPrice;
 
+  /// 開場時刻。未入力なら null。
+  final ClockTime? openTime;
+
   /// 開演時刻。未入力なら null。
   final ClockTime? startTime;
+
+  /// 終演時刻。未入力なら null。開演より前の時刻なら翌日（オールナイトなど）とみなす。
+  final ClockTime? endTime;
 
   const Record({
     required this.id,
@@ -102,19 +108,37 @@ class Record {
     this.venue,
     this.seat,
     this.ticketPrice,
+    this.openTime,
     this.startTime,
+    this.endTime,
   });
 
   String get typeLabel => type.japaneseLabel;
 
-  /// 開演日時（端末のローカル時刻）。開演時刻が未入力ならその日の始まり。
-  DateTime get startsAt => DateTime(
+  DateTime _at(ClockTime time, {int dayOffset = 0}) => DateTime(
     date.year,
     date.month,
-    date.day,
-    startTime?.hour ?? 0,
-    startTime?.minute ?? 0,
+    date.day + dayOffset,
+    time.hour,
+    time.minute,
   );
+
+  /// 開演日時（端末のローカル時刻）。開演時刻が未入力ならその日の始まり。
+  DateTime get startsAt => _at(startTime ?? const ClockTime(0, 0));
+
+  /// 開場日時。未入力なら null。
+  DateTime? get opensAt => openTime == null ? null : _at(openTime!);
+
+  /// 終演日時。未入力なら null。
+  DateTime? get endsAt {
+    final end = endTime;
+    if (end == null) return null;
+    final start = startTime;
+    return _at(
+      end,
+      dayOffset: start != null && end.compareTo(start) < 0 ? 1 : 0,
+    );
+  }
 
   factory Record.fromJson(Map<String, dynamic> json) {
     return Record(
@@ -134,7 +158,9 @@ class Record {
       venue: json['venue'] as String?,
       seat: json['seat'] as String?,
       ticketPrice: (json['ticket_price'] as num?)?.toInt(),
+      openTime: ClockTime.tryParse(json['open_time'] as String?),
       startTime: ClockTime.tryParse(json['start_time'] as String?),
+      endTime: ClockTime.tryParse(json['end_time'] as String?),
     );
   }
 
@@ -154,7 +180,9 @@ class Record {
       'venue': venue,
       'seat': seat,
       'ticket_price': ticketPrice,
+      'open_time': openTime?.format(),
       'start_time': startTime?.format(),
+      'end_time': endTime?.format(),
     };
   }
 }

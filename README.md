@@ -76,8 +76,8 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **メールから入力**: 作成画面の「メールから入力」に e+・ローチケ・チケットぴあなどの購入／当選メール本文を貼ると、公演名・出演者・公演日・取得元を入力欄に入れます（`features/records/ticket_mail_parser.dart`）。各社とも公開 API がなく、サイトの自動取得は利用規約に抵触しうるため、本文を端末内で読み取る方式にしています。
 - **セットリスト取り込み**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索します（下記の設定が必要）。
-- **公演・チケット情報**: ライブの記録には開演時刻・会場・座席・チケット代を残せます（`records` の `start_time` / `venue` / `seat` / `ticket_price`）。
-- **これから / これまで**: ホームは公演日で「これから」と「これまで」に分け、直近の公演を秒単位のカウントダウン付きで表示します（`features/records/record_timeline.dart`）。
+- **公演・チケット情報**: ライブの記録には開場・開演・終演の時刻、会場・座席・チケット代を残せます（`records` の `open_time` / `start_time` / `end_time` / `venue` / `seat` / `ticket_price`）。終演が開演より前の時刻なら翌日（オールナイトなど）とみなします。
+- **これから / これまで**: ホームは「これから」と「これまで」に分けます（終演時刻があれば終演した時点で、なければ日付が変わった時点で「これまで」へ）。直近の公演は、開場まで → 開演まで → 公演中・終演までと段階的に秒単位でカウントダウンし、これからの記録の詳細画面にも同じカウントダウンを出します（`features/records/record_timeline.dart`、`widgets/event_countdown.dart`）。
 - **振り返り**: 記録のカレンダーと、年別の件数・よく行ったアーティスト／会場・チケット代合計などの集計（`record_calendar.dart` / `record_stats.dart`）。
 - **シェア画像**: 詳細画面の共有ボタンから、チケット風・レシート風の画像（幅 1080px の PNG）を iOS の共有シートへ渡します。
 - **ホーム画面ウィジェット（iOS 17 以降）**: 次の公演までの日数を表示します。アプリは記録が変わるたびに近い順 5 件を App Group `group.com.ishidaminato.recolle` へ書き込み（[home_widget](https://pub.dev/packages/home_widget)、`features/records/home_widget_sync.dart`）、`ios/RecolleWidget/`（WidgetKit 拡張）が読み取ります。実機で動かすには Apple Developer で App Group を作成し、アプリとウィジェット（`com.ishidaminato.recolle.RecolleWidget`）の両方の App ID に割り当ててください。

@@ -55,6 +55,8 @@ void main() {
       'artist': 'Artist',
       'startsAt': DateTime(2026, 10, 3, 18, 30).millisecondsSinceEpoch,
       'hasStartTime': true,
+      'opensAt': null,
+      'endsAt': null,
       'venue': '日本武道館',
       'isLive': true,
     });
