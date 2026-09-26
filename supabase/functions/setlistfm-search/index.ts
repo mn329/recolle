@@ -2,6 +2,7 @@
 // 必要なシークレット: SETLISTFM_API_KEY（https://www.setlist.fm/settings/api で発行）
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -40,6 +41,23 @@ Deno.serve(async (req) => {
   }
   if (req.method !== "POST") {
     return json({ error: "method_not_allowed" }, 405)
+  }
+
+  // publishable key だけの呼び出しはゲートウェイの verify_jwt を通過してしまうため、
+  // セッションのユーザーを必ずここで検証する（setlist.fm の日次上限を第三者に消費させない）
+  const token = req.headers.get("Authorization")?.replace(/^Bearer\s+/i, "")
+  if (!token) {
+    return json({ error: "unauthorized" }, 401)
+  }
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_ANON_KEY")!,
+  )
+  const { data: userData, error: userError } = await supabase.auth.getUser(
+    token,
+  )
+  if (userError || !userData?.user) {
+    return json({ error: "unauthorized" }, 401)
   }
 
   const apiKey = Deno.env.get("SETLISTFM_API_KEY")

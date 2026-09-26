@@ -7,6 +7,7 @@ import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/features/favorites/widgets/favorite_artist_toggle_button.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
@@ -155,14 +156,22 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Artist Name
-                      Text(
-                        record.artistOrAuthor,
-                        style: const TextStyle(
-                          color: AppColors.gold,
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              record.artistOrAuthor,
+                              style: const TextStyle(
+                                color: AppColors.gold,
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          FavoriteArtistToggleButton(
+                            artistName: record.artistOrAuthor,
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       // Title

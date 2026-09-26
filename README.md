@@ -67,12 +67,18 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **セッション**: 起動時にセッションが無ければ匿名サインインを試みます（Supabase で匿名ログインが有効なことが前提）。
 - **アカウント**: 匿名ユーザーが Apple / Google で続けると同じユーザーに連携され、記録はそのまま引き継がれます。そのアカウントが既に別ユーザーに連携済みなら、確認のうえそちらへ切り替えます。
 - **ルーティング**: セッションが無い間は `/account` へ誘導します。旧パスの `/login`・`/forgot-password`・`/reset-password` も `/account` へリダイレクトされます。
-- **タブ UI**: 下部ナビで **ホーム（`/`）** と **アカウント（`/account`）** の 2 タブ。認証状態は Supabase の `onAuthStateChange` と再認証中フラグを GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
+- **タブ UI**: 下部ナビで **ホーム（`/`）**・**お気に入り（`/favorites`）**・**アカウント（`/account`）** の 3 タブ。認証状態は Supabase の `onAuthStateChange` と再認証中フラグを GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
+
+- **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。
+- **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
+- **セットリスト取り込み**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索します（下記の設定が必要）。
 
 ## プロジェクト構成（`lib/`）
 
 - `core/` … ルーター、テーマ、定数、エラーメッセージなど共通基盤
 - `features/records/` … レコード一覧・作成・詳細、モデル、プロバイダ
+- `features/favorites/` … お気に入りアーティスト（タブ・追加シート・アーティスト別一覧）
+- `features/music/` … iTunes Search API / setlist.fm のクライアント
 - `features/account/` … 認証サービス、プロバイダ、アカウント UI
 - `components/` … ナビ付きスキャフォールド、チケット風カードなど
 
@@ -83,6 +89,22 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 ```bash
 supabase functions deploy delete-account --project-ref <project-ref>
 ```
+
+`supabase/functions/setlistfm-search` は setlist.fm のプロキシです（API キーをアプリに埋め込まないため）。関数内でセッションのユーザーを検証するので、ログイン（匿名含む）していない呼び出しは 401 になります。
+
+1. [setlist.fm の API 設定](https://www.setlist.fm/settings/api)で API キーを発行（無料・非商用）。
+2. シークレットを登録してデプロイ:
+
+```bash
+supabase secrets set SETLISTFM_API_KEY=<発行したキー> --project-ref <project-ref>
+supabase functions deploy setlistfm-search --project-ref <project-ref>
+```
+
+キー未登録の間、アプリの「setlist.fm」ボタンは「連携が未設定です」と表示します。
+
+## DB マイグレーション
+
+`supabase/migrations/` にスキーマ変更を置いています（`favorite_artists` の作成、`records` の RLS 最適化など）。
 
 ## Supabase 無停止（GitHub Actions）
 
