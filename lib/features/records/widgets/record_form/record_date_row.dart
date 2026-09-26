@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/features/records/widgets/record_form/inline_picker_panel.dart';
 
 /// 日付の行。タップするとカレンダーアプリと同じく、行の下にホイールが開く。
 class RecordDateRow extends StatefulWidget {
@@ -84,9 +85,9 @@ class _RecordDateRowState extends State<RecordDateRow> {
           curve: Curves.easeOutCubic,
           alignment: Alignment.topCenter,
           child: _expanded
-              ? SizedBox(
-                  height: 200,
-                  child: CupertinoDatePicker(
+              ? InlinePickerPanel(
+                  onDone: () => setState(() => _expanded = false),
+                  picker: CupertinoDatePicker(
                     mode: CupertinoDatePickerMode.date,
                     dateOrder: DatePickerDateOrder.ymd,
                     initialDateTime: widget.date,
