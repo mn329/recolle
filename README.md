@@ -7,8 +7,7 @@
 | 領域 | 利用パッケージ |
 |------|----------------|
 | ルーティング | [go_router](https://pub.dev/packages/go_router)（タブは `StatefulShellRoute` で各スタックの状態を保持） |
-| バックエンド・認証 | [supabase_flutter](https://pub.dev/packages/supabase_flutter)（PKCE）、[jwt_decode](https://pub.dev/packages/jwt_decode) |
-| ディープリンク（メール認証コールバック） | [app_links](https://pub.dev/packages/app_links) |
+| バックエンド・認証 | [supabase_flutter](https://pub.dev/packages/supabase_flutter)、[sign_in_with_apple](https://pub.dev/packages/sign_in_with_apple)、[google_sign_in](https://pub.dev/packages/google_sign_in) |
 | 状態管理 | [flutter_riverpod](https://pub.dev/packages/flutter_riverpod) / [hooks_riverpod](https://pub.dev/packages/hooks_riverpod)、[flutter_hooks](https://pub.dev/packages/flutter_hooks) |
 | 環境変数 | [flutter_dotenv](https://pub.dev/packages/flutter_dotenv) |
 | ロケール | `flutter_localizations`（`supportedLocales`: 日本語） |
@@ -22,17 +21,13 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
    - `SUPABASE_URL`
    - `SUPABASE_PUBLISHABLE_KEY`（`sb_publishable_...` 形式の公開キー）
+   - `GOOGLE_WEB_CLIENT_ID` / `GOOGLE_IOS_CLIENT_ID`（下記「Apple / Google ログインの設定」参照）
 
-   値は Supabase ダッシュボードの Project Settings → API Keys から取得します。`service_role` / `sb_secret_...` などの秘密鍵は **絶対に入れない** でください（`.env` はアプリに同梱されます）。
+   Supabase の値は Project Settings → API Keys から取得します。`service_role` / `sb_secret_...` などの秘密鍵は **絶対に入れない** でください（`.env` はアプリに同梱されます）。
 
 2. `.env` は `pubspec.yaml` の `assets` に含めてビルドに同梱します。**リポジトリにコミットしない**でください（ルートの `.gitignore` で `.env` を除外済み）。
 
-3. **Supabase 側の設定（アプリが動くための前提）**
-
-   - **Authentication → Providers → Anonymous sign-ins** を有効にする（起動時に匿名セッションを確保するため）。
-   - **Authentication → URL Configuration → Redirect URLs** に、メール内リンクの戻り先を登録する。
-     - モバイル（本リポジトリの iOS/Android 設定と一致）: `io.supabase.recolle://login-callback`（末尾スラッシュなし。定数は `lib/core/constants/auth_redirect.dart` の `kSupabaseAppEmailRedirect`）。
-     - Web で動かす場合は、そのオリジン（例: `http://localhost:xxxx`）も Redirect URLs に含める（アプリは `Uri.base.origin` をメール用 `redirectTo` に使います）。
+3. Supabase の **Authentication → Sign In / Providers** で **Anonymous sign-ins** と **Allow manual linking** を有効にします（起動時の匿名セッションと、匿名から Apple / Google への引き継ぎに必要）。
 
 4. 依存関係の取得と実行:
 
@@ -48,12 +43,31 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
    flutter test
    ```
 
+## Apple / Google ログインの設定
+
+メールアドレスでの登録・ログインは廃止し、メール送信（SMTP）を使わない構成です。各 SDK で取得した ID トークンを Supabase の `signInWithIdToken` / `linkIdentityWithIdToken` に渡します。
+
+**Sign in with Apple（iOS のみ表示）**
+
+1. Apple Developer の Identifiers で App ID `com.ishidaminato.recolle` の **Sign In with Apple** を有効にする（`ios/Runner/Runner.entitlements` は設定済み）。
+2. Supabase の **Authentication → Sign In / Providers → Apple** を有効にし、**Client IDs** に `com.ishidaminato.recolle` を入れる（ネイティブのみならシークレットキーは不要）。
+
+**Google**
+
+1. Google Cloud Console の「API とサービス → 認証情報」で OAuth クライアント ID を作る。
+   - **ウェブアプリケーション**: ID を `.env` の `GOOGLE_WEB_CLIENT_ID` に入れる。
+   - **iOS**（バンドル ID `com.ishidaminato.recolle`）: ID を `.env` の `GOOGLE_IOS_CLIENT_ID` に入れ、逆順にした値（`com.googleusercontent.apps.xxxx`）を `ios/Flutter/GoogleSignIn.xcconfig` に入れる。
+   - **Android**（パッケージ名 `com.ishidaminato.recolle` と署名の SHA-1）: アプリ側の設定は不要。
+2. Supabase の **Authentication → Sign In / Providers → Google** を有効にし、**Client IDs** にウェブと iOS の ID をカンマ区切りで入れる。
+
+以前メールアドレスで登録したユーザーは、同じメールアドレスの Google アカウントでログインすると Supabase の自動リンクで既存アカウント（記録）に入れます。
+
 ## アプリの動き（概要）
 
 - **セッション**: 起動時にセッションが無ければ匿名サインインを試みます（Supabase で匿名ログインが有効なことが前提）。
-- **ルーティング**: セッションが無い間は `/account` など再接続しやすい導線を優先します。旧パスの `/login` は **`/account` へリダイレクト**されます。
-- **メール認証・リカバリ**: `app_links` でカスタムスキーム `io.supabase.recolle://login-callback` を受け取り、セッション確立後にアカウントタブや `/reset-password` へ遷移します。
-- **タブ UI**: 下部ナビで **ホーム（`/`）** と **アカウント（`/account`）** の 2 タブ。認証状態は Supabase の `onAuthStateChange`（ほか再認証・パスワードリカバリ用のフラグ）を GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
+- **アカウント**: 匿名ユーザーが Apple / Google で続けると同じユーザーに連携され、記録はそのまま引き継がれます。そのアカウントが既に別ユーザーに連携済みなら、確認のうえそちらへ切り替えます。
+- **ルーティング**: セッションが無い間は `/account` へ誘導します。旧パスの `/login`・`/forgot-password`・`/reset-password` も `/account` へリダイレクトされます。
+- **タブ UI**: 下部ナビで **ホーム（`/`）** と **アカウント（`/account`）** の 2 タブ。認証状態は Supabase の `onAuthStateChange` と再認証中フラグを GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
 
 ## プロジェクト構成（`lib/`）
 

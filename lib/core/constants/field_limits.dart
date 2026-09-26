@@ -11,10 +11,3 @@ abstract final class RecordFieldLimits {
   static const int mcMemo = 2000;
   static const int impressions = 4000;
 }
-
-abstract final class AccountFieldLimits {
-  AccountFieldLimits._();
-
-  static const int email = 254;
-  static const int password = 128;
-}
