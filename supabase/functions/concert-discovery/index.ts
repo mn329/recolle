@@ -1,6 +1,8 @@
-// アーティストの今後の公演を、Gemini + Google 検索（グラウンディング）で集める。
+// アーティストの今後の公演を Gemini で集める。
+// まず Google 検索（グラウンディング）を試し、無料枠の対象外などで 429 になったら、
+// MusicBrainz で公式サイトを特定して、そのページを URL context（無料枠で使える）で読み取る。
 // 必要なシークレット: GEMINI_API_KEY（https://aistudio.google.com/apikey で無料発行）
-// 任意: GEMINI_MODEL（既定 gemini-2.5-flash。検索グラウンディングを無料枠で使えるのは 2.5 系）
+// 任意: GEMINI_MODEL（既定 gemini-3.5-flash-lite）
 // @ts-nocheck
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
 import { createClient } from "jsr:@supabase/supabase-js@2"
@@ -12,9 +14,18 @@ const corsHeaders = {
 }
 
 const GEMINI_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
-const DEFAULT_MODEL = "gemini-2.5-flash"
+const DEFAULT_MODEL = "gemini-3.5-flash-lite"
 // 検索を伴う生成は数十秒かかることがある
 const REQUEST_TIMEOUT_MS = 60000
+const MUSICBRAINZ_ENDPOINT = "https://musicbrainz.org/ws/2"
+// MusicBrainz は連絡先入りの User-Agent がないと弾く
+const MUSICBRAINZ_USER_AGENT = "recolle/1.0 ( https://github.com/mn329/recolle )"
+const MUSICBRAINZ_MIN_SCORE = 90
+const PAGE_TIMEOUT_MS = 10000
+// URL context は 1 リクエスト 20 URL まで。読み込みが遅くならないよう絞る
+const MAX_PAGES = 5
+const LIVE_LINK_PATTERN =
+  /live|tour|schedule|concert|event|ライブ|ツアー|スケジュール|公演/i
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 // 無料枠は 1 日 500 回（プロジェクト全体）。1 人で使い切らないよう、キャッシュ外の検索を制限する
 const DAILY_LIMIT_PER_USER = 20
@@ -46,11 +57,22 @@ function todayInTokyo(): string {
   }).format(new Date())
 }
 
-function buildPrompt(artist: string, today: string): string {
+/** pages を渡すとそのページだけを読み、省略すると Google 検索で調べるよう指示する。 */
+function buildPrompt(artist: string, today: string, pages?: string[]): string {
+  const source = pages
+    ? [
+        `次のページを読んで「${artist}」の今後のライブ・コンサート・ツアー・フェス出演の予定を調べてください。`,
+        ...pages,
+        `今日は ${today}（日本時間）です。今日以降に開催されるものだけを対象にします。`,
+        "ページに書かれている告知だけを載せ、推測や過去の公演は含めないでください。source_url には告知が載っていたページの URL を入れてください。",
+      ]
+    : [
+        `Google 検索で「${artist}」の今後のライブ・コンサート・ツアー・フェス出演の予定を調べてください。`,
+        `今日は ${today}（日本時間）です。今日以降に開催されるものだけを対象にします。`,
+        "公式サイト・公式 SNS・チケット販売サイト・音楽ニュースで告知が確認できたものだけを載せ、推測や過去の公演、同名の別アーティストの公演は含めないでください。",
+      ]
   return [
-    `Google 検索で「${artist}」の今後のライブ・コンサート・ツアー・フェス出演の予定を調べてください。`,
-    `今日は ${today}（日本時間）です。今日以降に開催されるものだけを対象にします。`,
-    "公式サイト・公式 SNS・チケット販売サイト・音楽ニュースで告知が確認できたものだけを載せ、推測や過去の公演、同名の別アーティストの公演は含めないでください。",
+    ...source,
     "ツアーは公演日ごとに 1 件ずつ分けてください。",
     "結果は次の形式の JSON だけを ```json のコードブロックで出力してください。見つからなければ {\"events\": []} としてください。",
     '{"events":[{"title":"公演名・ツアー名","date":"YYYY-MM-DD","open_time":"HH:MM か null","start_time":"HH:MM か null","venue":"会場名 か null","city":"都市名 か null","source_url":"告知ページの URL か null"}]}',
@@ -109,7 +131,12 @@ function cleanUrl(value: unknown): string | null {
 }
 
 /** モデルの出力は信用せず、形式・日付を検めてから返す。 */
-function normalizeEvents(parsed: any, artist: string, today: string) {
+function normalizeEvents(
+  parsed: any,
+  artist: string,
+  today: string,
+  allowedUrls?: Set<string>,
+) {
   const seen = new Set<string>()
   const events = []
   for (const raw of Array.isArray(parsed?.events) ? parsed.events : []) {
@@ -120,6 +147,7 @@ function normalizeEvents(parsed: any, artist: string, today: string) {
     const key = `${date}|${venue ?? title}`
     if (seen.has(key)) continue
     seen.add(key)
+    const sourceUrl = cleanUrl(raw?.source_url)
     events.push({
       title,
       date,
@@ -127,7 +155,11 @@ function normalizeEvents(parsed: any, artist: string, today: string) {
       startTime: cleanTime(raw?.start_time),
       venue,
       city: cleanText(raw?.city, 100),
-      sourceUrl: cleanUrl(raw?.source_url),
+      // 読んだページ以外の URL はモデルの作り話のことがあるため載せない
+      sourceUrl:
+        sourceUrl && (!allowedUrls || allowedUrls.has(sourceUrl))
+          ? sourceUrl
+          : null,
     })
   }
   events.sort((a, b) => a.date.localeCompare(b.date))
@@ -146,6 +178,107 @@ function normalizeSources(metadata: any) {
     sources.push({ title, uri })
   }
   return sources.slice(0, MAX_SOURCES)
+}
+
+/** URL context で実際に読めたページの URL。 */
+function retrievedUrls(metadata: any): string[] {
+  const urls = []
+  for (const page of metadata?.urlMetadata ?? metadata?.url_metadata ?? []) {
+    const status = page?.urlRetrievalStatus ?? page?.url_retrieval_status
+    if (status !== "URL_RETRIEVAL_STATUS_SUCCESS") continue
+    const uri = cleanUrl(page?.retrievedUrl ?? page?.retrieved_url)
+    if (uri) urls.push(uri)
+  }
+  return urls
+}
+
+/**
+ * 読んだページのうち公式サイトのものを出典にする（リダイレクト先のログイン画面などは除く）。
+ * 同じサイトのページは 1 つにまとめ、title はドメイン名。
+ */
+function sourcesFromPages(urls: string[], pages: string[]) {
+  const officialHosts = new Set(pages.map((p) => new URL(p).hostname))
+  const seen = new Set<string>()
+  const sources = []
+  for (const uri of urls) {
+    const title = new URL(uri).hostname
+    if (!officialHosts.has(title) || seen.has(title)) continue
+    seen.add(title)
+    sources.push({ title, uri })
+  }
+  return sources.slice(0, MAX_SOURCES)
+}
+
+async function fetchMusicBrainz(path: string): Promise<any> {
+  const res = await fetch(`${MUSICBRAINZ_ENDPOINT}/${path}`, {
+    headers: { "User-Agent": MUSICBRAINZ_USER_AGENT, Accept: "application/json" },
+    signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+  })
+  if (!res.ok) throw new Error(`musicbrainz ${res.status}`)
+  return res.json()
+}
+
+/** MusicBrainz に登録された公式サイト（official homepage）。見つからなければ null。 */
+async function findOfficialSite(artist: string): Promise<string | null> {
+  const query = encodeURIComponent(`artist:"${artist.replace(/"/g, "")}"`)
+  const search = await fetchMusicBrainz(`artist?query=${query}&limit=1&fmt=json`)
+  const found = search?.artists?.[0]
+  if (!found?.id || (found.score ?? 0) < MUSICBRAINZ_MIN_SCORE) return null
+  const detail = await fetchMusicBrainz(`artist/${found.id}?inc=url-rels&fmt=json`)
+  for (const rel of detail?.relations ?? []) {
+    if (rel?.type !== "official homepage" || rel?.ended) continue
+    const url = cleanUrl(rel?.url?.resource)
+    if (url) return url
+  }
+  return null
+}
+
+/**
+ * 公式サイトのトップと、ライブ・ツアー告知らしい同じサイト内のページ。
+ * URL context はリンクをたどらないため、候補をここで拾っておく。
+ */
+async function collectSitePages(homepage: string): Promise<string[]> {
+  const pages = [homepage]
+  try {
+    const res = await fetch(homepage, {
+      headers: { "User-Agent": MUSICBRAINZ_USER_AGENT },
+      signal: AbortSignal.timeout(PAGE_TIMEOUT_MS),
+    })
+    if (!res.ok) return pages
+    const html = await res.text()
+    const base = new URL(res.url || homepage)
+    for (const m of html.matchAll(/<a\s[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi)) {
+      if (pages.length >= MAX_PAGES) break
+      let url: URL
+      try {
+        url = new URL(m[1], base)
+      } catch {
+        continue
+      }
+      if (url.hostname !== base.hostname) continue
+      const label = m[2].replace(/<[^>]*>/g, " ")
+      if (!LIVE_LINK_PATTERN.test(url.pathname) && !LIVE_LINK_PATTERN.test(label)) {
+        continue
+      }
+      const href = cleanUrl(url.toString())
+      if (href && !pages.includes(href)) pages.push(href)
+    }
+  } catch (e) {
+    console.error("official site fetch failed", homepage, e)
+  }
+  return pages
+}
+
+async function generate(apiKey: string, model: string, body: unknown) {
+  return fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey,
+    },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  })
 }
 
 function toResponse(row: any, cached: boolean) {
@@ -231,19 +364,32 @@ Deno.serve(async (req) => {
   const today = todayInTokyo()
   const model = Deno.env.get("GEMINI_MODEL") || DEFAULT_MODEL
   try {
-    const res = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: buildPrompt(artist, today) }] }],
-        tools: [{ google_search: {} }],
-      }),
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    let res = await generate(apiKey, model, {
+      contents: [{ parts: [{ text: buildPrompt(artist, today) }] }],
+      tools: [{ google_search: {} }],
     })
+    let pages: string[] | null = null
     if (res.status === 429) {
+      // 検索グラウンディングは無料枠の上限が 0 のモデルがあるため、公式サイトの読み取りに切り替える
+      console.error("gemini search rate limited", await res.text())
+      let homepage: string | null
+      try {
+        homepage = await findOfficialSite(artist)
+      } catch (e) {
+        console.error("musicbrainz lookup failed", e)
+        return json({ error: "discovery_upstream_error" }, 502)
+      }
+      if (!homepage) {
+        return json({ error: "discovery_no_official_site" }, 404)
+      }
+      pages = await collectSitePages(homepage)
+      res = await generate(apiKey, model, {
+        contents: [{ parts: [{ text: buildPrompt(artist, today, pages) }] }],
+        tools: [{ url_context: {} }],
+      })
+    }
+    if (res.status === 429) {
+      console.error("gemini rate limited", await res.text())
       return json({ error: "discovery_rate_limited" }, 429)
     }
     if (!res.ok) {
@@ -263,15 +409,26 @@ Deno.serve(async (req) => {
     }
 
     const metadata = candidate?.groundingMetadata
+    const retrieved = pages
+      ? retrievedUrls(
+          candidate?.urlContextMetadata ?? candidate?.url_context_metadata,
+        )
+      : []
     const row = {
       artist_key: key,
       artist_name: artist,
-      events: normalizeEvents(parsed, artist, today),
-      sources: normalizeSources(metadata),
-      search_entry_point: cleanText(
-        metadata?.searchEntryPoint?.renderedContent,
-        50000,
+      events: normalizeEvents(
+        parsed,
+        artist,
+        today,
+        pages ? new Set([...pages, ...retrieved]) : undefined,
       ),
+      sources: pages
+        ? sourcesFromPages(retrieved, pages)
+        : normalizeSources(metadata),
+      search_entry_point: pages
+        ? null
+        : cleanText(metadata?.searchEntryPoint?.renderedContent, 50000),
       fetched_at: new Date().toISOString(),
     }
     const { error: saveError } = await admin

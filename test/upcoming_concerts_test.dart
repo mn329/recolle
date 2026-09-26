@@ -71,6 +71,13 @@ void main() {
         contains('API キー'),
       );
       expect(
+        ConcertDiscoveryClient.messageForError(
+          'discovery_no_official_site',
+          404,
+        ),
+        contains('公式サイト'),
+      );
+      expect(
         ConcertDiscoveryClient.messageForError(null, 500),
         contains('500'),
       );

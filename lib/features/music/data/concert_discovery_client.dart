@@ -129,6 +129,8 @@ class ConcertDiscoveryClient {
       '公演検索が未設定です（サーバーに Gemini の API キーが登録されていません）。',
     'discovery_daily_limit' => '今日の公演検索の上限に達しました。明日またお試しください。',
     'discovery_rate_limited' => '検索が混み合っています。少し待ってからお試しください。',
+    'discovery_no_official_site' =>
+      '公式サイトが見つからず、公演を探せませんでした。アーティスト名の表記を確かめてください。',
     'discovery_timeout' => '検索に時間がかかりすぎました。もう一度お試しください。',
     'discovery_parse_error' => '検索結果をうまく読み取れませんでした。もう一度お試しください。',
     _ => '公演を検索できませんでした ($status)。',
