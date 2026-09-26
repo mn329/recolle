@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
@@ -67,8 +68,8 @@ void main() {
 
     expect(stats.topArtists.first, (label: 'YOASOBI', count: 2));
     expect(stats.topVenues, [(label: '東京ドーム', count: 2)]);
-    expect(stats.topSongs.first, (label: 'アイドル', count: 2));
-    expect(stats.topSongs[1], (label: '夜に駆ける', count: 1));
+    expect(stats.topSongs.first, (title: 'アイドル', artist: 'YOASOBI', count: 2));
+    expect(stats.topSongs[1], (title: '夜に駆ける', artist: 'YOASOBI', count: 1));
   });
 
   test('年を指定しなければ全期間、未来の公演は含めない', () {
@@ -128,7 +129,10 @@ void main() {
       // YOASOBI・Vaundy・sumika・back number
       expect(stats.artistCount, 4);
       expect(stats.topArtists.first, (label: 'Vaundy', count: 2));
-      expect(stats.topSongs.map((s) => s.label), contains('水平線'));
+      expect(
+        stats.topSongs,
+        contains((title: '水平線', artist: 'back number', count: 1)),
+      );
     });
 
     test('同じ回数なら大文字小文字を区別せずに並べる', () {
@@ -149,8 +153,21 @@ void main() {
         artist: 'Vaundy',
       );
 
-      expect(stats.topSongs, [(label: '怪獣の花唄', count: 1)]);
+      expect(stats.topSongs, [(title: '怪獣の花唄', artist: 'Vaundy', count: 1)]);
     });
+  });
+
+  test('同じ曲名でもアーティストが違えば別の曲として数える', () {
+    final stats = computeStats([
+      _live('1', DateTime(2026, 1, 1), artist: 'A', setlist: 'Lovers'),
+      _live('2', DateTime(2026, 2, 1), artist: 'B', setlist: 'Lovers'),
+      _live('3', DateTime(2026, 3, 1), artist: 'a', setlist: 'lovers'),
+    ], now: now);
+
+    expect(stats.topSongs, [
+      (title: 'Lovers', artist: 'A', count: 2),
+      (title: 'Lovers', artist: 'B', count: 1),
+    ]);
   });
 
   test('記録がある年を新しい順に返す', () {
@@ -182,6 +199,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('4'), findsWidgets);
     expect(find.text('よく行ったアーティスト'), findsOneWidget);
+
+    // よく聴いた曲の行から曲の詳細へ移れる
+    final songRow = find.widgetWithText(GroupedRow, 'アイドル');
+    await tester.scrollUntilVisible(
+      songRow,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(songRow);
+    await tester.pumpAndSettle();
+    expect(find.byType(SongDetailScreen), findsOneWidget);
+    Navigator.of(tester.element(find.byType(SongDetailScreen))).pop();
+    await tester.pumpAndSettle();
 
     // ランキングの行を押すと、そのアーティストの振り返りに切り替わる
     await tester.tap(find.widgetWithText(GroupedRow, 'Vaundy'));

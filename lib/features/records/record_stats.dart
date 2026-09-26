@@ -5,6 +5,9 @@ import 'package:recolle/features/records/record_timeline.dart';
 /// ランキングの 1 行。
 typedef RankedItem = ({String label, int count});
 
+/// 曲のランキングの 1 行。同じ曲名でもアーティストが違えば別の曲として数える。
+typedef RankedSong = ({String title, String artist, int count});
+
 /// 振り返りの集計結果。対象は今日より前の記録（実際に行った・観たもの）だけ。
 class RecordStats {
   const RecordStats({
@@ -44,7 +47,7 @@ class RecordStats {
   final List<RankedItem> topVenues;
 
   /// セットリストに登場した回数の多い曲。アーティストで絞ったときはその人の曲だけ。
-  final List<RankedItem> topSongs;
+  final List<RankedSong> topSongs;
 
   /// 集計対象のライブ（新しい順）。
   final List<Record> lives;
@@ -116,11 +119,16 @@ RecordStats computeStats(
     };
     performers.values.forEach(artists.add);
     if (r.venue != null) venues.add(r.venue!);
-    // 同じ公演で 2 回演奏された曲（アンコール等）は 1 回として数える
-    final uniqueSongs = artist == null
-        ? {for (final a in r.performances) ...a.songs}
-        : r.songsBy(artist).toSet();
-    uniqueSongs.forEach(songs.add);
+    // 同じ公演で同じ出演者が 2 回演奏した曲（アンコール等）は 1 回として数える
+    final played = <String>{};
+    for (final a in r.performances) {
+      if (artist != null && !artistMatches(a.artist, artist)) continue;
+      for (final song in a.songs) {
+        if (played.add(_Counter.keyFor(song, scope: a.artist))) {
+          songs.add(song, scope: a.artist);
+        }
+      }
+    }
   }
 
   return RecordStats(
@@ -133,29 +141,45 @@ RecordStats computeStats(
     liveCountsByMonth: byMonth,
     topArtists: artists.top(rankingLimit),
     topVenues: venues.top(rankingLimit),
-    topSongs: songs.top(rankingLimit),
+    topSongs: songs.topSongs(rankingLimit),
     lives: lives,
   );
 }
 
 /// 大文字小文字・空白の違いをまとめて数え、いちばん多い表記で表示する。
+/// [add] に scope（曲ならアーティスト）を渡すと、scope ごとに別の項目として数える。
 class _Counter {
   final _counts = <String, int>{};
   final _spellings = <String, Map<String, int>>{};
+  final _scopeSpellings = <String, Map<String, int>>{};
 
   int get length => _counts.length;
 
-  void add(String raw) {
+  static String keyFor(String label, {String? scope}) => [
+    if (scope != null) normalizeArtistName(scope),
+    normalizeArtistName(label),
+  ].join('\u0000');
+
+  void add(String raw, {String? scope}) {
     final label = raw.trim();
     if (label.isEmpty) return;
-    final key = normalizeArtistName(label);
+    final key = keyFor(label, scope: scope);
     _counts[key] = (_counts[key] ?? 0) + 1;
-    final spellings = _spellings.putIfAbsent(key, () => {});
-    spellings[label] = (spellings[label] ?? 0) + 1;
+    _countSpelling(_spellings, key, label);
+    if (scope != null) _countSpelling(_scopeSpellings, key, scope.trim());
   }
 
-  String _labelFor(String key) {
-    final entries = _spellings[key]!.entries.toList()
+  static void _countSpelling(
+    Map<String, Map<String, int>> table,
+    String key,
+    String spelling,
+  ) {
+    final spellings = table.putIfAbsent(key, () => {});
+    spellings[spelling] = (spellings[spelling] ?? 0) + 1;
+  }
+
+  static String _mostCommon(Map<String, int> spellings) {
+    final entries = spellings.entries.toList()
       ..sort((a, b) {
         final byCount = b.value.compareTo(a.value);
         return byCount != 0 ? byCount : a.key.compareTo(b.key);
@@ -163,11 +187,15 @@ class _Counter {
     return entries.first.key;
   }
 
-  List<RankedItem> top(int limit) {
+  List<({String key, String label, int count})> _ranked(int limit) {
     final ranked =
         [
           for (final e in _counts.entries)
-            (label: _labelFor(e.key), count: e.value),
+            (
+              key: e.key,
+              label: _mostCommon(_spellings[e.key]!),
+              count: e.value,
+            ),
         ]..sort((a, b) {
           final byCount = b.count.compareTo(a.count);
           if (byCount != 0) return byCount;
@@ -176,4 +204,17 @@ class _Counter {
         });
     return ranked.take(limit).toList();
   }
+
+  List<RankedItem> top(int limit) => [
+    for (final r in _ranked(limit)) (label: r.label, count: r.count),
+  ];
+
+  List<RankedSong> topSongs(int limit) => [
+    for (final r in _ranked(limit))
+      (
+        title: r.label,
+        artist: _mostCommon(_scopeSpellings[r.key] ?? const {'': 0}),
+        count: r.count,
+      ),
+  ];
 }

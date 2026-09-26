@@ -190,7 +190,11 @@ void main() {
         (label: 'Mrs. GREEN APPLE', count: 2),
         (label: 'sumika', count: 1),
       ]);
-      expect(stats.topSongs.first, (label: 'ケセラセラ', count: 2));
+      expect(stats.topSongs.first, (
+        title: 'ケセラセラ',
+        artist: 'Mrs. GREEN APPLE',
+        count: 2,
+      ));
       expect(filterByArtist(records, 'sumika').map((r) => r.id), ['taiban']);
     });
 

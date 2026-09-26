@@ -11,6 +11,7 @@ import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/favorite_artist_chips.dart';
+import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
@@ -146,11 +147,42 @@ class InsightsScreen extends HookConsumerWidget {
         if (artist == null)
           _Ranking(
             header: 'よく行ったアーティスト',
-            items: stats.topArtists,
-            onTap: onArtistSelected,
+            rows: [
+              for (final a in stats.topArtists)
+                (
+                  title: a.label,
+                  subtitle: null,
+                  count: a.count,
+                  onTap: () => onArtistSelected(a.label),
+                ),
+            ],
           ),
-        _Ranking(header: 'よく聴いた曲', items: stats.topSongs),
-        _Ranking(header: 'よく行った会場', items: stats.topVenues),
+        _Ranking(
+          header: 'よく聴いた曲',
+          rows: [
+            for (final s in stats.topSongs)
+              (
+                title: s.title,
+                // アーティストで絞っているときは全部同じなので出さない
+                subtitle: artist == null ? s.artist : null,
+                count: s.count,
+                onTap: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) =>
+                        SongDetailScreen(artistName: s.artist, title: s.title),
+                  ),
+                ),
+              ),
+          ],
+        ),
+        _Ranking(
+          header: 'よく行った会場',
+          rows: [
+            for (final v in stats.topVenues)
+              (title: v.label, subtitle: null, count: v.count, onTap: null),
+          ],
+        ),
         if (artist != null) _History(lives: stats.lives),
       ],
     ];
@@ -526,23 +558,28 @@ class _MonthlyChart extends StatelessWidget {
   }
 }
 
+/// ランキングの 1 行。[onTap] が null なら押せない。
+typedef _RankingRow = ({
+  String title,
+  String? subtitle,
+  int count,
+  VoidCallback? onTap,
+});
+
 class _Ranking extends StatelessWidget {
-  const _Ranking({required this.header, required this.items, this.onTap});
+  const _Ranking({required this.header, required this.rows});
 
   final String header;
-  final List<RankedItem> items;
-
-  /// 行を押したときに項目名を受け取る。null なら押せない。
-  final ValueChanged<String>? onTap;
+  final List<_RankingRow> rows;
 
   @override
   Widget build(BuildContext context) {
-    if (items.isEmpty) return const SizedBox.shrink();
+    if (rows.isEmpty) return const SizedBox.shrink();
     final colors = context.colors;
     return InsetGroupedSection(
       header: header,
       children: [
-        for (final (i, item) in items.indexed)
+        for (final (i, row) in rows.indexed)
           GroupedRow(
             leading: SizedBox(
               width: 24,
@@ -552,12 +589,13 @@ class _Ranking extends StatelessWidget {
                 style: AppFonts.monoStyle(fontSize: 15, color: colors.accent),
               ),
             ),
-            title: item.label,
+            title: row.title,
+            subtitle: row.subtitle,
             additionalInfo: Text(
-              '${item.count}回',
+              '${row.count}回',
               style: TextStyle(fontSize: 15, color: colors.textSecondary),
             ),
-            onTap: onTap == null ? null : () => onTap!(item.label),
+            onTap: row.onTap,
           ),
       ],
     );
