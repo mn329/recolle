@@ -13,6 +13,7 @@ import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
+import 'package:recolle/features/search/screens/search_screen.dart';
 
 class HomeScreen extends HookConsumerWidget {
   const HomeScreen({super.key});
@@ -45,6 +46,14 @@ class HomeScreen extends HookConsumerWidget {
             ),
           ),
           actions: [
+            IconButton(
+              icon: const Icon(Icons.search, color: AppColors.gold),
+              tooltip: '検索',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SearchScreen()),
+              ),
+            ),
             IconButton(
               icon: Icon(
                 Icons.add,
