@@ -4,6 +4,13 @@ import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/screens/detail_screen.dart';
 
+void openRecordDetail(BuildContext context, Record record) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(builder: (context) => DetailScreen(record: record)),
+  );
+}
+
 /// チケットカードの縦リスト。タップで詳細画面を開く。
 class RecordTicketList extends StatelessWidget {
   const RecordTicketList({
@@ -39,14 +46,7 @@ class RecordTicketList extends StatelessWidget {
         final record = records[index];
         return RecordTicketCard(
           record: record,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailScreen(record: record),
-              ),
-            );
-          },
+          onTap: () => openRecordDetail(context, record),
         );
       },
     );

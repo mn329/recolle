@@ -9,6 +9,13 @@ final _collaborationSeparator = RegExp(
   caseSensitive: false,
 );
 
+/// 改行区切りのセトリ [setlist] に、曲名 [title] が（表記ゆれを除いて）含まれるか。
+bool setlistContainsSong(String? setlist, String title) {
+  final target = normalizeArtistName(title);
+  if (setlist == null || target.isEmpty) return false;
+  return setlist.split('\n').any((line) => normalizeArtistName(line) == target);
+}
+
 /// 記録のアーティスト欄 [recordArtist] が、お気に入り [favoriteName] を含むか。
 ///
 /// 部分一致だと短い名前（例: "A"）が無関係な記録に当たるため、

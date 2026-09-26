@@ -7,7 +7,10 @@ import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/core/widgets/section_title.dart';
 import 'package:recolle/features/favorites/widgets/favorite_artist_toggle_button.dart';
+import 'package:recolle/features/music/screens/artist_detail_screen.dart';
+import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
@@ -159,12 +162,37 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                       Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              record.artistOrAuthor,
-                              style: const TextStyle(
-                                color: AppColors.gold,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
+                            child: GestureDetector(
+                              // iTunes のカタログは音楽のみなので、ライブのときだけ詳細へ飛べる
+                              onTap: record.type == RecordType.live
+                                  ? () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ArtistDetailScreen(
+                                          artistName: record.artistOrAuthor,
+                                        ),
+                                      ),
+                                    )
+                                  : null,
+                              child: Text.rich(
+                                TextSpan(
+                                  text: record.artistOrAuthor,
+                                  children: [
+                                    if (record.type == RecordType.live)
+                                      const WidgetSpan(
+                                        alignment: PlaceholderAlignment.middle,
+                                        child: Icon(
+                                          Icons.chevron_right_rounded,
+                                          color: AppColors.gold,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                                style: const TextStyle(
+                                  color: AppColors.gold,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ),
@@ -241,47 +269,18 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
 
             // 4. Reports
             if (record.type == RecordType.live) ...[
-              _buildSectionTitle('SETLIST', 'セトリ'),
-              _buildSetlistContent(record.setlist),
+              const SectionTitle('SETLIST', 'セトリ'),
+              _buildSetlistContent(record),
               const SizedBox(height: 24),
-              _buildSectionTitle('MC MEMO', 'MCメモ'),
+              const SectionTitle('MC MEMO', 'MCメモ'),
               _buildSectionContent(record.mcMemo),
               const SizedBox(height: 24),
             ],
 
-            _buildSectionTitle('IMPRESSIONS', '感想'),
+            const SectionTitle('IMPRESSIONS', '感想'),
             _buildSectionContent(record.impressions),
           ],
         ),
-      ),
-    );
-  }
-
-  /// 英字の印字風見出しに、和文の小さなラベルを添える。
-  Widget _buildSectionTitle(String title, String japaneseLabel) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Text(
-            title,
-            style: AppFonts.displayStyle(
-              fontSize: 24,
-              color: AppColors.gold,
-              letterSpacing: 1.4,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Text(
-            japaneseLabel,
-            style: TextStyle(
-              fontSize: 12,
-              color: AppColors.textSecondary.withValues(alpha: 0.7),
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -302,8 +301,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     );
   }
 
-  /// セットリストを改行で分割し、番号付きで1曲ずつ表示する。
-  Widget _buildSetlistContent(String? setlistText) {
+  /// セットリストを改行で分割し、番号付きで1曲ずつ表示する。タップで曲詳細へ。
+  Widget _buildSetlistContent(Record record) {
+    final setlistText = record.setlist;
     final lines = (setlistText == null || setlistText.isEmpty)
         ? <String>[]
         : setlistText
@@ -317,39 +317,60 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (var i = 0; i < lines.length; i++) ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SizedBox(
-                  width: 28,
-                  child: Text(
-                    (i + 1).toString().padLeft(2, '0'),
-                    style: AppFonts.monoStyle(
-                      fontSize: 14,
-                      color: AppColors.gold,
-                    ).copyWith(height: 1.75),
+          for (var i = 0; i < lines.length; i++)
+            InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SongDetailScreen(
+                    artistName: record.artistOrAuthor,
+                    title: lines[i],
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    lines[i],
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 15,
-                      height: 1.6,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 28,
+                      child: Text(
+                        (i + 1).toString().padLeft(2, '0'),
+                        style: AppFonts.monoStyle(
+                          fontSize: 14,
+                          color: AppColors.gold,
+                        ).copyWith(height: 1.75),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        lines[i],
+                        style: const TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 15,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 20,
+                      color: AppColors.textDisabled.withValues(alpha: 0.6),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-            if (i < lines.length - 1) const SizedBox(height: 6),
-          ],
         ],
       ),
     );

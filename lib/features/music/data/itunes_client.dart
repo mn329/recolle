@@ -7,11 +7,30 @@ import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
 
 class ItunesArtist {
-  const ItunesArtist({required this.id, required this.name, this.genre});
+  const ItunesArtist({
+    required this.id,
+    required this.name,
+    this.genre,
+    this.appleMusicUrl,
+  });
+
+  /// `artistId` と `artistName` が揃っていない結果は null。
+  static ItunesArtist? tryParse(Map<String, dynamic> r) {
+    final id = r['artistId'];
+    final name = r['artistName'];
+    if (id is! int || name is! String) return null;
+    return ItunesArtist(
+      id: id,
+      name: name,
+      genre: r['primaryGenreName'] as String?,
+      appleMusicUrl: _httpsUri(r['artistLinkUrl']),
+    );
+  }
 
   final int id;
   final String name;
   final String? genre;
+  final Uri? appleMusicUrl;
 }
 
 class ItunesSong {
@@ -19,13 +38,50 @@ class ItunesSong {
     required this.id,
     required this.title,
     required this.artistName,
+    this.artistId,
+    this.albumName,
     this.artworkUrl,
+    this.releaseDate,
+    this.duration,
+    this.appleMusicUrl,
   });
+
+  /// `trackId`・`trackName`・`artistName` が揃っていない結果は null。
+  static ItunesSong? tryParse(Map<String, dynamic> r) {
+    final id = r['trackId'];
+    final title = r['trackName'];
+    final artistName = r['artistName'];
+    if (id is! int || title is! String || artistName is! String) return null;
+    final millis = r['trackTimeMillis'];
+    final released = r['releaseDate'];
+    return ItunesSong(
+      id: id,
+      title: title,
+      artistName: artistName,
+      artistId: r['artistId'] as int?,
+      albumName: r['collectionName'] as String?,
+      artworkUrl: ItunesClient._resizeArtwork(r['artworkUrl100'] as String?),
+      releaseDate: released is String ? DateTime.tryParse(released) : null,
+      duration: millis is int ? Duration(milliseconds: millis) : null,
+      appleMusicUrl: _httpsUri(r['trackViewUrl']),
+    );
+  }
 
   final int id;
   final String title;
   final String artistName;
+  final int? artistId;
+  final String? albumName;
   final String? artworkUrl;
+  final DateTime? releaseDate;
+  final Duration? duration;
+  final Uri? appleMusicUrl;
+}
+
+Uri? _httpsUri(Object? raw) {
+  if (raw is! String) return null;
+  final uri = Uri.tryParse(raw);
+  return uri != null && uri.scheme == 'https' ? uri : null;
 }
 
 /// iTunes Search API（キー不要・無料）のクライアント。
@@ -55,15 +111,61 @@ class ItunesClient {
     final seen = <int>{};
     return [
       for (final r in results)
-        if (r['artistId'] is int &&
-            r['artistName'] is String &&
-            seen.add(r['artistId'] as int))
-          ItunesArtist(
-            id: r['artistId'] as int,
-            name: r['artistName'] as String,
-            genre: r['primaryGenreName'] as String?,
-          ),
+        if (ItunesArtist.tryParse(r) case final artist?
+            when seen.add(artist.id))
+          artist,
     ];
+  }
+
+  /// 名前に一致するアーティスト。[artistId] が分かっていればそれで引く。
+  Future<ItunesArtist?> findArtist(String artistName, {int? artistId}) async {
+    if (artistId != null) {
+      final results = await _get('/lookup', {'id': '$artistId'});
+      final found = results.map(ItunesArtist.tryParse).nonNulls.firstOrNull;
+      if (found != null) return found;
+    }
+    final candidates = await searchArtists(artistName, limit: 5);
+    final target = normalizeArtistName(artistName);
+    return candidates
+            .where((a) => normalizeArtistName(a.name) == target)
+            .firstOrNull ??
+        candidates.where((a) => artistMatches(a.name, artistName)).firstOrNull;
+  }
+
+  /// アーティストの人気曲（iTunes の lookup は人気順で返す）。同名曲は 1 つにまとめる。
+  Future<List<ItunesSong>> topSongs(int artistId, {int limit = 10}) async {
+    final results = await _get('/lookup', {
+      'id': '$artistId',
+      'entity': 'song',
+      'limit': '${limit * 2}',
+    });
+    final seenTitles = <String>{};
+    return results
+        .map(ItunesSong.tryParse)
+        .nonNulls
+        .where((s) => seenTitles.add(normalizeArtistName(_baseTitle(s.title))))
+        .take(limit)
+        .toList();
+  }
+
+  /// 記録のセトリの曲名から iTunes の曲を探す。見つからなければ null。
+  Future<ItunesSong?> findSong({
+    required String artistName,
+    required String title,
+  }) async {
+    final songs = await searchSongs(
+      artistName: artistName,
+      term: title,
+      limit: 10,
+    );
+    final target = normalizeArtistName(title);
+    return songs
+            .where((s) => normalizeArtistName(s.title) == target)
+            .firstOrNull ??
+        songs
+            .where((s) => normalizeArtistName(_baseTitle(s.title)) == target)
+            .firstOrNull ??
+        songs.firstOrNull;
   }
 
   /// [artistName] の曲から [term] に合うものを返す。曲名の重複（別アルバム収録など）は除く。
@@ -81,25 +183,13 @@ class ItunesClient {
       'limit': '25',
     });
     final seenTitles = <String>{};
-    final songs = <ItunesSong>[];
-    for (final r in results) {
-      final title = r['trackName'];
-      final songArtist = r['artistName'];
-      final id = r['trackId'];
-      if (title is! String || songArtist is! String || id is! int) continue;
-      if (artist.isNotEmpty && !artistMatches(songArtist, artist)) continue;
-      if (!seenTitles.add(normalizeArtistName(title))) continue;
-      songs.add(
-        ItunesSong(
-          id: id,
-          title: title,
-          artistName: songArtist,
-          artworkUrl: _resizeArtwork(r['artworkUrl100'] as String?),
-        ),
-      );
-      if (songs.length >= limit) break;
-    }
-    return songs;
+    return results
+        .map(ItunesSong.tryParse)
+        .nonNulls
+        .where((s) => artist.isEmpty || artistMatches(s.artistName, artist))
+        .where((s) => seenTitles.add(normalizeArtistName(s.title)))
+        .take(limit)
+        .toList();
   }
 
   /// アーティスト画像は API にないので、代表アルバムのジャケットで代用する。
@@ -233,10 +323,17 @@ class ItunesClient {
   Future<List<Map<String, dynamic>>> _search(
     Map<String, String> params, {
     String country = 'JP',
+  }) {
+    return _get('/search', {...params, 'media': 'music'}, country: country);
+  }
+
+  Future<List<Map<String, dynamic>>> _get(
+    String path,
+    Map<String, String> params, {
+    String country = 'JP',
   }) async {
-    final uri = Uri.https('itunes.apple.com', '/search', {
+    final uri = Uri.https('itunes.apple.com', path, {
       ...params,
-      'media': 'music',
       'country': country,
       if (country == 'JP') 'lang': 'ja_jp',
     });

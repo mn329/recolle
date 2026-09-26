@@ -8,9 +8,9 @@ import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
-import 'package:recolle/features/favorites/screens/artist_records_screen.dart';
 import 'package:recolle/features/favorites/widgets/add_favorite_artist_sheet.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
+import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 
 class FavoritesScreen extends ConsumerWidget {
@@ -89,7 +89,12 @@ class FavoritesScreen extends ConsumerWidget {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => ArtistRecordsScreen(artist: artist),
+                      builder: (_) => ArtistDetailScreen(
+                        artistName: artist.name,
+                        itunesArtistId: artist.itunesArtistId,
+                        artworkUrl: artist.artworkUrl,
+                        heroTag: 'favorite-artist-${artist.id}',
+                      ),
                     ),
                   ),
                   onLongPress: readOnlyOffline

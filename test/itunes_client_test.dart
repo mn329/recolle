@@ -144,6 +144,68 @@ void main() {
     });
   });
 
+  test('topSongs は先頭のアーティスト行を除き、別バージョンの同名曲をまとめる', () async {
+    final client = ItunesClient(
+      httpClient: MockClient((req) async {
+        expect(req.url.path, '/lookup');
+        return _json({
+          'results': [
+            {'wrapperType': 'artist', 'artistId': 1, 'artistName': 'YOASOBI'},
+            {
+              'trackId': 10,
+              'trackName': 'アイドル',
+              'artistName': 'YOASOBI',
+              'artistId': 1,
+              'collectionName': 'アイドル - Single',
+              'trackTimeMillis': 213000,
+              'releaseDate': '2023-04-12T12:00:00Z',
+              'trackViewUrl': 'https://music.apple.com/jp/song/10',
+            },
+            {
+              'trackId': 11,
+              'trackName': 'アイドル (Piano Ver.)',
+              'artistName': 'YOASOBI',
+            },
+            {'trackId': 12, 'trackName': '夜に駆ける', 'artistName': 'YOASOBI'},
+          ],
+        });
+      }),
+    );
+
+    final songs = await client.topSongs(1);
+
+    expect(songs.map((s) => s.title), ['アイドル', '夜に駆ける']);
+    final idol = songs.first;
+    expect(idol.duration, const Duration(minutes: 3, seconds: 33));
+    expect(idol.releaseDate?.year, 2023);
+    expect(idol.appleMusicUrl.toString(), 'https://music.apple.com/jp/song/10');
+  });
+
+  test('findArtist は完全一致を優先する', () async {
+    final client = ItunesClient(
+      httpClient: MockClient((req) async {
+        return _json({
+          'results': [
+            {'artistId': 1, 'artistName': 'YOASOBI × Someone'},
+            {
+              'artistId': 2,
+              'artistName': 'YOASOBI',
+              'artistLinkUrl': 'https://music.apple.com/jp/artist/2',
+            },
+          ],
+        });
+      }),
+    );
+
+    final artist = await client.findArtist('yoasobi');
+
+    expect(artist?.id, 2);
+    expect(
+      artist?.appleMusicUrl.toString(),
+      'https://music.apple.com/jp/artist/2',
+    );
+  });
+
   test('空の検索語ではリクエストしない', () async {
     final client = ItunesClient(
       httpClient: MockClient((_) async => fail('should not be called')),
