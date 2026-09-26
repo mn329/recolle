@@ -94,7 +94,8 @@ Deno.serve(async (req) => {
       headers: {
         "x-api-key": apiKey,
         Accept: "application/json",
-        "Accept-Language": "ja",
+        // ja は非対応で 406 になる（対応: en, es, fr, de, pt, tr, it, pl）
+        "Accept-Language": "en",
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     })
