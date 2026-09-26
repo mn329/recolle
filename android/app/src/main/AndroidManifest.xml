@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- debug/profile にしか自動で入らないため、リリースでも通信できるよう明示する -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Recolle"
         android:name="${applicationName}"

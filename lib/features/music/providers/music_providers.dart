@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
+import 'package:recolle/features/music/data/preview_player.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,6 +9,11 @@ final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
 
 final setlistFmClientProvider = Provider<SetlistFmClient>(
   (ref) => SetlistFmClient(Supabase.instance.client.functions),
+);
+
+/// 試聴プレイヤー。見ている画面がなくなると破棄され、再生も止まる。
+final previewPlayerProvider = ChangeNotifierProvider.autoDispose<PreviewPlayer>(
+  (ref) => PreviewPlayer(),
 );
 
 typedef ArtistQuery = ({String name, int? itunesArtistId});

@@ -11,6 +11,7 @@ import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
+import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/music/widgets/streaming_links.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 
@@ -116,6 +117,21 @@ class SongDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   if (resolved != null) _SongMeta(song: resolved),
+                  if (resolved?.previewUrl != null) ...[
+                    const SizedBox(height: 16),
+                    PreviewPlayButton(
+                      previewUrl: resolved!.previewUrl,
+                      size: 64,
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '30秒試聴',
+                      style: TextStyle(
+                        color: AppColors.textDisabled,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                   if (songAsync.hasError)
                     Padding(
                       padding: const EdgeInsets.only(top: 8),

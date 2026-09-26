@@ -14,6 +14,7 @@ import 'package:recolle/features/favorites/widgets/favorite_artist_toggle_button
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
+import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/music/widgets/streaming_links.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -292,16 +293,22 @@ class _SongTile extends StatelessWidget {
                 fontSize: 12,
               ),
             ),
-      trailing: heardLive
-          ? Tooltip(
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (heardLive)
+            Tooltip(
               message: 'ライブで聴いた曲',
               child: Icon(
                 Icons.confirmation_number_rounded,
                 size: 18,
                 color: AppColors.gold.withValues(alpha: 0.9),
               ),
-            )
-          : null,
+            ),
+          const SizedBox(width: 8),
+          PreviewPlayButton(previewUrl: song.previewUrl, size: 34),
+        ],
+      ),
       onTap: () => Navigator.push(
         context,
         MaterialPageRoute(

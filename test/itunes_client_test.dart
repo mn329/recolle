@@ -160,6 +160,7 @@ void main() {
               'trackTimeMillis': 213000,
               'releaseDate': '2023-04-12T12:00:00Z',
               'trackViewUrl': 'https://music.apple.com/jp/song/10',
+              'previewUrl': 'https://audio-ssl.itunes.apple.com/preview.m4a',
             },
             {
               'trackId': 11,
@@ -179,6 +180,11 @@ void main() {
     expect(idol.duration, const Duration(minutes: 3, seconds: 33));
     expect(idol.releaseDate?.year, 2023);
     expect(idol.appleMusicUrl.toString(), 'https://music.apple.com/jp/song/10');
+    expect(
+      idol.previewUrl.toString(),
+      'https://audio-ssl.itunes.apple.com/preview.m4a',
+    );
+    expect(songs.last.previewUrl, isNull);
   });
 
   test('findArtist は完全一致を優先する', () async {

@@ -44,6 +44,7 @@ class ItunesSong {
     this.releaseDate,
     this.duration,
     this.appleMusicUrl,
+    this.previewUrl,
   });
 
   /// `trackId`・`trackName`・`artistName` が揃っていない結果は null。
@@ -64,6 +65,7 @@ class ItunesSong {
       releaseDate: released is String ? DateTime.tryParse(released) : null,
       duration: millis is int ? Duration(milliseconds: millis) : null,
       appleMusicUrl: _httpsUri(r['trackViewUrl']),
+      previewUrl: _httpsUri(r['previewUrl']),
     );
   }
 
@@ -76,6 +78,9 @@ class ItunesSong {
   final DateTime? releaseDate;
   final Duration? duration;
   final Uri? appleMusicUrl;
+
+  /// 約 30 秒の試聴音源（AAC）。
+  final Uri? previewUrl;
 }
 
 Uri? _httpsUri(Object? raw) {

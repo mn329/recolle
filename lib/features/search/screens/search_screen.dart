@@ -17,6 +17,7 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
+import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/search/search_logic.dart';
 
@@ -360,6 +361,7 @@ class _SongResults extends HookConsumerWidget {
                   fontSize: 12,
                 ),
               ),
+              trailing: PreviewPlayButton(previewUrl: s.previewUrl, size: 34),
               onTap: () => Navigator.push(
                 context,
                 MaterialPageRoute(
