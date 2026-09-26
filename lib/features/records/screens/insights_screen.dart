@@ -65,20 +65,30 @@ class InsightsScreen extends HookConsumerWidget {
             data: (records) {
               final artist = selectedArtist.value;
               final filtered = filterByArtist(records, artist);
-              return SliverList.list(
-                children: [
-                  if (view.value == InsightsView.calendar)
-                    RecordCalendarView(records: filtered)
-                  else
-                    ..._statsChildren(
-                      context,
-                      filtered,
-                      selectedYear,
-                      artist: artist,
-                      onArtistSelected: (a) => selectedArtist.value = a,
-                    ),
-                  SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-                ],
+              final isCalendar = view.value == InsightsView.calendar;
+              return SliverToBoxAdapter(
+                child: _ContentSwitcher(
+                  // カレンダーは選んだ月を保つため、アーティストを変えても作り直さない
+                  contentKey: isCalendar ? view.value : (view.value, artist),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (isCalendar)
+                        RecordCalendarView(records: filtered)
+                      else
+                        ..._statsChildren(
+                          context,
+                          filtered,
+                          selectedYear,
+                          artist: artist,
+                          onArtistSelected: (a) => selectedArtist.value = a,
+                        ),
+                      SizedBox(
+                        height: 24 + MediaQuery.paddingOf(context).bottom,
+                      ),
+                    ],
+                  ),
+                ),
               );
             },
             loading: () => const SliverFillRemaining(
@@ -203,6 +213,47 @@ class InsightsScreen extends HookConsumerWidget {
         if (artist != null) _History(lives: stats.lives),
       ],
     ];
+  }
+}
+
+/// 表示やアーティストを切り替えたとき、中身をふわっと入れ替える。
+/// [contentKey] が変わったときだけ動かし、同じ表示のまま記録が更新されたときは動かさない。
+class _ContentSwitcher extends StatelessWidget {
+  const _ContentSwitcher({required this.contentKey, required this.child});
+
+  final Object contentKey;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    // 「視差効果を減らす」がオンなら切り替えるだけにする
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return AnimatedSwitcher(
+      duration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 320),
+      reverseDuration: reduceMotion
+          ? Duration.zero
+          : const Duration(milliseconds: 160),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeIn,
+      // 高さの違う中身を上端でそろえて重ねる
+      layoutBuilder: (current, previous) => Stack(
+        alignment: Alignment.topCenter,
+        children: [...previous, ?current],
+      ),
+      transitionBuilder: (child, animation) => FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: Tween(
+            begin: const Offset(0, 0.02),
+            end: Offset.zero,
+          ).animate(animation),
+          child: child,
+        ),
+      ),
+      child: KeyedSubtree(key: ValueKey(contentKey), child: child),
+    );
   }
 }
 

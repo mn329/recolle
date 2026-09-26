@@ -220,6 +220,11 @@ void main() {
 
     // ランキングの行を押すと、そのアーティストの振り返りに切り替わる
     await tester.tap(find.widgetWithText(GroupedRow, 'Vaundy'));
+    // パッと入れ替えず、しばらくは前の中身が消えていく途中で重なって見える
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 80));
+    expect(find.text('よく行ったアーティスト'), findsOneWidget);
+    expect(find.text('初めて行った日'), findsOneWidget);
     await tester.pumpAndSettle();
     expect(find.text('よく行ったアーティスト'), findsNothing);
     expect(find.text('初めて行った日'), findsOneWidget);
