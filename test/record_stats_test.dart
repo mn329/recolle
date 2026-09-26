@@ -8,6 +8,7 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/features/records/screens/insights_screen.dart';
+import 'package:recolle/features/records/screens/live_list_screen.dart';
 
 Record _live(
   String id,
@@ -243,5 +244,43 @@ void main() {
     await tester.tap(find.widgetWithText(CapsuleChip, 'すべて'));
     await tester.pumpAndSettle();
     expect(find.text('よく行ったアーティスト'), findsOneWidget);
+  });
+
+  testWidgets('ライブの回数や月別の棒から、そのライブの一覧を開ける', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recordsProvider.overrideWith((ref) => Stream.value(records)),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const InsightsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('集計'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('すべての年'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('ライブ'));
+    await tester.pumpAndSettle();
+    expect(find.byType(LiveListScreen), findsOneWidget);
+    expect(find.text('これまでのライブ・4回'), findsOneWidget);
+    Navigator.of(tester.element(find.byType(LiveListScreen))).pop();
+    await tester.pumpAndSettle();
+
+    final march = find.bySemanticsLabel('3月 2回');
+    await tester.ensureVisible(march);
+    await tester.pumpAndSettle();
+    await tester.tap(march);
+    await tester.pumpAndSettle();
+    expect(find.text('3月（全期間）のライブ・2回'), findsOneWidget);
+    expect(find.text('T1'), findsOneWidget);
+    expect(find.text('T2'), findsOneWidget);
+    expect(find.text('T3'), findsNothing);
+    semantics.dispose();
   });
 }

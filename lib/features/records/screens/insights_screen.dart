@@ -17,6 +17,7 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/features/records/record_timeline.dart';
+import 'package:recolle/features/records/screens/live_list_screen.dart';
 import 'package:recolle/features/records/widgets/record_calendar_view.dart';
 
 enum InsightsView {
@@ -123,6 +124,13 @@ class InsightsScreen extends HookConsumerWidget {
             records,
             now,
           ).upcoming.where((r) => r.type == RecordType.live).firstOrNull;
+    void openLives({int? month}) => Navigator.push(
+      context,
+      CupertinoPageRoute<void>(
+        builder: (_) =>
+            LiveListScreen(year: year, month: month, artist: artist),
+      ),
+    );
     return [
       if (years.length > 1)
         _ChipRow<int>(
@@ -142,9 +150,17 @@ class InsightsScreen extends HookConsumerWidget {
           ),
         )
       else ...[
-        _Summary(stats: stats, showsArtistCount: artist == null),
+        _Summary(
+          stats: stats,
+          showsArtistCount: artist == null,
+          onLivesTap: stats.liveCount == 0 ? null : openLives,
+        ),
         if (artist != null) _ArtistMilestones(stats: stats, nextLive: nextLive),
-        if (artist == null) _MonthlyChart(counts: stats.liveCountsByMonth),
+        if (artist == null)
+          _MonthlyChart(
+            counts: stats.liveCountsByMonth,
+            onMonthTap: (m) => openLives(month: m),
+          ),
         if (artist == null)
           _Ranking(
             header: 'よく行ったアーティスト',
@@ -352,10 +368,15 @@ class _History extends StatelessWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.stats, required this.showsArtistCount});
+  const _Summary({
+    required this.stats,
+    required this.showsArtistCount,
+    this.onLivesTap,
+  });
 
   final RecordStats stats;
   final bool showsArtistCount;
+  final VoidCallback? onLivesTap;
 
   @override
   Widget build(BuildContext context) {
@@ -388,6 +409,7 @@ class _Summary extends StatelessWidget {
                   value: '${stats.liveCount}',
                   unit: '回',
                   caption: formatBreakdown,
+                  onTap: onLivesTap,
                 ),
               ),
               const SizedBox(width: 12),
@@ -425,6 +447,7 @@ class _StatTile extends StatelessWidget {
     required this.value,
     this.unit,
     this.caption,
+    this.onTap,
   });
 
   final String label;
@@ -432,10 +455,13 @@ class _StatTile extends StatelessWidget {
   final String? unit;
   final String? caption;
 
+  /// null なら押せない。押せるときは見出しの横に「›」を出す。
+  final VoidCallback? onTap;
+
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return Container(
+    final tile = Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: colors.card,
@@ -444,9 +470,21 @@ class _StatTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: colors.textSecondary),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: colors.textSecondary),
+                ),
+              ),
+              if (onTap != null)
+                Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: 13,
+                  color: colors.textSecondary,
+                ),
+            ],
           ),
           const SizedBox(height: 4),
           FittedBox(
@@ -486,14 +524,26 @@ class _StatTile extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return tile;
+    return Semantics(
+      button: true,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: tile,
+      ),
+    );
   }
 }
 
-/// 月別のライブ数の棒グラフ。
+/// 月別のライブ数の棒グラフ。ライブのある月を押すと、その月のライブの一覧を開く。
 class _MonthlyChart extends StatelessWidget {
-  const _MonthlyChart({required this.counts});
+  const _MonthlyChart({required this.counts, required this.onMonthTap});
 
   final List<int> counts;
+
+  /// 押された月（1〜12）。
+  final ValueChanged<int> onMonthTap;
 
   static const double _barAreaHeight = 96;
 
@@ -503,55 +553,58 @@ class _MonthlyChart extends StatelessWidget {
     final max = counts.fold(0, (a, b) => a > b ? a : b);
     return InsetGroupedSection(
       header: '月別のライブ',
+      footer: counts.any((c) => c > 0) ? '棒を押すと、その月のライブを一覧できます' : null,
       hasLeading: false,
       children: [
-        Semantics(
-          label: [
-            for (final (i, c) in counts.indexed)
-              if (c > 0) '${i + 1}月 $c回',
-          ].join('、'),
-          excludeSemantics: true,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 16, 12, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (final (i, c) in counts.indexed)
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          c == 0 ? '' : '$c',
-                          style: AppFonts.monoStyle(
-                            fontSize: 10,
-                            color: colors.textSecondary,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 16, 12, 10),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              for (final (i, c) in counts.indexed)
+                Expanded(
+                  child: Semantics(
+                    button: c > 0,
+                    label: '${i + 1}月 $c回',
+                    excludeSemantics: true,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: c == 0 ? null : () => onMonthTap(i + 1),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            c == 0 ? '' : '$c',
+                            style: AppFonts.monoStyle(
+                              fontSize: 10,
+                              color: colors.textSecondary,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 2),
-                        Container(
-                          height: max == 0
-                              ? 2
-                              : 2 + (_barAreaHeight - 2) * c / max,
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          decoration: BoxDecoration(
-                            color: c == 0 ? colors.fill : colors.accent,
-                            borderRadius: BorderRadius.circular(3),
+                          const SizedBox(height: 2),
+                          Container(
+                            height: max == 0
+                                ? 2
+                                : 2 + (_barAreaHeight - 2) * c / max,
+                            margin: const EdgeInsets.symmetric(horizontal: 3),
+                            decoration: BoxDecoration(
+                              color: c == 0 ? colors.fill : colors.accent,
+                              borderRadius: BorderRadius.circular(3),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: colors.textSecondary,
+                          const SizedBox(height: 6),
+                          Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: colors.textSecondary,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ],
