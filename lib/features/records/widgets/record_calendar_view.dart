@@ -9,7 +9,7 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_calendar.dart';
 
-/// 月のカレンダー。記録のある日に印を付け、選んだ日の記録を下に並べる。
+/// 月のカレンダーと、その月の記録の一覧。日を選ぶと一覧をその日に絞る。
 class RecordCalendarView extends HookWidget {
   const RecordCalendarView({super.key, required this.records, this.today});
 
@@ -19,151 +19,248 @@ class RecordCalendarView extends HookWidget {
   final DateTime? today;
 
   static const _weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+  static const double _rowHeight = 38;
 
   @override
   Widget build(BuildContext context) {
     final todayDay = dayOf(today ?? DateTime.now());
-    final month = useState(DateTime(todayDay.year, todayDay.month));
-    final selected = useState(todayDay);
+    final thisMonth = DateTime(todayDay.year, todayDay.month);
+    final month = useState(thisMonth);
+    final selected = useState<DateTime?>(null);
     final byDay = useMemoized(() => recordsByDay(records), [records]);
     final colors = context.colors;
 
-    void moveMonth(int delta) {
-      HapticFeedback.selectionClick();
-      month.value = DateTime(month.value.year, month.value.month + delta);
+    void showMonth(DateTime m) {
+      month.value = m;
+      selected.value = null;
     }
 
-    final selectedRecords = byDay[selected.value] ?? const <Record>[];
+    void moveMonth(int delta) {
+      HapticFeedback.selectionClick();
+      showMonth(DateTime(month.value.year, month.value.month + delta));
+    }
+
+    final grid = monthGrid(month.value.year, month.value.month);
+    final monthDays = grid.whereType<DateTime>().toList();
+    final listedDays = selected.value != null
+        ? [selected.value!]
+        : [
+            for (final d in monthDays)
+              if (byDay.containsKey(d)) d,
+          ];
+    final monthCount = [for (final d in monthDays) ...?byDay[d]].length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 8, 4),
-          child: Row(
-            children: [
-              Text(
-                '${month.value.year}年${month.value.month}月',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: colors.textPrimary,
-                ),
-              ),
-              const Spacer(),
-              if (month.value != DateTime(todayDay.year, todayDay.month))
-                CupertinoButton(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  onPressed: () {
-                    month.value = DateTime(todayDay.year, todayDay.month);
-                    selected.value = todayDay;
-                  },
-                  child: Text(
-                    '今日',
-                    style: TextStyle(fontSize: 15, color: colors.accent),
-                  ),
-                ),
-              NavBarIconButton(
-                icon: CupertinoIcons.chevron_left,
-                semanticLabel: '前の月',
-                onPressed: () => moveMonth(-1),
-              ),
-              NavBarIconButton(
-                icon: CupertinoIcons.chevron_right,
-                semanticLabel: '次の月',
-                onPressed: () => moveMonth(1),
-              ),
-            ],
+        Container(
+          margin: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          padding: const EdgeInsets.fromLTRB(8, 4, 8, 10),
+          decoration: BoxDecoration(
+            color: colors.card,
+            borderRadius: BorderRadius.circular(14),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              for (final (i, w) in _weekdays.indexed)
-                Expanded(
-                  child: Text(
-                    w,
-                    textAlign: TextAlign.center,
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  Text(
+                    '${month.value.year}年${month.value.month}月',
                     style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: i == 0 || i == 6
-                          ? colors.textSecondary
-                          : colors.textDisabled,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: colors.textPrimary,
                     ),
                   ),
+                  const Spacer(),
+                  if (month.value != thisMonth)
+                    CupertinoButton(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      minimumSize: const Size(0, 36),
+                      onPressed: () => showMonth(thisMonth),
+                      child: Text(
+                        '今日',
+                        style: TextStyle(fontSize: 15, color: colors.accent),
+                      ),
+                    ),
+                  NavBarIconButton(
+                    icon: CupertinoIcons.chevron_left,
+                    semanticLabel: '前の月',
+                    onPressed: () => moveMonth(-1),
+                  ),
+                  NavBarIconButton(
+                    icon: CupertinoIcons.chevron_right,
+                    semanticLabel: '次の月',
+                    onPressed: () => moveMonth(1),
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  for (final w in _weekdays)
+                    Expanded(
+                      child: Text(
+                        w,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: colors.textDisabled,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              GestureDetector(
+                // 横スワイプでも月を送れるようにする
+                onHorizontalDragEnd: (d) {
+                  final v = d.primaryVelocity ?? 0;
+                  if (v.abs() < 200) return;
+                  moveMonth(v < 0 ? 1 : -1);
+                },
+                child: Column(
+                  children: [
+                    for (var i = 0; i < grid.length; i += 7)
+                      SizedBox(
+                        height: _rowHeight,
+                        child: Row(
+                          children: [
+                            for (final day in grid.sublist(i, i + 7))
+                              Expanded(
+                                child: day == null
+                                    ? const SizedBox.shrink()
+                                    : _DayCell(
+                                        day: day,
+                                        records: byDay[day] ?? const [],
+                                        isToday: day == todayDay,
+                                        isSelected: day == selected.value,
+                                        onTap: () {
+                                          HapticFeedback.selectionClick();
+                                          // もう一度押したら月全体の一覧に戻す
+                                          selected.value = day == selected.value
+                                              ? null
+                                              : day;
+                                        },
+                                      ),
+                              ),
+                          ],
+                        ),
+                      ),
+                  ],
                 ),
+              ),
             ],
           ),
         ),
-        const SizedBox(height: 6),
-        GestureDetector(
-          // 横スワイプでも月を送れるようにする
-          onHorizontalDragEnd: (d) {
-            final v = d.primaryVelocity ?? 0;
-            if (v.abs() < 200) return;
-            moveMonth(v < 0 ? 1 : -1);
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: GridView.count(
-              crossAxisCount: 7,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 0.9,
-              children: [
-                for (final day in monthGrid(
-                  month.value.year,
-                  month.value.month,
-                ))
-                  day == null
-                      ? const SizedBox.shrink()
-                      : _DayCell(
-                          day: day,
-                          records: byDay[day] ?? const [],
-                          isToday: day == todayDay,
-                          isSelected: day == selected.value,
-                          onTap: () => selected.value = day,
-                        ),
-              ],
+        _ListHeader(
+          title: selected.value == null
+              ? '${month.value.month}月の記録・$monthCount件'
+              : formatJapaneseDate(selected.value!, includeWeekday: true),
+          onShowAll: selected.value == null
+              ? null
+              : () => selected.value = null,
+        ),
+        if (listedDays.isEmpty ||
+            (selected.value != null && !byDay.containsKey(selected.value)))
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: Text(
+              selected.value == null ? 'この月の記録はありません' : 'この日の記録はありません',
+              style: TextStyle(fontSize: 15, color: colors.textSecondary),
+            ),
+          )
+        else
+          InsetGroupedSection(
+            hasLeading: false,
+            children: [
+              for (final d in listedDays)
+                for (final r in byDay[d]!)
+                  MediaListTile(
+                    leading: _DateBadge(day: d),
+                    title: r.title,
+                    subtitle: [
+                      r.artistOrAuthor,
+                      if (r.startTime != null)
+                        '${r.startTime!.format()} ${r.type.startTimeLabel}',
+                      ?r.venue,
+                    ].join('・'),
+                    onTap: () => openRecordDetail(context, r),
+                  ),
+            ],
+          ),
+      ],
+    );
+  }
+}
+
+class _ListHeader extends StatelessWidget {
+  const _ListHeader({required this.title, this.onShowAll});
+
+  final String title;
+  final VoidCallback? onShowAll;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 16, 6),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: colors.textSecondary,
+              ),
             ),
           ),
-        ),
-        InsetGroupedSection(
-          header: formatJapaneseDate(selected.value, includeWeekday: true),
-          hasLeading: false,
-          children: [
-            if (selectedRecords.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 14,
-                ),
-                child: Text(
-                  'この日の記録はありません',
-                  style: TextStyle(fontSize: 15, color: colors.textSecondary),
-                ),
-              )
-            else
-              for (final r in selectedRecords)
-                MediaListTile(
-                  title: r.title,
-                  subtitle: [
-                    r.artistOrAuthor,
-                    if (r.startTime != null)
-                      '${r.startTime!.format()} ${r.type.startTimeLabel}',
-                    ?r.venue,
-                  ].join('・'),
-                  trailing: Text(
-                    r.type.japaneseLabel,
-                    style: TextStyle(fontSize: 12, color: colors.textSecondary),
-                  ),
-                  onTap: () => openRecordDetail(context, r),
-                ),
-          ],
-        ),
-      ],
+          if (onShowAll != null)
+            CupertinoButton(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(0, 28),
+              onPressed: onShowAll,
+              child: Text(
+                '月全体を表示',
+                style: TextStyle(fontSize: 13, color: colors.accent),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 一覧の先頭に出す「日付と曜日」。
+class _DateBadge extends StatelessWidget {
+  const _DateBadge({required this.day});
+
+  final DateTime day;
+
+  static const _weekdays = ['月', '火', '水', '木', '金', '土', '日'];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return SizedBox(
+      width: 34,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            '${day.day}',
+            style: AppFonts.monoStyle(fontSize: 18, color: colors.accent),
+          ),
+          Text(
+            _weekdays[day.weekday - 1],
+            style: TextStyle(fontSize: 11, color: colors.textSecondary),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -186,14 +283,14 @@ class _DayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final hasLive = records.any((r) => r.type == RecordType.live);
+    final hasRecords = records.isNotEmpty;
     final Color background;
     final Color foreground;
     if (isSelected) {
       background = colors.accent;
       foreground = colors.onAccent;
-    } else if (hasLive) {
-      background = colors.accent.withValues(alpha: 0.18);
+    } else if (hasRecords) {
+      background = colors.accent.withValues(alpha: 0.2);
       foreground = colors.accent;
     } else {
       background = const Color(0x00000000);
@@ -204,58 +301,32 @@ class _DayCell extends StatelessWidget {
       button: true,
       selected: isSelected,
       label:
-          '${day.month}月${day.day}日${records.isEmpty ? '' : '、記録${records.length}件'}',
+          '${day.month}月${day.day}日${hasRecords ? '、記録${records.length}件' : ''}',
       excludeSemantics: true,
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 36,
-              height: 36,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: background,
-                shape: BoxShape.circle,
-                border: isToday && !isSelected
-                    ? Border.all(color: colors.accent, width: 1.5)
-                    : null,
-              ),
-              child: Text(
-                '${day.day}',
-                style: AppFonts.monoStyle(
-                  fontSize: 15,
-                  color: foreground,
-                  fontWeight: records.isEmpty
-                      ? FontWeight.w500
-                      : FontWeight.w700,
-                ),
+        child: Center(
+          child: Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: background,
+              shape: BoxShape.circle,
+              border: isToday && !isSelected
+                  ? Border.all(color: colors.accent, width: 1.5)
+                  : null,
+            ),
+            child: Text(
+              '${day.day}',
+              style: AppFonts.monoStyle(
+                fontSize: 14,
+                color: foreground,
+                fontWeight: hasRecords ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 3),
-            SizedBox(
-              height: 5,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (final r in records.take(3))
-                    Container(
-                      width: 5,
-                      height: 5,
-                      margin: const EdgeInsets.symmetric(horizontal: 1),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: r.type == RecordType.live
-                            ? colors.accent
-                            : colors.textSecondary,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

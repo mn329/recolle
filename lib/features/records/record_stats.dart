@@ -1,3 +1,4 @@
+import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/record_timeline.dart';
 
@@ -15,6 +16,7 @@ class RecordStats {
     required this.topArtists,
     required this.topVenues,
     required this.topSongs,
+    required this.lives,
   });
 
   final int liveCount;
@@ -35,6 +37,15 @@ class RecordStats {
   /// セットリストに登場した回数の多い曲。
   final List<RankedItem> topSongs;
 
+  /// 集計対象のライブ（新しい順）。
+  final List<Record> lives;
+
+  /// 最初に行ったライブの日。
+  DateTime? get firstLiveDate => lives.isEmpty ? null : lives.last.date;
+
+  /// 最後に行ったライブの日。
+  DateTime? get lastLiveDate => lives.isEmpty ? null : lives.first.date;
+
   int? get averageTicketPrice => pricedLiveCount == 0
       ? null
       : (totalTicketPrice / pricedLiveCount).round();
@@ -47,6 +58,21 @@ List<int> yearsWithRecords(Iterable<Record> records, DateTime now) {
   final years = {for (final r in splitByDate(records, now).past) r.date.year};
   return years.toList()..sort((a, b) => b.compareTo(a));
 }
+
+/// ライブの記録があるアーティストを、記録の多い順に返す（これからの予定も含む）。
+List<RankedItem> artistsByCount(Iterable<Record> records) {
+  final counter = _Counter();
+  for (final r in records) {
+    if (r.type == RecordType.live) counter.add(r.artistOrAuthor);
+  }
+  return counter.top(counter.length);
+}
+
+/// [artist] の記録だけに絞る。コラボ表記（「A × B」など）の記録も含める。null なら絞らない。
+List<Record> filterByArtist(Iterable<Record> records, String? artist) => [
+  for (final r in records)
+    if (artist == null || artistMatches(r.artistOrAuthor, artist)) r,
+];
 
 /// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
 RecordStats computeStats(
@@ -97,18 +123,21 @@ RecordStats computeStats(
     topArtists: artists.top(rankingLimit),
     topVenues: venues.top(rankingLimit),
     topSongs: songs.top(rankingLimit),
+    lives: lives,
   );
 }
 
-/// 大文字小文字・前後の空白の違いをまとめて数え、いちばん多い表記で表示する。
+/// 大文字小文字・空白の違いをまとめて数え、いちばん多い表記で表示する。
 class _Counter {
   final _counts = <String, int>{};
   final _spellings = <String, Map<String, int>>{};
 
+  int get length => _counts.length;
+
   void add(String raw) {
     final label = raw.trim();
     if (label.isEmpty) return;
-    final key = label.toLowerCase();
+    final key = normalizeArtistName(label);
     _counts[key] = (_counts[key] ?? 0) + 1;
     final spellings = _spellings.putIfAbsent(key, () => {});
     spellings[label] = (spellings[label] ?? 0) + 1;

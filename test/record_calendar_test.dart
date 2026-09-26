@@ -35,7 +35,7 @@ void main() {
     expect(map[DateTime(2026, 9, 2)]!.length, 1);
   });
 
-  testWidgets('日を選ぶとその日の記録を表示し、月を送れる', (tester) async {
+  testWidgets('月の記録を一覧し、日を選ぶとその日に絞り、月を送れる', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.darkTheme,
@@ -45,6 +45,7 @@ void main() {
               today: DateTime(2026, 9, 27),
               records: [
                 _record('a', DateTime(2026, 9, 5)),
+                _record('c', DateTime(2026, 9, 20)),
                 _record('b', DateTime(2026, 10, 10)),
               ],
             ),
@@ -54,11 +55,22 @@ void main() {
     );
 
     expect(find.text('2026年9月'), findsOneWidget);
-    expect(find.text('この日の記録はありません'), findsOneWidget);
+    expect(find.text('9月の記録・2件'), findsOneWidget);
+    expect(find.text('LIVE a'), findsOneWidget);
+    expect(find.text('LIVE c'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('9月5日、記録1件'));
     await tester.pump();
     expect(find.text('LIVE a'), findsOneWidget);
+    expect(find.text('LIVE c'), findsNothing);
+
+    await tester.tap(find.bySemanticsLabel('9月6日'));
+    await tester.pump();
+    expect(find.text('この日の記録はありません'), findsOneWidget);
+
+    await tester.tap(find.text('月全体を表示'));
+    await tester.pump();
+    expect(find.text('LIVE c'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('次の月'));
     await tester.pump();

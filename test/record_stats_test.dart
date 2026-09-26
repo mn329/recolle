@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recolle/core/theme/app_theme.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
@@ -78,6 +79,32 @@ void main() {
     expect(stats.totalTicketPrice, 27000);
   });
 
+  test('アーティストを記録の多い順に並べ、コラボ表記の記録も含めて絞り込む', () {
+    final withCollab = [
+      ...records,
+      _live('collab', DateTime(2026, 6, 1), artist: 'Vaundy × YOASOBI'),
+    ];
+
+    expect(artistsByCount(records).map((a) => (a.label, a.count)), [
+      ('YOASOBI', 3),
+      ('Vaundy', 2),
+    ]);
+    expect(filterByArtist(withCollab, 'Vaundy').map((r) => r.id), [
+      '3',
+      '4',
+      'collab',
+    ]);
+    expect(filterByArtist(withCollab, null), hasLength(withCollab.length));
+  });
+
+  test('初めて・最後に行った日と、行ったライブを新しい順に返す', () {
+    final stats = computeStats(filterByArtist(records, 'Vaundy'), now: now);
+
+    expect(stats.firstLiveDate, DateTime(2025, 12, 31));
+    expect(stats.lastLiveDate, DateTime(2026, 8, 5));
+    expect(stats.lives.map((r) => r.id), ['3', '4']);
+  });
+
   test('記録がある年を新しい順に返す', () {
     expect(yearsWithRecords(records, now), [2026, 2025]);
   });
@@ -103,10 +130,37 @@ void main() {
 
     await tester.tap(find.text('集計'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('すべて'));
+    await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();
     expect(find.text('4'), findsWidgets);
     expect(find.text('よく行ったアーティスト'), findsOneWidget);
-    expect(find.text('Vaundy'), findsOneWidget);
+
+    // ランキングの行を押すと、そのアーティストの振り返りに切り替わる
+    await tester.tap(find.widgetWithText(GroupedRow, 'Vaundy'));
+    await tester.pumpAndSettle();
+    expect(find.text('よく行ったアーティスト'), findsNothing);
+    expect(find.text('初めて行った日'), findsOneWidget);
+    final page = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await tester.scrollUntilVisible(
+      find.text('行ったライブ・2回'),
+      200,
+      scrollable: page,
+    );
+    expect(find.text('T3'), findsOneWidget);
+    expect(find.text('T4'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('すべてのアーティスト'),
+      -200,
+      scrollable: page,
+    );
+    await tester.tap(find.text('すべてのアーティスト'));
+    await tester.pumpAndSettle();
+    expect(find.text('よく行ったアーティスト'), findsOneWidget);
   });
 }

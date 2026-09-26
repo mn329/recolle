@@ -5,11 +5,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/utils/yen_format.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_stats.dart';
+import 'package:recolle/features/records/record_timeline.dart';
 import 'package:recolle/features/records/widgets/record_calendar_view.dart';
 
 enum InsightsView {
@@ -22,6 +25,8 @@ enum InsightsView {
 }
 
 /// 「振り返り」タブ。カレンダーと、年ごとの参戦回数・チケット代・ランキングを切り替える。
+///
+/// 上のチップでアーティストを選ぶと、カレンダーも集計もそのアーティストの記録だけになる。
 class InsightsScreen extends HookConsumerWidget {
   const InsightsScreen({super.key});
 
@@ -30,6 +35,7 @@ class InsightsScreen extends HookConsumerWidget {
     final recordsAsync = ref.watch(recordsProvider);
     final view = useState(InsightsView.calendar);
     final selectedYear = useState<int?>(DateTime.now().year);
+    final selectedArtist = useState<String?>(null);
 
     return Scaffold(
       backgroundColor: context.colors.background,
@@ -42,15 +48,36 @@ class InsightsScreen extends HookConsumerWidget {
         onRefresh: () => ref.refresh(recordsProvider.future),
         slivers: [
           recordsAsync.when(
-            data: (records) => SliverList.list(
-              children: [
-                if (view.value == InsightsView.calendar)
-                  RecordCalendarView(records: records)
-                else
-                  ..._statsChildren(context, records, selectedYear),
-                SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-              ],
-            ),
+            data: (records) {
+              final artists = artistsByCount(records);
+              // 記録を消すなどして選択中のアーティストがいなくなったら全体に戻す
+              final artist = artists.any((a) => a.label == selectedArtist.value)
+                  ? selectedArtist.value
+                  : null;
+              final filtered = filterByArtist(records, artist);
+              return SliverList.list(
+                children: [
+                  if (artists.length > 1)
+                    _ChipRow<String>(
+                      allLabel: 'すべてのアーティスト',
+                      items: [for (final a in artists) (a.label, a.label)],
+                      selected: artist,
+                      onSelected: (a) => selectedArtist.value = a,
+                    ),
+                  if (view.value == InsightsView.calendar)
+                    RecordCalendarView(records: filtered)
+                  else
+                    ..._statsChildren(
+                      context,
+                      filtered,
+                      selectedYear,
+                      artist: artist,
+                      onArtistSelected: (a) => selectedArtist.value = a,
+                    ),
+                  SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
+                ],
+              );
+            },
             loading: () => const SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CupertinoActivityIndicator(radius: 14)),
@@ -73,33 +100,57 @@ class InsightsScreen extends HookConsumerWidget {
   List<Widget> _statsChildren(
     BuildContext context,
     List<Record> records,
-    ValueNotifier<int?> selectedYear,
-  ) {
+    ValueNotifier<int?> selectedYear, {
+    required String? artist,
+    required ValueChanged<String> onArtistSelected,
+  }) {
     final now = DateTime.now();
     final years = yearsWithRecords(records, now);
     // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
     final year = years.contains(selectedYear.value) ? selectedYear.value : null;
-    final stats = computeStats(records, now: now, year: year);
+    final stats = computeStats(
+      records,
+      now: now,
+      year: year,
+      rankingLimit: artist == null ? 5 : 10,
+    );
+    final nextLive = artist == null
+        ? null
+        : splitByDate(
+            records,
+            now,
+          ).upcoming.where((r) => r.type == RecordType.live).firstOrNull;
     return [
-      _YearChips(
-        years: years,
-        selected: year,
-        onSelected: (y) => selectedYear.value = y,
-      ),
-      if (stats.isEmpty)
-        const Padding(
-          padding: EdgeInsets.only(top: 80),
+      if (years.length > 1)
+        _ChipRow<int>(
+          allLabel: 'すべての年',
+          items: [for (final y in years) ('$y年', y)],
+          selected: year,
+          onSelected: (y) => selectedYear.value = y,
+        ),
+      if (stats.isEmpty && nextLive == null)
+        Padding(
+          padding: const EdgeInsets.only(top: 80),
           child: IosEmptyState(
             icon: CupertinoIcons.chart_bar,
-            message: '行ったライブを記録すると、ここに集計が表示されます。',
+            message: artist == null
+                ? '行ったライブを記録すると、ここに集計が表示されます。'
+                : '$artistのライブの記録はまだありません。',
           ),
         )
       else ...[
         _Summary(stats: stats),
-        _MonthlyChart(counts: stats.liveCountsByMonth),
-        _Ranking(header: 'よく行ったアーティスト', items: stats.topArtists),
-        _Ranking(header: 'よく行った会場', items: stats.topVenues),
+        if (artist != null) _ArtistMilestones(stats: stats, nextLive: nextLive),
+        if (artist == null) _MonthlyChart(counts: stats.liveCountsByMonth),
+        if (artist == null)
+          _Ranking(
+            header: 'よく行ったアーティスト',
+            items: stats.topArtists,
+            onTap: onArtistSelected,
+          ),
         _Ranking(header: 'よく聴いた曲', items: stats.topSongs),
+        _Ranking(header: 'よく行った会場', items: stats.topVenues),
+        if (artist != null) _History(lives: stats.lives),
       ],
     ];
   }
@@ -127,16 +178,19 @@ class _ViewSwitcher extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-class _YearChips extends StatelessWidget {
-  const _YearChips({
-    required this.years,
+/// 「すべて」と各項目を横に並べる絞り込みチップ。null が「すべて」。
+class _ChipRow<T> extends StatelessWidget {
+  const _ChipRow({
+    required this.allLabel,
+    required this.items,
     required this.selected,
     required this.onSelected,
   });
 
-  final List<int> years;
-  final int? selected;
-  final ValueChanged<int?> onSelected;
+  final String allLabel;
+  final List<(String label, T value)> items;
+  final T? selected;
+  final ValueChanged<T?> onSelected;
 
   @override
   Widget build(BuildContext context) {
@@ -145,24 +199,88 @@ class _YearChips extends StatelessWidget {
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        itemCount: years.length + 1,
+        itemCount: items.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           if (index == 0) {
             return CapsuleChip(
-              label: 'すべて',
+              label: allLabel,
               selected: selected == null,
               onTap: () => onSelected(null),
             );
           }
-          final year = years[index - 1];
+          final (label, value) = items[index - 1];
           return CapsuleChip(
-            label: '$year年',
-            selected: selected == year,
-            onTap: () => onSelected(year),
+            label: label,
+            selected: selected == value,
+            onTap: () => onSelected(value),
           );
         },
       ),
+    );
+  }
+}
+
+/// アーティストを選んだときの、初めて・最後に行った日と次の公演。
+class _ArtistMilestones extends StatelessWidget {
+  const _ArtistMilestones({required this.stats, required this.nextLive});
+
+  final RecordStats stats;
+  final Record? nextLive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    Widget date(DateTime d) => Text(
+      formatJapaneseDate(d, includeWeekday: true),
+      style: AppFonts.monoStyle(fontSize: 15, color: colors.textSecondary),
+    );
+    final next = nextLive;
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: InsetGroupedSection(
+        hasLeading: false,
+        children: [
+          if (stats.firstLiveDate case final d?)
+            GroupedRow(title: '初めて行った日', additionalInfo: date(d)),
+          if (stats.lastLiveDate case final d?)
+            GroupedRow(title: '最後に行った日', additionalInfo: date(d)),
+          if (next != null)
+            GroupedRow(
+              title: '次の公演',
+              subtitle: next.title,
+              additionalInfo: date(next.date),
+              onTap: () => openRecordDetail(context, next),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// アーティストを選んだときの、行ったライブの一覧（新しい順）。
+class _History extends StatelessWidget {
+  const _History({required this.lives});
+
+  final List<Record> lives;
+
+  @override
+  Widget build(BuildContext context) {
+    if (lives.isEmpty) return const SizedBox.shrink();
+    return InsetGroupedSection(
+      header: '行ったライブ・${lives.length}回',
+      hasLeading: false,
+      children: [
+        for (final r in lives)
+          MediaListTile(
+            title: r.title,
+            subtitle: [
+              formatJapaneseDate(r.date, includeWeekday: true),
+              ?r.venue,
+            ].join('・'),
+            onTap: () => openRecordDetail(context, r),
+          ),
+      ],
     );
   }
 }
@@ -364,10 +482,13 @@ class _MonthlyChart extends StatelessWidget {
 }
 
 class _Ranking extends StatelessWidget {
-  const _Ranking({required this.header, required this.items});
+  const _Ranking({required this.header, required this.items, this.onTap});
 
   final String header;
   final List<RankedItem> items;
+
+  /// 行を押したときに項目名を受け取る。null なら押せない。
+  final ValueChanged<String>? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -391,6 +512,7 @@ class _Ranking extends StatelessWidget {
               '${item.count}回',
               style: TextStyle(fontSize: 15, color: colors.textSecondary),
             ),
+            onTap: onTap == null ? null : () => onTap!(item.label),
           ),
       ],
     );
