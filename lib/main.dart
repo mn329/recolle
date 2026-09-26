@@ -4,7 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/router/router.dart';
 import 'package:recolle/core/theme/app_theme.dart';
-import 'package:recolle/core/widgets/app_toast.dart';
+import 'package:recolle/core/widgets/app_root_builder.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:recolle/features/records/home_widget_sync.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -88,7 +88,7 @@ class MyApp extends ConsumerWidget {
 
       // 4. ルーティング設定: router.dart で定義した画面遷移ルールを適用
       routerConfig: router,
-      builder: (context, child) => AppToastHost(child: child!),
+      builder: buildAppRoot,
 
       // 5. 日本語化設定: カレンダーや戻るボタンなどの標準UIを日本語にする
       localizationsDelegates: const [
