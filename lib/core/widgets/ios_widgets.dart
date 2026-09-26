@@ -166,26 +166,28 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
   Widget _largeTitle(BuildContext context) {
     final en = widget.enTitle;
     if (en == null) return Text(widget.title);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          en,
-          style: AppFonts.displayStyle(
-            fontSize: 38,
-            color: context.colors.accent,
-            letterSpacing: 3,
+    // 文字を大きくする設定などで幅が足りないときは、はみ出さずに行ごと縮める
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: AlignmentDirectional.centerStart,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(
+            en,
+            style: AppFonts.displayStyle(
+              fontSize: 38,
+              color: context.colors.accent,
+              letterSpacing: 3,
+            ),
           ),
-        ),
-        // 英字と同じ名前（ホームの「RECOLLE」）なら添えない
-        if (widget.title != en) ...[
-          const SizedBox(width: 10),
-          Flexible(
-            child: Text(
+          // 英字と同じ名前（ホームの「RECOLLE」）なら添えない
+          if (widget.title != en) ...[
+            const SizedBox(width: 10),
+            Text(
               widget.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
@@ -193,9 +195,9 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
                 color: context.colors.textSecondary,
               ),
             ),
-          ),
+          ],
         ],
-      ],
+      ),
     );
   }
 
