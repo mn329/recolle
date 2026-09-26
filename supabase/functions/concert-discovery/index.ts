@@ -222,7 +222,10 @@ async function fetchMusicBrainz(path: string): Promise<any> {
 
 /** MusicBrainz に登録された公式サイト（official homepage）。見つからなければ null。 */
 async function findOfficialSite(artist: string): Promise<string | null> {
-  const query = encodeURIComponent(`artist:"${artist.replace(/"/g, "")}"`)
+  // artist は正式名だけが対象。日本のアーティストは正式名が和名（サカナクション）で、
+  // 英字表記（sakanaction）は別名として登録されているため alias でも探す
+  const name = artist.replace(/"/g, "")
+  const query = encodeURIComponent(`artist:"${name}" OR alias:"${name}"`)
   const search = await fetchMusicBrainz(`artist?query=${query}&limit=1&fmt=json`)
   const found = search?.artists?.[0]
   if (!found?.id || (found.score ?? 0) < MUSICBRAINZ_MIN_SCORE) return null
