@@ -60,6 +60,8 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
    - **Android**（パッケージ名 `com.ishidaminato.recolle` と署名の SHA-1）: アプリ側の設定は不要。
 2. Supabase の **Authentication → Sign In / Providers → Google** を有効にし、**Client IDs** にウェブと iOS の ID をカンマ区切りで入れる。
 
+`.env` の Google のクライアント ID が空のあいだは、アプリに「Google で続ける」を出しません（押しても設定エラーになるだけのため）。
+
 以前メールアドレスで登録したユーザーは、同じメールアドレスの Google アカウントでログインすると Supabase の自動リンクで既存アカウント（記録）に入れます。
 
 ## アプリの動き（概要）

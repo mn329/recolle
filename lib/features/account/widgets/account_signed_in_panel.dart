@@ -54,10 +54,7 @@ class AccountSignedInPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final linked = authService.linkedProviders;
-    final providers = [
-      if (isAppleSignInSupported) SocialProvider.apple,
-      SocialProvider.google,
-    ];
+    final providers = availableSocialProviders;
     final linkedSocial = {
       for (final p in SocialProvider.values)
         if (linked.contains(p.identityName)) p,

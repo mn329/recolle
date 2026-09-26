@@ -56,6 +56,22 @@ class SocialSignInCancelled implements Exception {
 bool get isAppleSignInSupported =>
     !kIsWeb && (Platform.isIOS || Platform.isMacOS);
 
+/// Google のクライアント ID が `.env` にそろっているか。
+/// 未設定のまま Google ボタンを出すと、押しても設定エラーになるだけなので出さない。
+bool get isGoogleSignInConfigured {
+  if (!dotenv.isInitialized) return false;
+  bool has(String key) => (dotenv.env[key] ?? '').trim().isNotEmpty;
+  final needsIosClient = !kIsWeb && Platform.isIOS;
+  return has('GOOGLE_WEB_CLIENT_ID') &&
+      (!needsIosClient || has('GOOGLE_IOS_CLIENT_ID'));
+}
+
+/// この端末・設定で使えるログイン方法（表示順）。
+List<SocialProvider> get availableSocialProviders => [
+  if (isAppleSignInSupported) SocialProvider.apple,
+  if (isGoogleSignInConfigured) SocialProvider.google,
+];
+
 String _sha256(String input) => sha256.convert(utf8.encode(input)).toString();
 
 Future<SocialCredential> obtainAppleCredential(GoTrueClient auth) async {

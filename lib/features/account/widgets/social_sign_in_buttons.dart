@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart' show Icons;
 import 'package:recolle/features/account/services/social_credential.dart';
 
-/// Apple / Google で続行するボタン群。Apple は iOS / macOS のみ表示する。
+/// Apple / Google で続行するボタン群。使えるものだけ出す（[availableSocialProviders]）。
 class SocialSignInButtons extends StatelessWidget {
   const SocialSignInButtons({
     super.key,
@@ -20,10 +20,9 @@ class SocialSignInButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final providers = [
-      if (isAppleSignInSupported) SocialProvider.apple,
-      SocialProvider.google,
-    ].where((p) => !hiddenProviders.contains(p)).toList();
+    final providers = availableSocialProviders
+        .where((p) => !hiddenProviders.contains(p))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
