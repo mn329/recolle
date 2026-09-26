@@ -80,18 +80,15 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('英字の見出しに、日本語の見出しを小さく添える', (tester) async {
+  testWidgets('英字の見出しだけを出し、日本語の見出しは読み上げに使う', (tester) async {
+    final semantics = tester.ensureSemantics();
     await pumpTitle(tester, title: '振り返り', en: 'LOOK BACK');
 
     // 大見出しと、縮んだときの見出しの 2 か所に英字を出す
     expect(find.text('LOOK BACK', skipOffstage: false), findsNWidgets(2));
-    expect(find.text('振り返り', skipOffstage: false), findsOneWidget);
-  });
-
-  testWidgets('英字と同じ名前なら、日本語の見出しは添えない', (tester) async {
-    await pumpTitle(tester, title: 'RECOLLE', en: 'RECOLLE');
-
-    expect(find.text('RECOLLE', skipOffstage: false), findsNWidgets(2));
+    expect(find.text('振り返り', skipOffstage: false), findsNothing);
+    expect(find.bySemanticsLabel('振り返り'), findsOneWidget);
+    semantics.dispose();
   });
 
   testWidgets('覚えた位置が新しい内容より長ければ、末尾に収める', (tester) async {

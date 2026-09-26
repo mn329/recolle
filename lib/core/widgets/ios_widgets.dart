@@ -90,7 +90,7 @@ class LargeTitleScrollView extends StatefulWidget {
     this.contentKey,
   });
 
-  /// 画面の見出し。[enTitle] があれば、大見出しでは英字の横に小さく添える。
+  /// 画面の見出し。[enTitle] があれば画面には出さず、読み上げにだけ使う。
   final String title;
 
   /// 印字風の英字で大きく出す見出し（ホームの「RECOLLE」など）。縮んだときもこちらを出す。
@@ -166,37 +166,22 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
   Widget _largeTitle(BuildContext context) {
     final en = widget.enTitle;
     if (en == null) return Text(widget.title);
-    // 文字を大きくする設定などで幅が足りないときは、はみ出さずに行ごと縮める
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: AlignmentDirectional.centerStart,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Text(
-            en,
-            style: AppFonts.displayStyle(
-              fontSize: 38,
-              color: context.colors.accent,
-              letterSpacing: 3,
-            ),
+    // 読み上げでは日本語の見出しを使う
+    return Semantics(
+      label: widget.title,
+      excludeSemantics: true,
+      // 文字を大きくする設定などで幅が足りないときは、はみ出さずに縮める
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: AlignmentDirectional.centerStart,
+        child: Text(
+          en,
+          style: AppFonts.displayStyle(
+            fontSize: 38,
+            color: context.colors.accent,
+            letterSpacing: 3,
           ),
-          // 英字と同じ名前（ホームの「RECOLLE」）なら添えない
-          if (widget.title != en) ...[
-            const SizedBox(width: 10),
-            Text(
-              widget.title,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0,
-                color: context.colors.textSecondary,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }
