@@ -67,22 +67,26 @@ class AppToastHost extends StatefulWidget {
 
 class _AppToastHostState extends State<AppToastHost>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 380),
-    reverseDuration: const Duration(milliseconds: 220),
-  );
-  late final Animation<double> _curve = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.easeOutBack,
-    reverseCurve: Curves.easeInCubic,
-  );
+  // 遅延初期化にすると、一度もトーストを出さずに破棄したとき dispose の中で
+  // 初めて作られ、破棄中の要素から Ticker を作ろうとして落ちる
+  late final AnimationController _controller;
+  late final Animation<double> _curve;
   _ToastData? _current;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 380),
+      reverseDuration: const Duration(milliseconds: 220),
+    );
+    _curve = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeOutBack,
+      reverseCurve: Curves.easeInCubic,
+    );
     AppToast._host = this;
   }
 
