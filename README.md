@@ -21,9 +21,9 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 1. リポジトリルートに `.env` を作成します。雛形は `env.example` なので、コピーして値を埋めてください。
 
    - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_PUBLISHABLE_KEY`（`sb_publishable_...` 形式の公開キー）
 
-   値は Supabase ダッシュボードの Project Settings → API から取得します。
+   値は Supabase ダッシュボードの Project Settings → API Keys から取得します。`service_role` / `sb_secret_...` などの秘密鍵は **絶対に入れない** でください（`.env` はアプリに同梱されます）。
 
 2. `.env` は `pubspec.yaml` の `assets` に含めてビルドに同梱します。**リポジトリにコミットしない**でください（ルートの `.gitignore` で `.env` を除外済み）。
 
@@ -64,26 +64,38 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 ## Supabase Edge Functions（任意）
 
-バックエンドを自プロジェクトにデプロイする場合、`supabase/functions/` に Resend 経由の認証メール送信（`resend-auth`）やアカウント削除用（`delete-account`）などの関数があります。必要なシークレット（例: `SUPABASE_SERVICE_ROLE_KEY`、`RESEND_API_KEY`）は各関数のソース内の `Deno.env.get(...)` を参照してください。
+バックエンドを自プロジェクトにデプロイする場合、`supabase/functions/` に Resend 経由の認証メール送信（`resend-auth`）やアカウント削除用（`delete-account`）などの関数があります。
+
+| シークレット | 用途 | 設定方法 |
+|--------------|------|----------|
+| `SUPABASE_URL` / `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` | DB・Auth 管理操作 | Supabase が自動で注入（設定不要） |
+| `RESEND_API_KEY` | `resend-auth` のメール送信 | 手動で登録 |
+
+`RESEND_API_KEY` は [Resend](https://resend.com/api-keys) で発行し、次の手順で登録します。
+
+```bash
+cp supabase/functions/.env.example supabase/functions/.env   # 値を埋める（.gitignore 済み）
+supabase secrets set --env-file supabase/functions/.env --project-ref <project-ref>
+supabase secrets list --project-ref <project-ref>             # 登録確認
+```
+
+ローカル実行は `supabase functions serve --env-file supabase/functions/.env` です。
 
 ## Supabase 無停止（GitHub Actions）
 
-無料プランは約 7 日間「DB へのユーザークエリ」が少ないと一時停止します。`.github/workflows/supabase-keep-alive.yml` が週 3 回 `records` へ軽量な SELECT を送り、停止を防ぎます（Auth health だけでは足りないことがあります）。すでに一時停止したプロジェクトはダッシュボードで Resume が必要です。
+無料プランは約 7 日間「DB へのユーザークエリ」が少ないと一時停止します。`.github/workflows/supabase-keep-alive.yml` が毎日 2 回（日本時間 12:00 / 24:00）`records` へ軽量な SELECT を送り、停止を防ぎます（Auth health だけでは足りないことがあります）。すでに一時停止したプロジェクトはダッシュボードで Resume が必要です。
 
-GitHub リポジトリの **Settings → Secrets and variables → Actions** に、`.env` と同じ値で次を登録してください。
+GitHub リポジトリの **Settings → Secrets and variables → Actions** に、`.env` と同じ値で次を登録してください（`gh secret set <名前>` でも可）。
 
 | Secret 名 | 値 |
 |-----------|-----|
 | `SUPABASE_URL` | Supabase プロジェクト URL（例: `https://abcdefghijklmno.supabase.co`） |
-| `SUPABASE_ANON_KEY` | Supabase anon（公開）キー |
-
-`SUPABASE_URL` の代わりに `SUPABASE_PROJECT_REF`（例: `abcdefghijklmno`）だけを設定しても動作します。
+| `SUPABASE_PUBLISHABLE_KEY` | Supabase publishable（公開）キー（`sb_publishable_...`） |
 
 **よくある設定ミス**
 
 - `<project-ref>` のようなプレースホルダーをそのまま入れている
-- `https://` を付けずに `abcdefghijklmno.supabase.co` だけ入れている（`SUPABASE_URL` では `https://` 必須）
-- `SUPABASE_PROJECT_REF` にフル URL を入れている（project ref のみを入れる）
+- `https://` を付けずに `abcdefghijklmno.supabase.co` だけ入れている（`https://` 必須）
 - 引用符で囲んでいる（`"https://..."` は不要）
 
 登録後、**Actions** タブから `Supabase Keep Alive` を手動実行して動作確認できます。
