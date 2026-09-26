@@ -59,6 +59,8 @@ class NavBarTextButton extends StatelessWidget {
       onPressed: onPressed,
       child: Text(
         label,
+        maxLines: 1,
+        softWrap: false,
         style: TextStyle(
           fontSize: 17,
           fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
@@ -98,6 +100,17 @@ class LargeTitleScrollView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final refresh = onRefresh;
+    // CupertinoPageScaffold の下に置くと、スクロール前はナビバーの背景と区切り線が消える
+    return CupertinoPageScaffold(
+      backgroundColor: AppColors.background,
+      child: _buildScrollView(context, refresh),
+    );
+  }
+
+  Widget _buildScrollView(
+    BuildContext context,
+    Future<void> Function()? refresh,
+  ) {
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
@@ -162,24 +175,31 @@ class InsetGroupedSection extends StatelessWidget {
       separatorColor: AppColors.separator,
       hasLeading: hasLeading,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      // 見出しと注記は、設定アプリと同じく行の文字の左端に揃える
       header: header == null
           ? null
-          : Text(
-              header!,
-              style: const TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w500,
+          : Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text(
+                header!,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
       footer: footer == null
           ? null
-          : Text(
-              footer!,
-              style: const TextStyle(
-                fontSize: 12,
-                height: 1.45,
-                color: AppColors.textSecondary,
+          : Padding(
+              padding: const EdgeInsets.only(left: 12),
+              child: Text(
+                footer!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  height: 1.45,
+                  color: AppColors.textSecondary,
+                ),
               ),
             ),
       children: children,

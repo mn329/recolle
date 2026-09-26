@@ -310,7 +310,8 @@ class _TextSection extends StatelessWidget {
       header: header,
       hasLeading: false,
       children: [
-        Padding(
+        Container(
+          width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: SelectableText(
             content.isEmpty ? '未入力' : content,

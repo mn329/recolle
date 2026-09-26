@@ -70,12 +70,17 @@ class SongDetailScreen extends ConsumerWidget {
                         ),
                       ],
                     ),
-                    child: songAsync.isLoading
-                        ? SizedBox.square(
-                            dimension: artworkSize,
-                            child: const Center(
-                              child: CupertinoActivityIndicator(radius: 14),
+                    // Riverpod は失敗時に自動で再試行し isLoading が true のままになるため、
+                    // 値もエラーもまだ無いときだけ読み込み中とみなす
+                    child: !songAsync.hasValue && !songAsync.hasError
+                        ? Container(
+                            width: artworkSize,
+                            height: artworkSize,
+                            decoration: BoxDecoration(
+                              color: AppColors.card,
+                              borderRadius: BorderRadius.circular(16),
                             ),
+                            child: const CupertinoActivityIndicator(radius: 14),
                           )
                         : ArtistAvatar(
                             name: title,

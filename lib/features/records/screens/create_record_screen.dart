@@ -274,7 +274,7 @@ class CreateRecordScreen extends HookConsumerWidget {
         backgroundColor: AppColors.background,
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          leadingWidth: 110,
+          leadingWidth: 124,
           leading: Align(
             alignment: Alignment.centerLeft,
             child: NavBarTextButton(
