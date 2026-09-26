@@ -9,6 +9,8 @@ typedef RankedItem = ({String label, int count});
 class RecordStats {
   const RecordStats({
     required this.liveCount,
+    required this.liveCountsByFormat,
+    required this.artistCount,
     required this.countsByType,
     required this.totalTicketPrice,
     required this.pricedLiveCount,
@@ -20,6 +22,13 @@ class RecordStats {
   });
 
   final int liveCount;
+
+  /// ワンマン・対バン・フェスそれぞれのライブ数。
+  final Map<EventFormat, int> liveCountsByFormat;
+
+  /// 観たアーティストの数（対バン・フェスの出演者も含む）。
+  final int artistCount;
+
   final Map<RecordType, int> countsByType;
 
   /// チケット代を入力したライブの合計（円）。
@@ -34,7 +43,7 @@ class RecordStats {
   final List<RankedItem> topArtists;
   final List<RankedItem> topVenues;
 
-  /// セットリストに登場した回数の多い曲。
+  /// セットリストに登場した回数の多い曲。アーティストで絞ったときはその人の曲だけ。
   final List<RankedItem> topSongs;
 
   /// 集計対象のライブ（新しい順）。
@@ -67,10 +76,12 @@ List<Record> filterByArtist(Iterable<Record> records, String? artist) => [
 ];
 
 /// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
+/// [artist] を渡すと、曲のランキングは対バン・フェスでもその出演者の曲だけを数える。
 RecordStats computeStats(
   Iterable<Record> records, {
   required DateTime now,
   int? year,
+  String? artist,
   int rankingLimit = 5,
 }) {
   final past = splitByDate(
@@ -84,6 +95,7 @@ RecordStats computeStats(
     countsByType[r.type] = countsByType[r.type]! + 1;
   }
 
+  final byFormat = {for (final f in EventFormat.values) f: 0};
   final byMonth = List.filled(12, 0);
   var total = 0;
   var priced = 0;
@@ -91,6 +103,7 @@ RecordStats computeStats(
   final venues = _Counter();
   final songs = _Counter();
   for (final r in lives) {
+    byFormat[r.eventFormat] = byFormat[r.eventFormat]! + 1;
     byMonth[r.date.month - 1]++;
     if (r.ticketPrice != null) {
       total += r.ticketPrice!;
@@ -104,12 +117,16 @@ RecordStats computeStats(
     performers.values.forEach(artists.add);
     if (r.venue != null) venues.add(r.venue!);
     // 同じ公演で 2 回演奏された曲（アンコール等）は 1 回として数える
-    final uniqueSongs = {for (final a in r.performances) ...a.songs};
+    final uniqueSongs = artist == null
+        ? {for (final a in r.performances) ...a.songs}
+        : r.songsBy(artist).toSet();
     uniqueSongs.forEach(songs.add);
   }
 
   return RecordStats(
     liveCount: lives.length,
+    liveCountsByFormat: byFormat,
+    artistCount: artists.length,
     countsByType: countsByType,
     totalTicketPrice: total,
     pricedLiveCount: priced,
@@ -125,6 +142,8 @@ RecordStats computeStats(
 class _Counter {
   final _counts = <String, int>{};
   final _spellings = <String, Map<String, int>>{};
+
+  int get length => _counts.length;
 
   void add(String raw) {
     final label = raw.trim();
@@ -151,7 +170,9 @@ class _Counter {
             (label: _labelFor(e.key), count: e.value),
         ]..sort((a, b) {
           final byCount = b.count.compareTo(a.count);
-          return byCount != 0 ? byCount : a.label.compareTo(b.label);
+          if (byCount != 0) return byCount;
+          // 同数なら大文字小文字を区別せずに並べ、小文字の表記が常に後ろへ回らないようにする
+          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
         });
     return ranked.take(limit).toList();
   }

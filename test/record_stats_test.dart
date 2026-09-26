@@ -101,6 +101,58 @@ void main() {
     expect(stats.lives.map((r) => r.id), ['3', '4']);
   });
 
+  group('対バン・フェス', () {
+    final fes = Record(
+      id: 'fes',
+      type: RecordType.live,
+      title: 'ROCK IN JAPAN',
+      artistOrAuthor: 'Vaundy',
+      date: DateTime(2026, 8, 8),
+      endDate: DateTime(2026, 8, 9),
+      ticketImageUrl: '',
+      eventFormat: EventFormat.festival,
+      acts: const [
+        RecordAct(artist: 'Vaundy', songs: ['怪獣の花唄'], isMain: true, day: 1),
+        RecordAct(artist: 'sumika', songs: ['Lovers'], day: 1),
+        RecordAct(artist: 'back number', songs: ['水平線'], day: 2),
+      ],
+    );
+    final withFes = [...records, fes];
+
+    test('形式ごとの回数と、出演者全員を含めた観たアーティスト数を数える', () {
+      final stats = computeStats(withFes, now: now, year: 2026);
+
+      expect(stats.liveCount, 4);
+      expect(stats.liveCountsByFormat[EventFormat.oneman], 3);
+      expect(stats.liveCountsByFormat[EventFormat.festival], 1);
+      // YOASOBI・Vaundy・sumika・back number
+      expect(stats.artistCount, 4);
+      expect(stats.topArtists.first, (label: 'Vaundy', count: 2));
+      expect(stats.topSongs.map((s) => s.label), contains('水平線'));
+    });
+
+    test('同じ回数なら大文字小文字を区別せずに並べる', () {
+      final stats = computeStats(withFes, now: now, year: 2026);
+
+      expect(stats.topArtists.map((a) => a.label), [
+        'Vaundy',
+        'YOASOBI',
+        'back number',
+        'sumika',
+      ]);
+    });
+
+    test('アーティストで絞ると、その出演者の曲だけを数える', () {
+      final stats = computeStats(
+        filterByArtist(withFes, 'Vaundy'),
+        now: now,
+        artist: 'Vaundy',
+      );
+
+      expect(stats.topSongs, [(label: '怪獣の花唄', count: 1)]);
+    });
+  });
+
   test('記録がある年を新しい順に返す', () {
     expect(yearsWithRecords(records, now), [2026, 2025]);
   });

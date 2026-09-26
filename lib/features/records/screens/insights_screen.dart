@@ -112,6 +112,7 @@ class InsightsScreen extends HookConsumerWidget {
       records,
       now: now,
       year: year,
+      artist: artist,
       rankingLimit: artist == null ? 5 : 10,
     );
     final nextLive = artist == null
@@ -139,7 +140,7 @@ class InsightsScreen extends HookConsumerWidget {
           ),
         )
       else ...[
-        _Summary(stats: stats),
+        _Summary(stats: stats, showsArtistCount: artist == null),
         if (artist != null) _ArtistMilestones(stats: stats, nextLive: nextLive),
         if (artist == null) _MonthlyChart(counts: stats.liveCountsByMonth),
         if (artist == null)
@@ -318,14 +319,25 @@ class _History extends StatelessWidget {
 }
 
 class _Summary extends StatelessWidget {
-  const _Summary({required this.stats});
+  const _Summary({required this.stats, required this.showsArtistCount});
 
   final RecordStats stats;
+  final bool showsArtistCount;
 
   @override
   Widget build(BuildContext context) {
     final average = stats.averageTicketPrice;
+    final byFormat = stats.liveCountsByFormat;
+    // ワンマンだけなら内訳は出さない
+    final formatBreakdown = byFormat[EventFormat.oneman] == stats.liveCount
+        ? null
+        : [
+            for (final f in EventFormat.values)
+              if (byFormat[f]! > 0) '${f.label} ${byFormat[f]}',
+          ].join('・');
     final others = [
+      if (showsArtistCount && stats.artistCount > 0)
+        '観たアーティスト ${stats.artistCount}組',
       for (final t in RecordType.values)
         if (t != RecordType.live && stats.countsByType[t]! > 0)
           '${t.japaneseLabel} ${stats.countsByType[t]}',
@@ -342,6 +354,7 @@ class _Summary extends StatelessWidget {
                   label: 'ライブ',
                   value: '${stats.liveCount}',
                   unit: '回',
+                  caption: formatBreakdown,
                 ),
               ),
               const SizedBox(width: 12),
