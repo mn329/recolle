@@ -10,56 +10,47 @@ import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
+import 'package:recolle/features/records/widgets/record_calendar_view.dart';
 
-/// 参戦回数・チケット代・よく行ったアーティストなどを年ごとに振り返る画面。
-class StatsScreen extends HookConsumerWidget {
-  const StatsScreen({super.key});
+enum InsightsView {
+  calendar('カレンダー'),
+  stats('集計');
+
+  const InsightsView(this.label);
+
+  final String label;
+}
+
+/// 「振り返り」タブ。カレンダーと、年ごとの参戦回数・チケット代・ランキングを切り替える。
+class InsightsScreen extends HookConsumerWidget {
+  const InsightsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(recordsProvider);
+    final view = useState(InsightsView.calendar);
     final selectedYear = useState<int?>(DateTime.now().year);
 
     return Scaffold(
       backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: '振り返り',
+        bottom: _ViewSwitcher(
+          value: view.value,
+          onChanged: (v) => view.value = v,
+        ),
+        onRefresh: () => ref.refresh(recordsProvider.future),
         slivers: [
           recordsAsync.when(
-            data: (records) {
-              final now = DateTime.now();
-              final years = yearsWithRecords(records, now);
-              // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
-              final year = years.contains(selectedYear.value)
-                  ? selectedYear.value
-                  : null;
-              final stats = computeStats(records, now: now, year: year);
-              return SliverList.list(
-                children: [
-                  _YearChips(
-                    years: years,
-                    selected: year,
-                    onSelected: (y) => selectedYear.value = y,
-                  ),
-                  if (stats.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 80),
-                      child: IosEmptyState(
-                        icon: CupertinoIcons.chart_bar,
-                        message: '行ったライブを記録すると、ここに集計が表示されます。',
-                      ),
-                    )
-                  else ...[
-                    _Summary(stats: stats),
-                    _MonthlyChart(counts: stats.liveCountsByMonth),
-                    _Ranking(header: 'よく行ったアーティスト', items: stats.topArtists),
-                    _Ranking(header: 'よく行った会場', items: stats.topVenues),
-                    _Ranking(header: 'よく聴いた曲', items: stats.topSongs),
-                    SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-                  ],
-                ],
-              );
-            },
+            data: (records) => SliverList.list(
+              children: [
+                if (view.value == InsightsView.calendar)
+                  RecordCalendarView(records: records)
+                else
+                  ..._statsChildren(context, records, selectedYear),
+                SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
+              ],
+            ),
             loading: () => const SliverFillRemaining(
               hasScrollBody: false,
               child: Center(child: CupertinoActivityIndicator(radius: 14)),
@@ -75,6 +66,62 @@ class StatsScreen extends HookConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  List<Widget> _statsChildren(
+    BuildContext context,
+    List<Record> records,
+    ValueNotifier<int?> selectedYear,
+  ) {
+    final now = DateTime.now();
+    final years = yearsWithRecords(records, now);
+    // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
+    final year = years.contains(selectedYear.value) ? selectedYear.value : null;
+    final stats = computeStats(records, now: now, year: year);
+    return [
+      _YearChips(
+        years: years,
+        selected: year,
+        onSelected: (y) => selectedYear.value = y,
+      ),
+      if (stats.isEmpty)
+        const Padding(
+          padding: EdgeInsets.only(top: 80),
+          child: IosEmptyState(
+            icon: CupertinoIcons.chart_bar,
+            message: '行ったライブを記録すると、ここに集計が表示されます。',
+          ),
+        )
+      else ...[
+        _Summary(stats: stats),
+        _MonthlyChart(counts: stats.liveCountsByMonth),
+        _Ranking(header: 'よく行ったアーティスト', items: stats.topArtists),
+        _Ranking(header: 'よく行った会場', items: stats.topVenues),
+        _Ranking(header: 'よく聴いた曲', items: stats.topSongs),
+      ],
+    ];
+  }
+}
+
+class _ViewSwitcher extends StatelessWidget implements PreferredSizeWidget {
+  const _ViewSwitcher({required this.value, required this.onChanged});
+
+  final InsightsView value;
+  final ValueChanged<InsightsView> onChanged;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(48);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      child: IosSegmentedControl<InsightsView>(
+        value: value,
+        segments: {for (final v in InsightsView.values) v: v.label},
+        onChanged: onChanged,
       ),
     );
   }

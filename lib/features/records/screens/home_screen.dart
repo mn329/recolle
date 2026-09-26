@@ -16,7 +16,6 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_timeline.dart';
-import 'package:recolle/features/records/screens/stats_screen.dart';
 import 'package:recolle/features/records/widgets/next_event_card.dart';
 import 'package:recolle/features/search/screens/search_screen.dart';
 
@@ -67,14 +66,6 @@ class HomeScreen extends HookConsumerWidget {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            NavBarIconButton(
-              icon: CupertinoIcons.chart_bar_alt_fill,
-              semanticLabel: '振り返り',
-              onPressed: () => Navigator.push(
-                context,
-                CupertinoPageRoute<void>(builder: (_) => const StatsScreen()),
-              ),
-            ),
             NavBarIconButton(
               icon: CupertinoIcons.search,
               semanticLabel: '検索',

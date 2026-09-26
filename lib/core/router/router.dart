@@ -7,12 +7,14 @@ import 'package:recolle/features/records/screens/home_screen.dart';
 import 'package:recolle/components/scaffold_with_navbar.dart';
 import 'package:recolle/features/account/account_page.dart';
 import 'package:recolle/features/favorites/screens/favorites_screen.dart';
+import 'package:recolle/features/records/screens/insights_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // ナビゲーションの状態を管理するためのキー
 // ダイアログ表示などを制御する際に必要になります
 final _rootNavigatorKey = GlobalKey<NavigatorState>();
 final _homeNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'home');
+final _insightsNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'insights');
 final _favoritesNavigatorKey = GlobalKey<NavigatorState>(
   debugLabel: 'favorites',
 );
@@ -79,6 +81,15 @@ final router = GoRouter(
           navigatorKey: _homeNavigatorKey,
           routes: [
             GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+          ],
+        ),
+        StatefulShellBranch(
+          navigatorKey: _insightsNavigatorKey,
+          routes: [
+            GoRoute(
+              path: '/insights',
+              builder: (context, state) => const InsightsScreen(),
+            ),
           ],
         ),
         StatefulShellBranch(

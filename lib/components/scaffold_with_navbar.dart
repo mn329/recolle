@@ -22,6 +22,11 @@ class ScaffoldWithNavBar extends StatelessWidget {
       label: 'ホーム',
     ),
     LiquidGlassTabItem(
+      icon: CupertinoIcons.calendar,
+      activeIcon: CupertinoIcons.calendar_today,
+      label: '振り返り',
+    ),
+    LiquidGlassTabItem(
       icon: CupertinoIcons.star,
       activeIcon: CupertinoIcons.star_fill,
       label: 'お気に入り',

@@ -5,7 +5,7 @@ import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
-import 'package:recolle/features/records/screens/stats_screen.dart';
+import 'package:recolle/features/records/screens/insights_screen.dart';
 
 Record _live(
   String id,
@@ -95,12 +95,14 @@ void main() {
         ],
         child: MaterialApp(
           theme: AppTheme.darkTheme,
-          home: const StatsScreen(),
+          home: const InsightsScreen(),
         ),
       ),
     );
     await tester.pumpAndSettle();
 
+    await tester.tap(find.text('集計'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('すべて'));
     await tester.pumpAndSettle();
     expect(find.text('4'), findsWidgets);
