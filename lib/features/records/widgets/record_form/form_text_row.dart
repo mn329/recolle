@@ -5,8 +5,7 @@ import 'package:recolle/features/records/widgets/record_form/form_row_parts.dart
 
 /// [FormCard] の中に置く、枠のない iOS の入力行。
 ///
-/// [icon] と [enLabel] を渡すと、左にアイコン、上にチケット風の項目名を添える。
-/// 項目名の和文（[label]）は、プレースホルダーが消える入力後にだけ出す。
+/// [icon] と [enLabel] を渡すと、左にアイコン、上にチケット風の英字の項目名を添える。
 class FormTextRow extends StatefulWidget {
   const FormTextRow({
     super.key,
@@ -14,7 +13,6 @@ class FormTextRow extends StatefulWidget {
     required this.placeholder,
     this.icon,
     this.enLabel,
-    this.label,
     this.focusNode,
     this.onChanged,
     this.maxLines = 1,
@@ -33,9 +31,6 @@ class FormTextRow extends StatefulWidget {
 
   /// 「VENUE」のような英字の項目名。
   final String? enLabel;
-
-  /// 「会場」のような和文の項目名。省略時は [placeholder] を使う。
-  final String? label;
   final FocusNode? focusNode;
   final ValueChanged<String>? onChanged;
   final int maxLines;
@@ -176,15 +171,7 @@ class _FormTextRowState extends State<FormTextRow> {
                       _horizontalPadding,
                       0,
                     ),
-                    child: ValueListenableBuilder(
-                      valueListenable: widget.controller,
-                      builder: (context, value, _) => FormFieldLabel(
-                        en: enLabel,
-                        ja: value.text.isEmpty
-                            ? null
-                            : widget.label ?? widget.placeholder,
-                      ),
-                    ),
+                    child: FormFieldLabel(enLabel),
                   ),
                 ),
               field,

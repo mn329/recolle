@@ -458,7 +458,6 @@ class CreateRecordScreen extends HookConsumerWidget {
           ? CupertinoIcons.bag
           : CupertinoIcons.tickets,
       enLabel: kind.sourceEnLabel,
-      label: kind.sourceLabel,
       maxLength: RecordFieldLimits.ticketSource,
       scrollPadding: _fieldScrollPadding,
     );
@@ -629,7 +628,6 @@ class CreateRecordScreen extends HookConsumerWidget {
                       placeholder: kind.seatPlaceholder!,
                       icon: CupertinoIcons.square_grid_2x2,
                       enLabel: 'SEAT',
-                      label: '座席',
                       maxLength: RecordFieldLimits.seat,
                       scrollPadding: _fieldScrollPadding,
                     ),

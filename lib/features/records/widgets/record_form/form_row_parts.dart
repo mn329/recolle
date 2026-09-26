@@ -25,43 +25,20 @@ class FormRowIcon extends StatelessWidget {
   }
 }
 
-/// チケットの半券と同じ、英字（等幅）と和文を並べた小さな項目名。
-///
-/// 和文は、入力前はプレースホルダーが同じ役目を果たすので、[ja] を渡したときだけ出す。
+/// チケットの半券と同じ、等幅の英字で書いた小さな項目名。
 class FormFieldLabel extends StatelessWidget {
-  const FormFieldLabel({super.key, required this.en, this.ja});
+  const FormFieldLabel(this.text, {super.key});
 
-  final String en;
-  final String? ja;
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.baseline,
-      textBaseline: TextBaseline.alphabetic,
-      children: [
-        Text(
-          en,
-          style: AppFonts.monoStyle(
-            fontSize: 10.5,
-            color: context.colors.accent,
-          ).copyWith(letterSpacing: 1.2),
-        ),
-        if (ja != null) ...[
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              ja!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11,
-                color: context.colors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ],
+    return Text(
+      text,
+      style: AppFonts.monoStyle(
+        fontSize: 10.5,
+        color: context.colors.accent,
+      ).copyWith(letterSpacing: 1.2),
     );
   }
 }
@@ -100,7 +77,7 @@ class FormRowTitle extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    FormFieldLabel(en: enLabel!),
+                    FormFieldLabel(enLabel!),
                     const SizedBox(height: 2),
                     title,
                   ],

@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 
-/// 作成フォームの 1 グループ。iOS の設定画面と同じく、小さな見出しの下に角丸カードで行を並べる。
+/// 作成フォームの 1 グループ。見出しの下に角丸カードで行を並べる。
 class FormSection extends StatelessWidget {
   const FormSection({
     super.key,
@@ -31,16 +31,16 @@ class FormSection extends StatelessWidget {
         children: [
           if (header != null)
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 10),
               child: Row(
                 children: [
                   Expanded(
                     child: Text(
                       header!,
                       style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: context.colors.textSecondary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: context.colors.textPrimary,
                       ),
                     ),
                   ),

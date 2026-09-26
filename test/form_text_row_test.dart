@@ -37,26 +37,23 @@ bool _isHighlighted(WidgetTester tester, String placeholder) {
 }
 
 void main() {
-  testWidgets('英字の項目名は常に出し、和文は入力してプレースホルダーが消えてから添える', (tester) async {
+  testWidgets('入力後もアイコンと英字の項目名を出し、和文の項目名は重ねない', (tester) async {
     final controller = TextEditingController();
     addTearDown(controller.dispose);
     await _pump(tester, controller);
 
-    final jaLabel = find.descendant(
-      of: find.byType(FormFieldLabel),
-      matching: find.text('会場'),
-    );
-    expect(find.text('VENUE'), findsOneWidget);
-    expect(find.byIcon(CupertinoIcons.location), findsOneWidget);
-    expect(jaLabel, findsNothing);
-
     await tester.enterText(find.byType(CupertinoTextField).first, '日本武道館');
     await tester.pump();
-    expect(jaLabel, findsOneWidget);
 
-    await tester.enterText(find.byType(CupertinoTextField).first, '');
-    await tester.pump();
-    expect(jaLabel, findsNothing);
+    expect(find.text('VENUE'), findsOneWidget);
+    expect(find.byIcon(CupertinoIcons.location), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(FormFieldLabel),
+        matching: find.text('会場'),
+      ),
+      findsNothing,
+    );
   });
 
   testWidgets('入力中の行だけを強調する', (tester) async {
