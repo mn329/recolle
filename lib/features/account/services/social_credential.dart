@@ -170,6 +170,8 @@ Future<SocialCredential> obtainGoogleCredential(GoTrueClient auth) async {
       displayName: account.displayName,
     );
   } on GoogleSignInException catch (e) {
+    // Google のエラー画面（テストユーザー外など）を閉じた場合も canceled になるので、理由を残す
+    debugPrint('Google sign-in ended: ${e.code} ${e.description}');
     if (e.code == GoogleSignInExceptionCode.canceled) {
       throw const SocialSignInCancelled();
     }
