@@ -4,6 +4,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/core/widgets/content_switcher.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/record_actions.dart';
@@ -121,35 +122,39 @@ class RecordCalendarView extends HookWidget {
                   if (v.abs() < 200) return;
                   moveMonth(v < 0 ? 1 : -1);
                 },
-                child: Column(
-                  children: [
-                    for (var i = 0; i < grid.length; i += 7)
-                      SizedBox(
-                        height: _rowHeight,
-                        child: Row(
-                          children: [
-                            for (final day in grid.sublist(i, i + 7))
-                              Expanded(
-                                child: day == null
-                                    ? const SizedBox.shrink()
-                                    : _DayCell(
-                                        day: day,
-                                        records: byDay[day] ?? const [],
-                                        isToday: day == todayDay,
-                                        isSelected: day == selected.value,
-                                        onTap: () {
-                                          HapticFeedback.selectionClick();
-                                          // もう一度押したら月全体の一覧に戻す
-                                          selected.value = day == selected.value
-                                              ? null
-                                              : day;
-                                        },
-                                      ),
-                              ),
-                          ],
+                child: ContentSwitcher(
+                  contentKey: month.value,
+                  child: Column(
+                    children: [
+                      for (var i = 0; i < grid.length; i += 7)
+                        SizedBox(
+                          height: _rowHeight,
+                          child: Row(
+                            children: [
+                              for (final day in grid.sublist(i, i + 7))
+                                Expanded(
+                                  child: day == null
+                                      ? const SizedBox.shrink()
+                                      : _DayCell(
+                                          day: day,
+                                          records: byDay[day] ?? const [],
+                                          isToday: day == todayDay,
+                                          isSelected: day == selected.value,
+                                          onTap: () {
+                                            HapticFeedback.selectionClick();
+                                            // もう一度押したら月全体の一覧に戻す
+                                            selected.value =
+                                                day == selected.value
+                                                ? null
+                                                : day;
+                                          },
+                                        ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -163,34 +168,37 @@ class RecordCalendarView extends HookWidget {
               ? null
               : () => selected.value = null,
         ),
-        if (listedDays.isEmpty ||
-            (selected.value != null && !byDay.containsKey(selected.value)))
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-            child: Text(
-              selected.value == null ? 'この月の記録はありません' : 'この日の記録はありません',
-              style: TextStyle(fontSize: 15, color: colors.textSecondary),
-            ),
-          )
-        else
-          InsetGroupedSection(
-            hasLeading: false,
-            children: [
-              for (final d in listedDays)
-                for (final r in byDay[d]!)
-                  MediaListTile(
-                    leading: _DateBadge(day: d),
-                    title: r.title,
-                    subtitle: [
-                      r.artistOrAuthor,
-                      if (r.startTime != null)
-                        '${r.startTime!.format()} ${r.type.startTimeLabel}',
-                      ?r.venue,
-                    ].join('・'),
-                    onTap: () => openRecordDetail(context, r),
+        ContentSwitcher(
+          contentKey: (month.value, selected.value),
+          child:
+              listedDays.isEmpty ||
+                  (selected.value != null && !byDay.containsKey(selected.value))
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+                  child: Text(
+                    selected.value == null ? 'この月の記録はありません' : 'この日の記録はありません',
+                    style: TextStyle(fontSize: 15, color: colors.textSecondary),
                   ),
-            ],
-          ),
+                )
+              : InsetGroupedSection(
+                  hasLeading: false,
+                  children: [
+                    for (final d in listedDays)
+                      for (final r in byDay[d]!)
+                        MediaListTile(
+                          leading: _DateBadge(day: d),
+                          title: r.title,
+                          subtitle: [
+                            r.artistOrAuthor,
+                            if (r.startTime != null)
+                              '${r.startTime!.format()} ${r.type.startTimeLabel}',
+                            ?r.venue,
+                          ].join('・'),
+                          onTap: () => openRecordDetail(context, r),
+                        ),
+                  ],
+                ),
+        ),
       ],
     );
   }

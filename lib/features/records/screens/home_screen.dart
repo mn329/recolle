@@ -6,6 +6,7 @@ import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/content_switcher.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
@@ -76,51 +77,54 @@ class HomeScreen extends HookConsumerWidget {
         slivers: [
           if (readOnlyOffline)
             const SliverToBoxAdapter(child: _OfflineBanner()),
-          recordsAsync.when(
-            data: (records) {
-              final visible = records.where(
-                (r) =>
-                    r.type == selectedType.value &&
-                    (selectedFavorite == null ||
-                        r.features(selectedFavorite.name)),
-              );
-              final (:upcoming, :past) = splitByDate(visible, DateTime.now());
-              if (upcoming.isNotEmpty) {
-                return SliverMainAxisGroup(
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: NextEventCard(record: upcoming.first),
-                    ),
-                    _SectionHeader('これから・${upcoming.length}件'),
-                    SliverRecordTicketList(records: upcoming),
-                    if (past.isNotEmpty) ...[
-                      _SectionHeader('これまで・${past.length}件'),
-                      SliverRecordTicketList(records: past),
-                    ],
-                  ],
+          SliverContentSwitcher(
+            contentKey: (selectedType.value, selectedFavorite?.name),
+            sliver: recordsAsync.when(
+              data: (records) {
+                final visible = records.where(
+                  (r) =>
+                      r.type == selectedType.value &&
+                      (selectedFavorite == null ||
+                          r.features(selectedFavorite.name)),
                 );
-              }
-              return SliverRecordTicketList(
-                records: past,
-                emptyTitle: selectedFavorite == null
-                    ? '${selectedType.value.japaneseLabel}の記録はまだありません'
-                    : '${selectedFavorite.name} の記録はまだありません',
-                emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
-                emptyActionLabel: readOnlyOffline ? null : '記録を追加',
-                onEmptyAction: readOnlyOffline ? null : openEditor,
-              );
-            },
-            loading: () => const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CupertinoActivityIndicator(radius: 14)),
-            ),
-            error: (error, stack) => SliverFillRemaining(
-              hasScrollBody: false,
-              child: IosEmptyState(
-                icon: CupertinoIcons.exclamationmark_triangle,
-                message: toUserFriendlyMessage(error),
-                actionLabel: '再読み込み',
-                onAction: () => ref.invalidate(recordsProvider),
+                final (:upcoming, :past) = splitByDate(visible, DateTime.now());
+                if (upcoming.isNotEmpty) {
+                  return SliverMainAxisGroup(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: NextEventCard(record: upcoming.first),
+                      ),
+                      _SectionHeader('これから・${upcoming.length}件'),
+                      SliverRecordTicketList(records: upcoming),
+                      if (past.isNotEmpty) ...[
+                        _SectionHeader('これまで・${past.length}件'),
+                        SliverRecordTicketList(records: past),
+                      ],
+                    ],
+                  );
+                }
+                return SliverRecordTicketList(
+                  records: past,
+                  emptyTitle: selectedFavorite == null
+                      ? '${selectedType.value.japaneseLabel}の記録はまだありません'
+                      : '${selectedFavorite.name} の記録はまだありません',
+                  emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
+                  emptyActionLabel: readOnlyOffline ? null : '記録を追加',
+                  onEmptyAction: readOnlyOffline ? null : openEditor,
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CupertinoActivityIndicator(radius: 14)),
+              ),
+              error: (error, stack) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: IosEmptyState(
+                  icon: CupertinoIcons.exclamationmark_triangle,
+                  message: toUserFriendlyMessage(error),
+                  actionLabel: '再読み込み',
+                  onAction: () => ref.invalidate(recordsProvider),
+                ),
               ),
             ),
           ),

@@ -60,23 +60,23 @@ void main() {
     expect(find.text('LIVE c'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('9月5日、記録1件'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('LIVE a'), findsOneWidget);
     expect(find.text('LIVE c'), findsNothing);
 
     await tester.tap(find.bySemanticsLabel('9月6日'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('この日の記録はありません'), findsOneWidget);
 
     await tester.tap(find.text('月全体を表示'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('LIVE c'), findsOneWidget);
 
     await tester.tap(find.bySemanticsLabel('次の月'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('2026年10月'), findsOneWidget);
     await tester.tap(find.bySemanticsLabel('10月10日、記録1件'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(find.text('LIVE b'), findsOneWidget);
   });
 }

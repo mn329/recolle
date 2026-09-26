@@ -9,6 +9,7 @@ import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/core/widgets/content_switcher.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/core/widgets/section_title.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
@@ -69,11 +70,14 @@ class SearchScreen extends HookConsumerWidget {
           ),
         ),
       ),
-      body: switch (scope.value) {
-        _Scope.records => _RecordResults(query: query),
-        _Scope.artists => _ArtistResults(query: query),
-        _Scope.songs => _SongResults(query: query),
-      },
+      body: ContentSwitcher(
+        contentKey: scope.value,
+        child: switch (scope.value) {
+          _Scope.records => _RecordResults(query: query),
+          _Scope.artists => _ArtistResults(query: query),
+          _Scope.songs => _SongResults(query: query),
+        },
+      ),
     );
   }
 }
