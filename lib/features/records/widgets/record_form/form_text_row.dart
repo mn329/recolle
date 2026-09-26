@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 
 /// [FormCard] の中に置く、枠のない iOS の入力行。見出しの代わりにプレースホルダーで項目を示す。
@@ -13,6 +14,9 @@ class FormTextRow extends StatelessWidget {
     this.minLines,
     this.maxLength,
     this.textInputAction,
+    this.keyboardType,
+    this.inputFormatters,
+    this.suffix,
     this.scrollPadding = const EdgeInsets.all(20),
   });
 
@@ -24,6 +28,11 @@ class FormTextRow extends StatelessWidget {
   final int? minLines;
   final int? maxLength;
   final TextInputAction? textInputAction;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+
+  /// 入力欄の右端に添える単位など（「円」）。
+  final String? suffix;
 
   /// キーボード表示時に ensureVisible が十分スクロールするよう拡げる。
   final EdgeInsets scrollPadding;
@@ -46,6 +55,20 @@ class FormTextRow extends StatelessWidget {
           maxLines: maxLines,
           minLines: minLines ?? (multiline ? 3 : null),
           maxLength: maxLength,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          suffix: suffix == null
+              ? null
+              : Padding(
+                  padding: const EdgeInsets.only(right: 16),
+                  child: Text(
+                    suffix!,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: context.colors.textSecondary,
+                    ),
+                  ),
+                ),
           textInputAction:
               textInputAction ??
               (multiline ? TextInputAction.newline : TextInputAction.next),

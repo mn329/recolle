@@ -32,6 +32,42 @@ extension RecordTypeUi on RecordType {
   };
 }
 
+/// 開演時刻などの「時:分」。日付やタイムゾーンを持たない。
+class ClockTime implements Comparable<ClockTime> {
+  const ClockTime(this.hour, this.minute)
+    : assert(hour >= 0 && hour < 24),
+      assert(minute >= 0 && minute < 60);
+
+  final int hour;
+  final int minute;
+
+  /// DB の time 型（"18:00:00"）や "18:00" を読む。形式が違えば null。
+  static ClockTime? tryParse(String? value) {
+    if (value == null) return null;
+    final m = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(value.trim());
+    if (m == null) return null;
+    final hour = int.parse(m.group(1)!);
+    final minute = int.parse(m.group(2)!);
+    if (hour > 23 || minute > 59) return null;
+    return ClockTime(hour, minute);
+  }
+
+  /// "18:00" の形。
+  String format() =>
+      '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+
+  @override
+  int compareTo(ClockTime other) =>
+      (hour * 60 + minute) - (other.hour * 60 + other.minute);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ClockTime && other.hour == hour && other.minute == minute;
+
+  @override
+  int get hashCode => Object.hash(hour, minute);
+}
+
 class Record {
   final String id;
   final RecordType type;
@@ -43,6 +79,14 @@ class Record {
   final String? setlist;
   final String? mcMemo;
   final String? impressions;
+  final String? venue;
+  final String? seat;
+
+  /// チケット代（円）。
+  final int? ticketPrice;
+
+  /// 開演時刻。未入力なら null。
+  final ClockTime? startTime;
 
   const Record({
     required this.id,
@@ -55,9 +99,22 @@ class Record {
     this.setlist,
     this.mcMemo,
     this.impressions,
+    this.venue,
+    this.seat,
+    this.ticketPrice,
+    this.startTime,
   });
 
   String get typeLabel => type.japaneseLabel;
+
+  /// 開演日時（端末のローカル時刻）。開演時刻が未入力ならその日の始まり。
+  DateTime get startsAt => DateTime(
+    date.year,
+    date.month,
+    date.day,
+    startTime?.hour ?? 0,
+    startTime?.minute ?? 0,
+  );
 
   factory Record.fromJson(Map<String, dynamic> json) {
     return Record(
@@ -74,6 +131,10 @@ class Record {
       setlist: json['setlist'] as String?,
       mcMemo: json['mc_memo'] as String?,
       impressions: json['impressions'] as String?,
+      venue: json['venue'] as String?,
+      seat: json['seat'] as String?,
+      ticketPrice: (json['ticket_price'] as num?)?.toInt(),
+      startTime: ClockTime.tryParse(json['start_time'] as String?),
     );
   }
 
@@ -90,6 +151,10 @@ class Record {
       'setlist': setlist,
       'mc_memo': mcMemo,
       'impressions': impressions,
+      'venue': venue,
+      'seat': seat,
+      'ticket_price': ticketPrice,
+      'start_time': startTime?.format(),
     };
   }
 }

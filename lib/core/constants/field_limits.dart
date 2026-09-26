@@ -5,6 +5,11 @@ abstract final class RecordFieldLimits {
   static const int title = 300;
   static const int artistOrAuthor = 300;
   static const int ticketSource = 80;
+  static const int venue = 200;
+  static const int seat = 100;
+
+  /// チケット代（円）の上限。DB の制約と揃える。
+  static const int ticketPriceMax = 10000000;
 
   /// セットリストを改行で結合したときの合計。
   static const int setlistTotal = 10000;

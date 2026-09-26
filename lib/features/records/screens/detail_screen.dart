@@ -5,6 +5,7 @@ import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
+import 'package:recolle/core/utils/yen_format.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
@@ -182,17 +183,24 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   ),
                 ),
               ),
-              if (record.ticketSource != null)
-                GroupedRow(
-                  title: 'チケット取得元',
-                  additionalInfo: Text(
-                    record.ticketSource!,
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: context.colors.textSecondary,
-                    ),
-                  ),
+              if (record.startTime != null)
+                _InfoRow(
+                  title: '開演',
+                  value: record.startTime!.format(),
+                  monospaced: true,
                 ),
+              if (record.venue != null)
+                _InfoRow(title: '会場', value: record.venue!),
+              if (record.seat != null)
+                _InfoRow(title: '座席', value: record.seat!),
+              if (record.ticketPrice != null)
+                _InfoRow(
+                  title: 'チケット代',
+                  value: formatYen(record.ticketPrice!),
+                  monospaced: true,
+                ),
+              if (record.ticketSource != null)
+                _InfoRow(title: 'チケット取得元', value: record.ticketSource!),
             ],
           ),
           if (isLive) ...[
@@ -325,6 +333,41 @@ class _TextSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 詳細の情報行。長い会場名などは右側で省略する。
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.title,
+    required this.value,
+    this.monospaced = false,
+  });
+
+  final String title;
+  final String value;
+  final bool monospaced;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.colors.textSecondary;
+    return GroupedRow(
+      title: title,
+      additionalInfo: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.55,
+        ),
+        child: Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.right,
+          style: monospaced
+              ? AppFonts.monoStyle(fontSize: 15, color: color)
+              : TextStyle(fontSize: 15, color: color),
+        ),
+      ),
     );
   }
 }

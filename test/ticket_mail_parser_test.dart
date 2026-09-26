@@ -22,6 +22,30 @@ void main() {
     expect(info.artist, 'Mrs. GREEN APPLE');
     expect(info.date, DateTime(2026, 11, 3));
     expect(info.ticketSource, 'e+');
+    expect(info.venue, 'さいたまスーパーアリーナ');
+    expect(info.startTime?.format(), '18:00');
+  });
+
+  test('座席・料金・開演ラベルを読み取る（合計金額より券面の料金を優先）', () {
+    const mail = '''
+チケットぴあ
+公演名：ARENA TOUR
+公演日：2026年7月20日(月)
+開場/開演：16:30/17:30
+会場名：横浜アリーナ
+座席：アリーナ A5ブロック 12列 34番
+料金：S席 ¥12,800
+合計金額：14,080円
+''';
+    final info = parseTicketMail(mail, now: now);
+    expect(info.startTime?.format(), '17:30');
+    expect(info.venue, '横浜アリーナ');
+    expect(info.seat, 'アリーナ A5ブロック 12列 34番');
+    expect(info.ticketPrice, 12800);
+  });
+
+  test('「開演：18:00」だけの行からも開演を読む', () {
+    expect(parseTicketMail('開演：18:00', now: now).startTime?.format(), '18:00');
   });
 
   test('ローチケの【ラベル】形式や、値が次の行にある形式も読み取る', () {
