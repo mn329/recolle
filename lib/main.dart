@@ -6,6 +6,8 @@ import 'package:recolle/core/router/router.dart';
 import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:recolle/features/records/home_widget_sync.dart';
+import 'package:recolle/features/records/providers/records_provider.dart';
 
 /// App Store: 未登録でも使えるよう、起動直後に匿名セッションを保証する。
 /// Supabase ダッシュボードで「Anonymous sign-ins」が有効なこと。
@@ -64,16 +66,21 @@ void main() async {
   runApp(const ProviderScope(child: MyApp()));
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    ref.listen(recordsProvider, (_, next) {
+      final records = next.asData?.value;
+      if (records != null) syncHomeWidget(records);
+    });
+
     // 2. MaterialApp.router: GoRouterを使ったナビゲーション機能付きのアプリ定義
     return MaterialApp.router(
       title: 'recolle',
       debugShowCheckedModeBanner: false,
-      // 3. テーマ設定: 別ファイルの AppTheme クラスで定義したダークテーマを適用
+      // 3. テーマ設定: AppTheme で定義したライト・ダークのテーマを適用
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       // 端末の外観設定（ライト・ダーク）に合わせる
