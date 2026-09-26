@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
+import 'package:recolle/core/widgets/fullscreen_image_viewer.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/features/records/models/record.dart';
@@ -87,9 +88,8 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // 2. Large Ticket Image
+            // 2. Large Ticket Image（元の縦横比で全体を表示し、タップで拡大）
             Container(
-              height: 300,
               width: double.infinity,
               decoration: BoxDecoration(
                 boxShadow: [
@@ -102,21 +102,35 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  return DecodedNetworkImage(
-                    url: record.ticketImageUrl,
-                    logicalWidth: constraints.maxWidth,
-                    logicalHeight: constraints.maxHeight,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: AppColors.surfaceLight,
-                        child: const Icon(
-                          Icons.broken_image,
-                          size: 50,
-                          color: AppColors.textDisabled,
-                        ),
-                      );
-                    },
+                  final heroTag = 'ticket-image-${record.id}';
+                  return GestureDetector(
+                    onTap: record.ticketImageUrl.isEmpty
+                        ? null
+                        : () => FullscreenImageViewer.open(
+                              context,
+                              url: record.ticketImageUrl,
+                              heroTag: heroTag,
+                            ),
+                    child: Hero(
+                      tag: heroTag,
+                      child: DecodedNetworkImage(
+                        url: record.ticketImageUrl,
+                        logicalWidth: constraints.maxWidth,
+                        fit: BoxFit.fitWidth,
+                        placeholderHeight: 300,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 300,
+                            color: AppColors.surfaceLight,
+                            child: const Icon(
+                              Icons.broken_image,
+                              size: 50,
+                              color: AppColors.textDisabled,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   );
                 },
               ),

@@ -405,11 +405,17 @@ class CreateRecordScreen extends HookConsumerWidget {
                 child: selectedImage.value != null
                     ? ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Image.file(
-                          selectedImage.value!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final dpr = MediaQuery.devicePixelRatioOf(context);
+                            return Image.file(
+                              selectedImage.value!,
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              height: double.infinity,
+                              cacheHeight: (constraints.maxHeight * dpr).round(),
+                            );
+                          },
                         ),
                       )
                     : (recordToEdit?.ticketImageUrl.isNotEmpty ?? false)
@@ -421,7 +427,7 @@ class CreateRecordScreen extends HookConsumerWidget {
                               url: recordToEdit!.ticketImageUrl,
                               logicalWidth: constraints.maxWidth,
                               logicalHeight: constraints.maxHeight,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               errorBuilder: (context, error, stackTrace) {
                                 return Column(
                                   mainAxisAlignment: MainAxisAlignment.center,
