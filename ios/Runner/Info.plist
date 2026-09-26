@@ -41,6 +41,8 @@
 		<string>チケット画像を撮影するためにカメラにアクセスします。</string>
 		<key>NSPhotoLibraryUsageDescription</key>
 		<string>チケット画像を登録するために写真ライブラリにアクセスします。</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>作成したシェア画像を写真に保存します。</string>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UILaunchStoryboardName</key>

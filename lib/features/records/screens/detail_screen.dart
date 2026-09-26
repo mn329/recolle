@@ -15,6 +15,7 @@ import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/record_actions.dart';
+import 'package:recolle/features/records/share/share_record_sheet.dart';
 
 enum _MoreAction { delete }
 
@@ -89,6 +90,11 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
       backgroundColor: context.colors.background,
       appBar: AppBar(
         actions: [
+          NavBarIconButton(
+            icon: CupertinoIcons.square_arrow_up,
+            semanticLabel: 'シェア画像を作る',
+            onPressed: () => showShareRecordSheet(context, record),
+          ),
           NavBarTextButton(
             label: '編集',
             onPressed: readOnlyOffline ? null : _edit,
