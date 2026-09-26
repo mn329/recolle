@@ -6,6 +6,7 @@ import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/models/record.dart';
@@ -52,10 +53,32 @@ class _FakeSetlistFmClient extends SetlistFmClient {
     DateTime? date,
     String? tourName,
     bool includeEmpty = false,
-  }) async {
     int pages = 1,
+  }) async {
     if (tourName != null) tourQueries.add(tourName);
     return byTourName[tourName] ?? const [];
+  }
+}
+
+class _FakeItunesClient extends ItunesClient {
+  _FakeItunesClient(this.japaneseTitles, {this.fails = false});
+
+  final Map<String, String> japaneseTitles;
+  final bool fails;
+  final requests = <({String artist, List<String> titles})>[];
+
+  @override
+  Future<Map<String, String>> localizeSongTitles({
+    required String artistName,
+    required List<String> titles,
+    int maxIndividualLookups = 6,
+  }) async {
+    requests.add((artist: artistName, titles: titles));
+    if (fails) throw Exception('network down');
+    return {
+      for (final t in titles)
+        if (japaneseTitles[t] case final ja?) t: ja,
+    };
   }
 }
 
@@ -67,6 +90,7 @@ Future<void> _pumpScreen(
   List<Record> records = const [],
   ConcertDiscoveryClient? discoveryClient,
   SetlistFmClient? setlistFmClient,
+  ItunesClient? itunesClient,
 }) async {
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
@@ -79,6 +103,9 @@ Future<void> _pumpScreen(
         recentSetlistsProvider.overrideWith((ref, _) async => setlists),
         setlistFmClientProvider.overrideWithValue(
           setlistFmClient ?? _FakeSetlistFmClient(const {}),
+        ),
+        itunesClientProvider.overrideWithValue(
+          itunesClient ?? _FakeItunesClient(const {}),
         ),
         recordsProvider.overrideWith((ref) => Stream.value(records)),
         concertDiscoveryClientProvider.overrideWithValue(
@@ -298,7 +325,7 @@ void main() {
       venueName: '東京ドーム',
       cityName: 'Tokyo',
       tourName: 'ARENA TOUR 2025',
-      songs: const ['飛行艇', '白日'],
+      songs: const ['Hikoutei', '白日'],
     );
 
     List<String?> fieldTexts(WidgetTester tester) => [
@@ -308,8 +335,11 @@ void main() {
         field.controller?.text,
     ];
 
-    testWidgets('setlist.fm の公演を選ぶと公演名・日付・会場・セトリを入れる', (tester) async {
-      await _pumpScreen(tester, setlists: [setlist]);
+    testWidgets('setlist.fm の公演を選ぶと公演名・日付・会場・日本語化したセトリを入れる', (
+      tester,
+    ) async {
+      final itunes = _FakeItunesClient(const {'Hikoutei': '飛行艇'});
+      await _pumpScreen(tester, setlists: [setlist], itunesClient: itunes);
       await tester.enterText(_field('アーティスト'), 'King Gnu');
       await tester.showKeyboard(_field('公演名・ツアー名'));
       await tester.pumpAndSettle();
@@ -319,9 +349,29 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(fieldTexts(tester), containsAll(['ARENA TOUR 2025', '東京ドーム']));
+      expect(fieldTexts(tester), containsAll(['飛行艇', '白日']));
+      expect(fieldTexts(tester), isNot(contains('Hikoutei')));
+      expect(itunes.requests.single.artist, 'King Gnu');
+      expect(itunes.requests.single.titles, ['Hikoutei', '白日']);
       expect(find.text('2曲'), findsOneWidget);
       expect(find.text('2025年05月03日 (土)'), findsOneWidget);
       expect(find.text('これからの公演を探す'), findsNothing);
+    });
+
+    testWidgets('曲名の日本語化に失敗しても、元の表記でセトリを入れる', (tester) async {
+      await _pumpScreen(
+        tester,
+        setlists: [setlist],
+        itunesClient: _FakeItunesClient(const {}, fails: true),
+      );
+      await tester.enterText(_field('アーティスト'), 'King Gnu');
+      await tester.showKeyboard(_field('公演名・ツアー名'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('ARENA TOUR 2025'));
+      await tester.pumpAndSettle();
+
+      expect(fieldTexts(tester), containsAll(['Hikoutei', '白日']));
+      expect(find.text('2曲'), findsOneWidget);
     });
 
     testWidgets('入力した文字で候補を絞り込み、一致があれば setlist.fm は呼ばない', (tester) async {

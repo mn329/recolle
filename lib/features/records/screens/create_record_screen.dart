@@ -14,6 +14,8 @@ import 'package:recolle/core/utils/ticket_image_compress.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/music/data/setlist_localization.dart';
+import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -172,7 +174,7 @@ class CreateRecordScreen extends HookConsumerWidget {
       artistFocusNode.unfocus();
     }
 
-    void pickConcert(ConcertCandidate c) {
+    Future<void> pickConcert(ConcertCandidate c) async {
       final title = c.title.length > RecordFieldLimits.title
           ? c.title.substring(0, RecordFieldLimits.title)
           : c.title;
@@ -203,16 +205,26 @@ class CreateRecordScreen extends HookConsumerWidget {
           startTime.value = t;
           filled.add(kind.startTimeLabel);
         }
-        // 入力済みのセトリは上書きしない
-        final setlistFits =
-            c.songs.join('\n').length <= RecordFieldLimits.setlistTotal;
-        if (songs.value.isEmpty && c.songs.isNotEmpty && setlistFits) {
-          songs.value = c.songs;
+      }
+      HapticFeedback.selectionClick();
+
+      // 入力済みのセトリは上書きしない
+      if (c.fillsDetails && c.songs.isNotEmpty && songs.value.isEmpty) {
+        final localized = await localizeSetlistSongs(
+          ref.read(itunesClientProvider),
+          artistName: artistController.text.trim(),
+          songs: c.songs,
+        );
+        if (!context.mounted) return;
+        // 日本語化を待つ間に手で入れた曲も上書きしない
+        final fits =
+            localized.join('\n').length <= RecordFieldLimits.setlistTotal;
+        if (songs.value.isEmpty && fits) {
+          songs.value = localized;
           setlistEditorGeneration.value++;
           filled.add('セットリスト');
         }
       }
-      HapticFeedback.selectionClick();
       AppToast.show(
         '${filled.join('・')}を入力しました',
         icon: CupertinoIcons.checkmark_circle_fill,

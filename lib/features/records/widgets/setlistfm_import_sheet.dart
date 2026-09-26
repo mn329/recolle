@@ -5,6 +5,7 @@ import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/music/data/setlist_localization.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 
@@ -46,16 +47,11 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
     Future<void> pick(SetlistSummary setlist) async {
       if (isLocalizing.value) return;
       isLocalizing.value = true;
-      var songs = setlist.songs;
-      try {
-        final japanese = await ref
-            .read(itunesClientProvider)
-            .localizeSongTitles(artistName: artistName, titles: songs);
-        songs = [for (final s in songs) japanese[s] ?? s];
-      } catch (e) {
-        // 日本語化は補助機能なので、失敗しても元の表記で取り込む
-        debugPrint('Song title localization failed: $e');
-      }
+      final songs = await localizeSetlistSongs(
+        ref.read(itunesClientProvider),
+        artistName: artistName,
+        songs: setlist.songs,
+      );
       if (context.mounted) Navigator.of(context).pop(songs);
     }
 
