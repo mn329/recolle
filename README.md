@@ -68,6 +68,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **アカウント**: 匿名ユーザーが Apple / Google で続けると同じユーザーに連携され、記録はそのまま引き継がれます。そのアカウントが既に別ユーザーに連携済みなら、確認のうえそちらへ切り替えます。
 - **ルーティング**: セッションが無い間は `/account` へ誘導します。旧パスの `/login`・`/forgot-password`・`/reset-password` も `/account` へリダイレクトされます。
 - **iOS ライクな UI**: `ThemeData.platform` を iOS に固定し、全画面でスワイプで戻る・バウンススクロールを有効にしています。タブバーは画面下に浮かぶリキッドグラス（[liquid_glass_renderer](https://pub.dev/packages/liquid_glass_renderer)、`components/liquid_glass_tab_bar.dart`。シェーダーは Impeller 専用のため、それ以外の環境では軽量なすりガラスで代用）、各タブはラージタイトル（`LargeTitleScrollView`）、確認は `CupertinoAlertDialog` / アクションシート（`core/widgets/confirm_dialog.dart`）、通知はスナックバーではなく上部のトースト（`AppToast`）です。共通部品は `core/widgets/ios_widgets.dart` にまとめています。記録の作成・編集は iOS のカード型シート（`showCupertinoSheet`）で開き、入力途中のデータを守るためスワイプでは閉じません。
+- **ライト / ダーク**: 端末の外観設定（`ThemeMode.system`）に合わせて自動で切り替わります。アクセントはシャンパンゴールドです。色は `core/theme/app_colors.dart` の `AppPalette`（`ThemeExtension`）にライト・ダークの 2 セットで定義し、ウィジェットからは `context.colors.accent` のように参照します。色を直接書かず、足りない色はパレットに追加してください。
 - **タブ UI**: 下部ナビで **ホーム（`/`）**・**お気に入り（`/favorites`）**・**アカウント（`/account`）** の 3 タブ。認証状態は Supabase の `onAuthStateChange` と再認証中フラグを GoRouter の `refreshListenable` に渡し、セッション変化でルートを再評価します。
 
 - **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。

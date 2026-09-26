@@ -47,7 +47,7 @@ class StreamingLinks extends StatelessWidget {
             const SizedBox(width: 8),
           Expanded(
             child: CupertinoButton(
-              color: AppColors.card,
+              color: context.colors.card,
               borderRadius: BorderRadius.circular(12),
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
               minimumSize: Size.zero,
@@ -61,9 +61,9 @@ class StreamingLinks extends StatelessWidget {
                     service.label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
-                      color: AppColors.textPrimary,
+                      color: context.colors.textPrimary,
                     ),
                   ),
                 ],

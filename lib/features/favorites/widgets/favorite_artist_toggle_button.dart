@@ -81,10 +81,10 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
             key: ValueKey(existing != null),
             size: 24,
             color: existing != null
-                ? AppColors.gold
+                ? context.colors.accent
                 : enabled
-                ? AppColors.textSecondary
-                : AppColors.textDisabled,
+                ? context.colors.textSecondary
+                : context.colors.textDisabled,
           ),
         ),
       ),

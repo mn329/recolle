@@ -89,18 +89,18 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
     );
 
     return CupertinoPageScaffold(
-      backgroundColor: AppColors.surfaceLight,
+      backgroundColor: context.colors.card,
       navigationBar: CupertinoNavigationBar(
         automaticallyImplyLeading: false,
-        backgroundColor: AppColors.surfaceLight,
+        backgroundColor: context.colors.card,
         border: null,
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: const Size(0, 44),
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             'キャンセル',
-            style: TextStyle(color: AppColors.gold, fontSize: 17),
+            style: TextStyle(color: context.colors.accent, fontSize: 17),
           ),
         ),
         middle: const Text('アーティストを追加'),
@@ -117,12 +117,12 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                 controller: controller,
                 autofocus: true,
                 placeholder: 'アーティスト名で検索',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
+                style: TextStyle(
+                  color: context.colors.textPrimary,
                   fontSize: 16,
                 ),
-                itemColor: AppColors.textSecondary,
-                backgroundColor: const Color(0x3D767680),
+                itemColor: context.colors.textSecondary,
+                backgroundColor: context.colors.fill,
                 onSubmitted: (value) {
                   if (value.trim().isNotEmpty) addArtist(value);
                 },
@@ -162,8 +162,8 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                       ),
                       child: Text(
                         toUserFriendlyMessage(suggestions.error),
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.colors.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -185,13 +185,13 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                           addArtist(artist.name, itunesArtistId: artist.id),
                     ),
                   if (trimmedQuery.isEmpty)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
                         'Apple Music のカタログから候補を表示します',
                         textAlign: TextAlign.center,
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: context.colors.textSecondary,
                           fontSize: 13,
                         ),
                       ),
@@ -229,16 +229,21 @@ class _SuggestionRow extends StatelessWidget {
       leading: Icon(
         icon,
         size: 22,
-        color: enabled ? AppColors.gold : AppColors.textDisabled,
+        color: enabled ? context.colors.accent : context.colors.textDisabled,
       ),
       title: title,
-      titleColor: enabled ? AppColors.textPrimary : AppColors.textDisabled,
+      titleColor: enabled
+          ? context.colors.textPrimary
+          : context.colors.textDisabled,
       subtitle: subtitle,
       showChevron: false,
       additionalInfo: alreadyAdded
-          ? const Text(
+          ? Text(
               '登録済み',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(
+                color: context.colors.textSecondary,
+                fontSize: 13,
+              ),
             )
           : null,
       onTap: enabled ? onTap : null,

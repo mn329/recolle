@@ -95,14 +95,15 @@ class _LiquidGlassTabBarState extends State<LiquidGlassTabBar> {
   Widget build(BuildContext context) {
     final dragging = _dragX != null;
     final highlightedIndex = _hoveredIndex ?? widget.currentIndex;
+    final colors = context.colors;
 
     return LiquidGlassLayer(
       // リキッドグラスのシェーダーは Impeller 専用。それ以外は軽量なすりガラスで代用する
       fake: !ImageFilter.isShaderFilterSupported,
-      settings: const LiquidGlassSettings(
+      settings: LiquidGlassSettings(
         thickness: 18,
         blur: 12,
-        glassColor: Color(0x33303036),
+        glassColor: colors.glassTint,
         lightIntensity: 0.9,
         ambientStrength: 0.4,
         refractiveIndex: 1.25,
@@ -116,7 +117,7 @@ class _LiquidGlassTabBarState extends State<LiquidGlassTabBar> {
             borderRadius: LiquidGlassTabBar.height / 2,
           ),
           child: GlassGlow(
-            glowColor: const Color(0x33FFFFFF),
+            glowColor: colors.glassGlow,
             child: SizedBox(
               height: LiquidGlassTabBar.height,
               child: LayoutBuilder(
@@ -163,8 +164,8 @@ class _LiquidGlassTabBarState extends State<LiquidGlassTabBar> {
                               duration: const Duration(milliseconds: 220),
                               decoration: BoxDecoration(
                                 color: dragging
-                                    ? const Color(0x3DFFFFFF)
-                                    : const Color(0x24FFFFFF),
+                                    ? colors.tabIndicatorActive
+                                    : colors.tabIndicator,
                                 borderRadius: const BorderRadius.all(
                                   Radius.circular(
                                     LiquidGlassTabBar.height / 2 - _inset,
@@ -217,7 +218,7 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? AppColors.gold : const Color(0xFFD1D1D6);
+    final color = selected ? context.colors.accent : context.colors.tabInactive;
     return Semantics(
       button: true,
       selected: selected,

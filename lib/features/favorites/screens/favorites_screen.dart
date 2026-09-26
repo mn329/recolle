@@ -108,7 +108,7 @@ class FavoritesScreen extends ConsumerWidget {
             ),
           ),
           if (!readOnlyOffline)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Text(
@@ -116,7 +116,7 @@ class FavoritesScreen extends ConsumerWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: context.colors.textSecondary,
                   ),
                 ),
               ),
@@ -143,7 +143,7 @@ class FavoritesScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: 'お気に入り',
         trailing: NavBarIconButton(
@@ -197,7 +197,7 @@ class _FavoriteArtistCardState extends State<_FavoriteArtistCard> {
         curve: Curves.easeOut,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: AppColors.card,
+            color: context.colors.card,
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -226,10 +226,10 @@ class _FavoriteArtistCardState extends State<_FavoriteArtistCard> {
                       artist.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
+                        color: context.colors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 3),
@@ -237,7 +237,7 @@ class _FavoriteArtistCardState extends State<_FavoriteArtistCard> {
                       '${widget.recordCount}件の記録',
                       style: AppFonts.monoStyle(
                         fontSize: 11,
-                        color: AppColors.gold.withValues(alpha: 0.9),
+                        color: context.colors.accent.withValues(alpha: 0.9),
                       ),
                     ),
                   ],

@@ -60,18 +60,18 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
     }
 
     return CupertinoPageScaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       navigationBar: CupertinoNavigationBar(
         automaticallyImplyLeading: false,
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         border: null,
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
           minimumSize: const Size(0, 44),
           onPressed: () => Navigator.pop(context),
-          child: const Text(
+          child: Text(
             'キャンセル',
-            style: TextStyle(color: AppColors.gold, fontSize: 17),
+            style: TextStyle(color: context.colors.accent, fontSize: 17),
           ),
         ),
         middle: const Text('setlist.fm から取り込む'),
@@ -87,15 +87,15 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
                 filterByDate.value
                     ? '$artistName・${_formatDate(date)} の公演'
                     : '$artistName の最近の公演',
-                style: const TextStyle(
-                  color: AppColors.textSecondary,
+                style: TextStyle(
+                  color: context.colors.textSecondary,
                   fontSize: 13,
                 ),
               ),
             ),
             Expanded(
               child: isLocalizing.value
-                  ? const Center(
+                  ? Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -103,7 +103,9 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
                           SizedBox(height: 16),
                           Text(
                             '曲名を日本語表記に変換しています…',
-                            style: TextStyle(color: AppColors.textSecondary),
+                            style: TextStyle(
+                              color: context.colors.textSecondary,
+                            ),
                           ),
                         ],
                       ),
@@ -167,12 +169,15 @@ class _SetlistFmImportSheet extends HookConsumerWidget {
       separatorBuilder: (_, _) => const SizedBox(height: 10),
       itemBuilder: (context, index) {
         if (index == setlists.length) {
-          return const Padding(
+          return Padding(
             padding: EdgeInsets.only(top: 4),
             child: Text(
               'Setlist data from setlist.fm',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textDisabled, fontSize: 11),
+              style: TextStyle(
+                color: context.colors.textDisabled,
+                fontSize: 11,
+              ),
             ),
           );
         }
@@ -209,7 +214,7 @@ class _SetlistCard extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: AppColors.card,
+          color: context.colors.card,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
@@ -225,15 +230,15 @@ class _SetlistCard extends StatelessWidget {
                           _SetlistFmImportSheet._formatDate(date),
                           style: AppFonts.monoStyle(
                             fontSize: 13,
-                            color: AppColors.gold,
+                            color: context.colors.accent,
                           ),
                         ),
                       const Spacer(),
                       Text(
                         '${setlist.songs.length}曲',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
-                          color: AppColors.textSecondary,
+                          color: context.colors.textSecondary,
                         ),
                       ),
                     ],
@@ -242,9 +247,9 @@ class _SetlistCard extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       place,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 15,
-                        color: AppColors.textPrimary,
+                        color: context.colors.textPrimary,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -252,8 +257,8 @@ class _SetlistCard extends StatelessWidget {
                   if (setlist.tourName != null)
                     Text(
                       setlist.tourName!,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: context.colors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -262,8 +267,8 @@ class _SetlistCard extends StatelessWidget {
                     '$preview${setlist.songs.length > 3 ? ' ほか' : ''}',
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
+                    style: TextStyle(
+                      color: context.colors.textSecondary,
                       fontSize: 12,
                     ),
                   ),
@@ -271,10 +276,10 @@ class _SetlistCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            const Icon(
+            Icon(
               CupertinoIcons.chevron_forward,
               size: 16,
-              color: AppColors.textDisabled,
+              color: context.colors.textDisabled,
             ),
           ],
         ),

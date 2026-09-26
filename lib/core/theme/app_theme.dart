@@ -6,67 +6,75 @@ import 'app_fonts.dart';
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData get darkTheme {
+  static ThemeData get lightTheme => _build(AppPalette.light);
+
+  static ThemeData get darkTheme => _build(AppPalette.dark);
+
+  static ThemeData _build(AppPalette c) {
+    final baseScheme = c.isDark
+        ? const ColorScheme.dark()
+        : const ColorScheme.light();
     return ThemeData(
-      brightness: Brightness.dark,
+      brightness: c.brightness,
       // Android 端末でも iOS と同じ遷移（右からスライド・左端スワイプで戻る）、
       // バウンススクロール、戻るボタンの山括弧、中央寄せタイトルにそろえる
       platform: TargetPlatform.iOS,
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.gold,
-        onPrimary: Colors.black,
-        surface: AppColors.background,
-        onSurface: AppColors.textPrimary,
-        error: AppColors.destructive,
+      extensions: [c],
+      scaffoldBackgroundColor: c.background,
+      colorScheme: baseScheme.copyWith(
+        primary: c.accent,
+        onPrimary: c.onAccent,
+        surface: c.background,
+        onSurface: c.textPrimary,
+        error: c.destructive,
       ),
       useMaterial3: true,
       fontFamily: AppFonts.body,
       // iOS はタップで波紋を出さず、押している間だけ淡くハイライトする
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
-      highlightColor: Colors.white.withValues(alpha: 0.06),
-      dividerColor: AppColors.separator,
-      cupertinoOverrideTheme: const CupertinoThemeData(
-        brightness: Brightness.dark,
-        primaryColor: AppColors.gold,
-        scaffoldBackgroundColor: AppColors.background,
-        barBackgroundColor: AppColors.bar,
+      highlightColor: c.textPrimary.withValues(alpha: 0.06),
+      dividerColor: c.separator,
+      cupertinoOverrideTheme: CupertinoThemeData(
+        brightness: c.brightness,
+        primaryColor: c.accent,
+        scaffoldBackgroundColor: c.background,
+        barBackgroundColor: c.bar,
         textTheme: CupertinoTextThemeData(
-          primaryColor: AppColors.gold,
+          primaryColor: c.accent,
           textStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 16,
-            color: AppColors.textPrimary,
+            color: c.textPrimary,
             letterSpacing: -0.2,
           ),
           navTitleTextStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 17,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: c.textPrimary,
           ),
           navLargeTitleTextStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 32,
             fontWeight: FontWeight.w700,
-            color: AppColors.textPrimary,
+            color: c.textPrimary,
             letterSpacing: -0.4,
           ),
           actionTextStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 17,
-            color: AppColors.gold,
+            color: c.accent,
           ),
           dateTimePickerTextStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 21,
-            color: AppColors.textPrimary,
+            color: c.textPrimary,
           ),
           pickerTextStyle: TextStyle(
             fontFamily: AppFonts.body,
             fontSize: 21,
-            color: AppColors.textPrimary,
+            color: c.textPrimary,
           ),
         ),
       ),
@@ -74,27 +82,27 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: WidgetStateColor.resolveWith(
           (states) => states.contains(WidgetState.scrolledUnder)
-              ? AppColors.card
-              : AppColors.background,
+              ? c.card
+              : c.background,
         ),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
-        titleTextStyle: const TextStyle(
+        titleTextStyle: TextStyle(
           fontFamily: AppFonts.body,
-          color: AppColors.textPrimary,
+          color: c.textPrimary,
           fontSize: 17,
           fontWeight: FontWeight.w700,
         ),
-        iconTheme: const IconThemeData(color: AppColors.gold),
-        actionsIconTheme: const IconThemeData(color: AppColors.gold),
+        iconTheme: IconThemeData(color: c.accent),
+        actionsIconTheme: IconThemeData(color: c.accent),
       ),
 
-      textSelectionTheme: const TextSelectionThemeData(
-        cursorColor: AppColors.gold,
-        selectionColor: Color(0x55D4AF37),
-        selectionHandleColor: AppColors.gold,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: c.accent,
+        selectionColor: c.accent.withValues(alpha: 0.33),
+        selectionHandleColor: c.accent,
       ),
     );
   }

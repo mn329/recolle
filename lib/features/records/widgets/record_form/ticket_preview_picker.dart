@@ -102,10 +102,10 @@ class TicketPreviewPicker extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        const Text(
+        Text(
           'ホームにはこのチケットで並びます。タップで券面の写真を設定できます。',
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: TextStyle(fontSize: 12, color: context.colors.textSecondary),
         ),
       ],
     );
@@ -131,11 +131,10 @@ class TicketPreviewPicker extends StatelessWidget {
             url: url,
             logicalWidth: constraints.maxWidth,
             logicalHeight: constraints.maxHeight,
-            errorBuilder: (_, _, _) =>
-                const ColoredBox(color: AppColors.surfaceLight),
+            errorBuilder: (_, _, _) => ColoredBox(color: context.colors.card),
           );
         }
-        return const ColoredBox(color: AppColors.surfaceLight);
+        return ColoredBox(color: context.colors.card);
       },
     );
   }
@@ -150,9 +149,8 @@ class _ImageBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0x99000000),
+        color: context.colors.accent,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.gold.withValues(alpha: 0.5)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
@@ -162,14 +160,14 @@ class _ImageBadge extends StatelessWidget {
             Icon(
               hasImage ? CupertinoIcons.photo : CupertinoIcons.camera_fill,
               size: 13,
-              color: AppColors.gold,
+              color: context.colors.onAccent,
             ),
             const SizedBox(width: 4),
             Text(
               hasImage ? '変更' : '券面を追加',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 11,
-                color: AppColors.gold,
+                color: context.colors.onAccent,
                 fontWeight: FontWeight.w600,
               ),
             ),

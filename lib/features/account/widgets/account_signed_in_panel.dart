@@ -77,23 +77,23 @@ class AccountSignedInPanel extends StatelessWidget {
                   ? GroupedRow(
                       leading: SocialProviderIcon(provider: p),
                       title: p.label,
-                      additionalInfo: const Text(
+                      additionalInfo: Text(
                         '連携済み',
                         style: TextStyle(
-                          color: AppColors.textSecondary,
+                          color: context.colors.textSecondary,
                           fontSize: 15,
                         ),
                       ),
-                      trailing: const Icon(
+                      trailing: Icon(
                         CupertinoIcons.checkmark_alt,
                         size: 20,
-                        color: AppColors.gold,
+                        color: context.colors.accent,
                       ),
                     )
                   : GroupedRow(
                       leading: SocialProviderIcon(provider: p),
                       title: '${p.label} と連携',
-                      titleColor: AppColors.gold,
+                      titleColor: context.colors.accent,
                       showChevron: false,
                       onTap: isBusy ? null : () => onLink(p),
                     ),
@@ -105,7 +105,7 @@ class AccountSignedInPanel extends StatelessWidget {
           children: [
             GroupedRow(
               title: 'ログアウト',
-              titleColor: AppColors.gold,
+              titleColor: context.colors.accent,
               showChevron: false,
               onTap: isBusy ? null : () => _confirmSignOut(context),
             ),
@@ -118,7 +118,7 @@ class AccountSignedInPanel extends StatelessWidget {
           children: [
             GroupedRow(
               title: 'アカウントを完全に削除',
-              titleColor: AppColors.destructive,
+              titleColor: context.colors.destructive,
               showChevron: false,
               onTap: isBusy ? null : () => _confirmDelete(context),
             ),

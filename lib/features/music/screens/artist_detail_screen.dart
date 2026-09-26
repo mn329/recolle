@@ -74,7 +74,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
           );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         actions: [
           FavoriteArtistToggleButton(artistName: artistName),
@@ -107,14 +107,14 @@ class ArtistDetailScreen extends HookConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: AppFonts.displayStyle(
                             fontSize: 30,
-                            color: AppColors.textPrimary,
+                            color: context.colors.textPrimary,
                           ),
                         ),
                         if (artist?.genre != null)
                           Text(
                             artist!.genre!,
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
+                            style: TextStyle(
+                              color: context.colors.textSecondary,
                               fontSize: 12,
                             ),
                           ),
@@ -123,7 +123,7 @@ class ArtistDetailScreen extends HookConsumerWidget {
                           '${records.length} RECORDS',
                           style: AppFonts.monoStyle(
                             fontSize: 13,
-                            color: AppColors.gold,
+                            color: context.colors.accent,
                           ),
                         ),
                       ],
@@ -221,8 +221,8 @@ class _PopularSongsSliver extends ConsumerWidget {
                       onPressed: onToggleShowAll,
                       child: Text(
                         showAll ? '閉じる' : 'もっと見る',
-                        style: const TextStyle(
-                          color: AppColors.gold,
+                        style: TextStyle(
+                          color: context.colors.accent,
                           fontSize: 15,
                           fontWeight: FontWeight.w600,
                         ),
@@ -259,7 +259,10 @@ class _SongTile extends StatelessWidget {
             width: 26,
             child: Text(
               rank.toString().padLeft(2, '0'),
-              style: AppFonts.monoStyle(fontSize: 12, color: AppColors.gold),
+              style: AppFonts.monoStyle(
+                fontSize: 12,
+                color: context.colors.accent,
+              ),
             ),
           ),
           ArtistAvatar(
@@ -278,10 +281,10 @@ class _SongTile extends StatelessWidget {
           if (heardLive)
             Semantics(
               label: 'ライブで聴いた曲',
-              child: const Icon(
+              child: Icon(
                 CupertinoIcons.tickets_fill,
                 size: 18,
-                color: AppColors.gold,
+                color: context.colors.accent,
               ),
             ),
           const SizedBox(width: 8),
@@ -314,7 +317,7 @@ class _SliverError extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: Text(
           toUserFriendlyMessage(error),
-          style: const TextStyle(color: AppColors.textSecondary),
+          style: TextStyle(color: context.colors.textSecondary),
         ),
       ),
     );

@@ -20,7 +20,7 @@ class AccountProfileCard extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: context.colors.card,
         borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
@@ -31,20 +31,23 @@ class AccountProfileCard extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: isRegistered
-                  ? const LinearGradient(
+                  ? LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [AppColors.goldLight, AppColors.gold],
+                      colors: [
+                        context.colors.accentLight,
+                        context.colors.accent,
+                      ],
                     )
                   : null,
-              color: isRegistered ? null : AppColors.cardPressed,
+              color: isRegistered ? null : context.colors.cardPressed,
             ),
             child: Icon(
               CupertinoIcons.person_fill,
               size: 32,
               color: isRegistered
-                  ? CupertinoColors.black
-                  : AppColors.textSecondary,
+                  ? context.colors.onAccent
+                  : context.colors.textSecondary,
             ),
           ),
           const SizedBox(width: 14),
@@ -56,10 +59,10 @@ class AccountProfileCard extends StatelessWidget {
                   title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.colors.textPrimary,
                   ),
                 ),
                 if (subtitle.isNotEmpty) ...[
@@ -68,9 +71,9 @@ class AccountProfileCard extends StatelessWidget {
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 13,
-                      color: AppColors.textSecondary,
+                      color: context.colors.textSecondary,
                     ),
                   ),
                 ],

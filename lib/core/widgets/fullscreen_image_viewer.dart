@@ -108,10 +108,10 @@ class _FullscreenImageViewerState extends State<FullscreenImageViewer>
                     child: Image.network(
                       widget.url,
                       fit: BoxFit.contain,
-                      errorBuilder: (_, _, _) => const Icon(
+                      errorBuilder: (_, _, _) => Icon(
                         CupertinoIcons.photo,
                         size: 50,
-                        color: AppColors.textDisabled,
+                        color: context.colors.textDisabled,
                       ),
                     ),
                   ),

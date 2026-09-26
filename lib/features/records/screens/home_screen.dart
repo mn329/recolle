@@ -42,14 +42,14 @@ class HomeScreen extends HookConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: LargeTitleScrollView(
         title: 'RECOLLE',
         largeTitle: Text(
           'RECOLLE',
           style: AppFonts.displayStyle(
             fontSize: 38,
-            color: AppColors.gold,
+            color: context.colors.accent,
             letterSpacing: 3,
           ),
         ),
@@ -57,7 +57,7 @@ class HomeScreen extends HookConsumerWidget {
           'RECOLLE',
           style: AppFonts.displayStyle(
             fontSize: 22,
-            color: AppColors.gold,
+            color: context.colors.accent,
             letterSpacing: 2,
           ),
         ),
@@ -213,17 +213,24 @@ class _OfflineBanner extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: context.colors.card,
         borderRadius: BorderRadius.circular(12),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(CupertinoIcons.wifi_slash, size: 18, color: AppColors.gold),
+          Icon(
+            CupertinoIcons.wifi_slash,
+            size: 18,
+            color: context.colors.accent,
+          ),
           SizedBox(width: 10),
           Expanded(
             child: Text(
               'オフラインです。キャッシュがある記録は閲覧のみできます。',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: TextStyle(
+                color: context.colors.textSecondary,
+                fontSize: 13,
+              ),
             ),
           ),
         ],

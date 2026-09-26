@@ -156,6 +156,7 @@ class _ToastCapsule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icon = data.icon;
+    final colors = context.colors;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
@@ -164,11 +165,11 @@ class _ToastCapsule extends StatelessWidget {
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(22),
-              boxShadow: const [
+              boxShadow: [
                 BoxShadow(
-                  color: Color(0x66000000),
+                  color: colors.shadow,
                   blurRadius: 24,
-                  offset: Offset(0, 8),
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
@@ -179,9 +180,9 @@ class _ToastCapsule extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
                   decoration: BoxDecoration(
-                    color: const Color(0xD92C2C2E),
+                    color: colors.toastBackground,
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: const Color(0x14FFFFFF)),
+                    border: Border.all(color: colors.toastBorder),
                   ),
                   child: Row(
                     children: [
@@ -190,8 +191,8 @@ class _ToastCapsule extends StatelessWidget {
                           icon,
                           size: 20,
                           color: data.isError
-                              ? AppColors.destructive
-                              : AppColors.gold,
+                              ? context.colors.destructive
+                              : context.colors.accent,
                         ),
                         const SizedBox(width: 10),
                       ],
@@ -200,9 +201,9 @@ class _ToastCapsule extends StatelessWidget {
                           data.message,
                           maxLines: 3,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontFamily: AppFonts.body,
-                            color: AppColors.textPrimary,
+                            color: context.colors.textPrimary,
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
                             height: 1.35,
@@ -217,8 +218,8 @@ class _ToastCapsule extends StatelessWidget {
                           onPressed: onAction,
                           child: Text(
                             data.actionLabel!,
-                            style: const TextStyle(
-                              color: AppColors.gold,
+                            style: TextStyle(
+                              color: context.colors.accent,
                               fontSize: 14,
                               fontWeight: FontWeight.w700,
                             ),

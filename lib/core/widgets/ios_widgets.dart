@@ -30,8 +30,8 @@ class NavBarIconButton extends StatelessWidget {
           icon,
           size: 24,
           color: onPressed == null
-              ? AppColors.textDisabled
-              : color ?? AppColors.gold,
+              ? context.colors.textDisabled
+              : color ?? context.colors.accent,
         ),
       ),
     );
@@ -64,7 +64,9 @@ class NavBarTextButton extends StatelessWidget {
         style: TextStyle(
           fontSize: 17,
           fontWeight: isBold ? FontWeight.w700 : FontWeight.w400,
-          color: onPressed == null ? AppColors.textDisabled : AppColors.gold,
+          color: onPressed == null
+              ? context.colors.textDisabled
+              : context.colors.accent,
         ),
       ),
     );
@@ -102,7 +104,7 @@ class LargeTitleScrollView extends StatelessWidget {
     final refresh = onRefresh;
     // CupertinoPageScaffold の下に置くと、スクロール前はナビバーの背景と区切り線が消える
     return CupertinoPageScaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       child: _buildScrollView(context, refresh),
     );
   }
@@ -121,9 +123,9 @@ class LargeTitleScrollView extends StatelessWidget {
           middle: middle ?? Text(title),
           alwaysShowMiddle: false,
           trailing: trailing,
-          backgroundColor: AppColors.bar,
-          border: const Border(
-            bottom: BorderSide(color: AppColors.separator, width: 0.33),
+          backgroundColor: context.colors.bar,
+          border: Border(
+            bottom: BorderSide(color: context.colors.separator, width: 0.33),
           ),
           // 遷移先は Material の AppBar なので、ナビバー同士の Hero 遷移は使わない
           transitionBetweenRoutes: false,
@@ -167,12 +169,12 @@ class InsetGroupedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoListSection.insetGrouped(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       decoration: BoxDecoration(
-        color: AppColors.card,
+        color: context.colors.card,
         borderRadius: BorderRadius.circular(12),
       ),
-      separatorColor: AppColors.separator,
+      separatorColor: context.colors.separator,
       hasLeading: hasLeading,
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       // 見出しと注記は、設定アプリと同じく行の文字の左端に揃える
@@ -182,9 +184,9 @@ class InsetGroupedSection extends StatelessWidget {
               padding: const EdgeInsets.only(left: 12),
               child: Text(
                 header!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -195,10 +197,10 @@ class InsetGroupedSection extends StatelessWidget {
               padding: const EdgeInsets.only(left: 12),
               child: Text(
                 footer!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   height: 1.45,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                 ),
               ),
             ),
@@ -236,7 +238,7 @@ class GroupedRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final chevron = showChevron ?? (onTap != null && trailing == null);
     return CupertinoListTile(
-      backgroundColorActivated: AppColors.cardPressed,
+      backgroundColorActivated: context.colors.cardPressed,
       padding: const EdgeInsetsDirectional.fromSTEB(16, 11, 14, 11),
       leading: leading,
       leadingSize: 30,
@@ -244,24 +246,24 @@ class GroupedRow extends StatelessWidget {
         title,
         style: TextStyle(
           fontSize: 16,
-          color: titleColor ?? AppColors.textPrimary,
+          color: titleColor ?? context.colors.textPrimary,
         ),
       ),
       subtitle: subtitle == null
           ? null
           : Text(
               subtitle!,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: AppColors.textSecondary,
+                color: context.colors.textSecondary,
               ),
             ),
       additionalInfo: additionalInfo,
       trailing: chevron
-          ? const Icon(
+          ? Icon(
               CupertinoIcons.chevron_forward,
               size: 17,
-              color: Color(0x4DEBEBF5),
+              color: context.colors.textDisabled,
             )
           : trailing,
       onTap: onTap,
@@ -309,7 +311,7 @@ class _MediaListTileState extends State<MediaListTile> {
       onTapCancel: () => _setPressed(false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 120),
-        color: _pressed ? AppColors.cardPressed : const Color(0x00000000),
+        color: _pressed ? context.colors.cardPressed : const Color(0x00000000),
         padding: const EdgeInsets.fromLTRB(20, 8, 12, 8),
         child: Row(
           children: [
@@ -325,9 +327,9 @@ class _MediaListTileState extends State<MediaListTile> {
                     widget.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 16,
-                      color: AppColors.textPrimary,
+                      color: context.colors.textPrimary,
                     ),
                   ),
                   if (widget.subtitle != null) ...[
@@ -336,9 +338,9 @@ class _MediaListTileState extends State<MediaListTile> {
                       widget.subtitle!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
-                        color: AppColors.textSecondary,
+                        color: context.colors.textSecondary,
                       ),
                     ),
                   ],
@@ -355,16 +357,18 @@ class _MediaListTileState extends State<MediaListTile> {
 
 /// 設定アプリ風の、色付き角丸四角に白抜きアイコン。
 class RowIcon extends StatelessWidget {
-  const RowIcon(this.icon, {super.key, this.color = AppColors.gold});
+  const RowIcon(this.icon, {super.key, this.color});
 
   final IconData icon;
-  final Color color;
+
+  /// 省略時はアクセントカラー。
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
+        color: color ?? context.colors.accent,
         borderRadius: BorderRadius.circular(7),
       ),
       child: SizedBox.square(
@@ -394,8 +398,8 @@ class IosSegmentedControl<T extends Object> extends StatelessWidget {
       width: double.infinity,
       child: CupertinoSlidingSegmentedControl<T>(
         groupValue: value,
-        backgroundColor: const Color(0x3D767680),
-        thumbColor: const Color(0xFF636366),
+        backgroundColor: context.colors.fill,
+        thumbColor: context.colors.segmentThumb,
         padding: const EdgeInsets.all(2),
         onValueChanged: (next) {
           if (next == null || next == value) return;
@@ -411,7 +415,7 @@ class IosSegmentedControl<T extends Object> extends StatelessWidget {
                 maxLines: 1,
                 style: TextStyle(
                   fontSize: 13,
-                  color: AppColors.textPrimary,
+                  color: context.colors.textPrimary,
                   fontWeight: key == value ? FontWeight.w700 : FontWeight.w500,
                 ),
               ),
@@ -450,7 +454,7 @@ class CapsuleChip extends StatelessWidget {
         duration: const Duration(milliseconds: 160),
         padding: EdgeInsets.fromLTRB(avatar == null ? 14 : 4, 4, 14, 4),
         decoration: BoxDecoration(
-          color: selected ? AppColors.gold : const Color(0x3D767680),
+          color: selected ? context.colors.accent : context.colors.fill,
           borderRadius: BorderRadius.circular(100),
         ),
         child: Row(
@@ -461,7 +465,9 @@ class CapsuleChip extends StatelessWidget {
               label,
               style: TextStyle(
                 fontSize: 13,
-                color: selected ? CupertinoColors.black : AppColors.textPrimary,
+                color: selected
+                    ? context.colors.onAccent
+                    : context.colors.textPrimary,
                 fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
               ),
             ),
@@ -497,16 +503,16 @@ class IosEmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 56, color: AppColors.textDisabled),
+            Icon(icon, size: 56, color: context.colors.textDisabled),
             const SizedBox(height: 16),
             if (title != null) ...[
               Text(
                 title!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
-                  color: AppColors.textPrimary,
+                  color: context.colors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
@@ -514,21 +520,21 @@ class IosEmptyState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
                 height: 1.55,
-                color: AppColors.textSecondary,
+                color: context.colors.textSecondary,
               ),
             ),
             if (actionLabel != null) ...[
               const SizedBox(height: 20),
               CupertinoButton.tinted(
-                color: AppColors.gold,
+                color: context.colors.accent,
                 onPressed: onAction,
                 child: Text(
                   actionLabel!,
-                  style: const TextStyle(
-                    color: AppColors.gold,
+                  style: TextStyle(
+                    color: context.colors.accent,
                     fontWeight: FontWeight.w700,
                     fontSize: 15,
                   ),

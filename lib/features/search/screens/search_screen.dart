@@ -35,7 +35,7 @@ class SearchScreen extends HookConsumerWidget {
     final scope = useState(_Scope.records);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         automaticallyImplyLeading: false,
         titleSpacing: 16,
@@ -43,9 +43,9 @@ class SearchScreen extends HookConsumerWidget {
           controller: controller,
           autofocus: true,
           placeholder: 'ライブ・アーティスト・曲',
-          style: const TextStyle(color: AppColors.textPrimary, fontSize: 16),
-          itemColor: AppColors.textSecondary,
-          backgroundColor: const Color(0x3D767680),
+          style: TextStyle(color: context.colors.textPrimary, fontSize: 16),
+          itemColor: context.colors.textSecondary,
+          backgroundColor: context.colors.fill,
         ),
         actions: [
           NavBarTextButton(
@@ -122,15 +122,15 @@ class _RecordResults extends ConsumerWidget {
                     children: [
                       TextSpan(
                         text: '${hit.matchLabel}  ',
-                        style: const TextStyle(color: AppColors.gold),
+                        style: TextStyle(color: context.colors.accent),
                       ),
                       TextSpan(text: hit.snippet),
                     ],
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    color: context.colors.textSecondary,
                     fontSize: 12,
                   ),
                 ),
@@ -210,10 +210,10 @@ class _ArtistResults extends HookConsumerWidget {
               subtitle: '${a.recordCount}件の記録',
               trailing: a.favorite == null
                   ? null
-                  : const Icon(
+                  : Icon(
                       CupertinoIcons.star_fill,
                       size: 18,
-                      color: AppColors.gold,
+                      color: context.colors.accent,
                     ),
               onTap: () => open(
                 a.name,
@@ -296,16 +296,16 @@ class _SongResults extends HookConsumerWidget {
           ),
           for (final s in local)
             MediaListTile(
-              leading: const SizedBox.square(
+              leading: SizedBox.square(
                 dimension: 46,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: AppColors.card,
+                    color: context.colors.card,
                     borderRadius: BorderRadius.all(Radius.circular(6)),
                   ),
                   child: Icon(
                     CupertinoIcons.tickets_fill,
-                    color: AppColors.gold,
+                    color: context.colors.accent,
                     size: 22,
                   ),
                 ),
@@ -319,7 +319,7 @@ class _SongResults extends HookConsumerWidget {
                   '×${s.timesHeard}',
                   style: AppFonts.monoStyle(
                     fontSize: 13,
-                    color: AppColors.gold,
+                    color: context.colors.accent,
                   ),
                 ),
               ),
@@ -380,7 +380,7 @@ class _RemoteState extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
       child: Text(
         message,
-        style: const TextStyle(color: AppColors.textSecondary, fontSize: 14),
+        style: TextStyle(color: context.colors.textSecondary, fontSize: 14),
       ),
     );
   }

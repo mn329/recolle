@@ -57,8 +57,10 @@ class PreviewPlayButton extends ConsumerWidget {
                   child: CircularProgressIndicator(
                     value: player.progressOf(url),
                     strokeWidth: size * 0.06,
-                    color: AppColors.gold,
-                    backgroundColor: AppColors.gold.withValues(alpha: 0.18),
+                    color: context.colors.accent,
+                    backgroundColor: context.colors.accent.withValues(
+                      alpha: 0.18,
+                    ),
                   ),
                 ),
                 Icon(
@@ -66,7 +68,7 @@ class PreviewPlayButton extends ConsumerWidget {
                       ? CupertinoIcons.pause_fill
                       : CupertinoIcons.play_fill,
                   size: size * 0.45,
-                  color: AppColors.gold,
+                  color: context.colors.accent,
                 ),
               ],
             ],

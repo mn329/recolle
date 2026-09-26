@@ -271,7 +271,7 @@ class CreateRecordScreen extends HookConsumerWidget {
         if (discard == true && context.mounted) Navigator.of(context).pop();
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: context.colors.background,
         appBar: AppBar(
           automaticallyImplyLeading: false,
           leadingWidth: 124,
@@ -355,9 +355,9 @@ class CreateRecordScreen extends HookConsumerWidget {
                       ? null
                       : Text(
                           '${songs.value.length}曲',
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 13,
-                            color: AppColors.textSecondary,
+                            color: context.colors.textSecondary,
                           ),
                         ),
                   wrapInCard: false,

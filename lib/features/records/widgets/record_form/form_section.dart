@@ -37,10 +37,10 @@ class FormSection extends StatelessWidget {
                   Expanded(
                     child: Text(
                       header!,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
+                        color: context.colors.textSecondary,
                       ),
                     ),
                   ),
@@ -54,10 +54,10 @@ class FormSection extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
               child: Text(
                 footer!,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 12,
                   height: 1.45,
-                  color: AppColors.textSecondary,
+                  color: context.colors.textSecondary,
                 ),
               ),
             ),
@@ -78,7 +78,7 @@ class FormCard extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: ColoredBox(
-        color: AppColors.card,
+        color: context.colors.card,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -103,9 +103,9 @@ class FormDivider extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(left: indent),
-      child: const SizedBox(
+      child: SizedBox(
         height: 0.33,
-        child: ColoredBox(color: AppColors.separator),
+        child: ColoredBox(color: context.colors.separator),
       ),
     );
   }

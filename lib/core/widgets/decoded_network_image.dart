@@ -30,7 +30,7 @@ class DecodedNetworkImage extends StatelessWidget {
     if (url.isEmpty) {
       return SizedBox(
         height: boxHeight ?? placeholderHeight,
-        child: const ColoredBox(color: AppColors.surfaceLight),
+        child: ColoredBox(color: context.colors.card),
       );
     }
 
@@ -59,7 +59,7 @@ class DecodedNetworkImage extends StatelessWidget {
           width: logicalWidth,
           height: boxHeight ?? placeholderHeight,
           child: ColoredBox(
-            color: AppColors.surfaceLight,
+            color: context.colors.card,
             child: Center(
               child: loadingProgress.expectedTotalBytes != null
                   ? CupertinoActivityIndicator.partiallyRevealed(

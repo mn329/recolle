@@ -144,7 +144,7 @@ class SetlistEditor extends HookWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: ColoredBox(
-            color: AppColors.card,
+            color: context.colors.card,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -155,7 +155,7 @@ class SetlistEditor extends HookWidget {
                     buildDefaultDragHandles: false,
                     padding: EdgeInsets.zero,
                     proxyDecorator: (child, _, _) => Material(
-                      color: AppColors.cardPressed,
+                      color: context.colors.cardPressed,
                       elevation: 8,
                       shadowColor: CupertinoColors.black,
                       borderRadius: BorderRadius.circular(10),
@@ -215,7 +215,7 @@ class SetlistEditor extends HookWidget {
         ),
         const SizedBox(height: 12),
         CupertinoButton.tinted(
-          color: AppColors.gold,
+          color: context.colors.accent,
           onPressed: canImport ? importFromSetlistFm : null,
           sizeStyle: CupertinoButtonSize.medium,
           child: const Row(
@@ -238,10 +238,10 @@ class SetlistEditor extends HookWidget {
                       ? '右端のつまみで並び替え、左にスワイプで削除できます。'
                       : '公演日のセットリストを取り込めます。')
                 : 'アーティストを入力すると、公演日のセットリストを取り込めます。',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.45,
-              color: AppColors.textSecondary,
+              color: context.colors.textSecondary,
             ),
           ),
         ),
@@ -277,8 +277,8 @@ class _DeleteBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const ColoredBox(
-      color: AppColors.destructive,
+    return ColoredBox(
+      color: context.colors.destructive,
       child: Align(
         alignment: Alignment.centerRight,
         child: Padding(
@@ -304,7 +304,7 @@ class _SongNumber extends StatelessWidget {
         number.toString().padLeft(2, '0'),
         style: AppFonts.monoStyle(
           fontSize: 13,
-          color: AppColors.gold.withValues(alpha: dimmed ? 0.35 : 0.8),
+          color: context.colors.accent.withValues(alpha: dimmed ? 0.35 : 0.8),
         ),
       ),
     );
@@ -312,7 +312,8 @@ class _SongNumber extends StatelessWidget {
 }
 
 /// セトリの曲名入力に共通の見た目。
-CupertinoTextField _songTextField({
+CupertinoTextField _songTextField(
+  BuildContext context, {
   required TextEditingController controller,
   required FocusNode focusNode,
   required EdgeInsets scrollPadding,
@@ -333,11 +334,11 @@ CupertinoTextField _songTextField({
     textInputAction: textInputAction,
     decoration: null,
     padding: const EdgeInsets.symmetric(vertical: 13),
-    cursorColor: AppColors.gold,
-    style: const TextStyle(fontSize: 16, color: AppColors.textPrimary),
-    placeholderStyle: const TextStyle(
+    cursorColor: context.colors.accent,
+    style: TextStyle(fontSize: 16, color: context.colors.textPrimary),
+    placeholderStyle: TextStyle(
       fontSize: 16,
-      color: AppColors.textDisabled,
+      color: context.colors.textDisabled,
     ),
     onChanged: onChanged,
     onEditingComplete: onEditingComplete,
@@ -390,7 +391,7 @@ class _SongRowState extends State<_SongRow> {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: AppColors.card,
+      color: context.colors.card,
       child: Column(
         children: [
           Padding(
@@ -400,6 +401,7 @@ class _SongRowState extends State<_SongRow> {
                 _SongNumber(widget.number),
                 Expanded(
                   child: _songTextField(
+                    context,
                     controller: _controller,
                     focusNode: _focusNode,
                     scrollPadding: widget.scrollPadding,
@@ -409,12 +411,12 @@ class _SongRowState extends State<_SongRow> {
                 ),
                 ReorderableDragStartListener(
                   index: widget.index,
-                  child: const Padding(
+                  child: Padding(
                     padding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     child: Icon(
                       CupertinoIcons.line_horizontal_3,
                       size: 20,
-                      color: AppColors.textDisabled,
+                      color: context.colors.textDisabled,
                     ),
                   ),
                 ),
@@ -455,6 +457,7 @@ class _AddSongInput extends StatelessWidget {
           _SongNumber(nextNumber, dimmed: true),
           Expanded(
             child: _songTextField(
+              context,
               controller: controller,
               focusNode: focusNode,
               scrollPadding: scrollPadding,
@@ -475,7 +478,9 @@ class _AddSongInput extends StatelessWidget {
                 child: Icon(
                   CupertinoIcons.plus_circle_fill,
                   size: 26,
-                  color: enabled ? AppColors.gold : AppColors.textDisabled,
+                  color: enabled
+                      ? context.colors.accent
+                      : context.colors.textDisabled,
                 ),
               );
             },

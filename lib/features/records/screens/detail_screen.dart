@@ -85,7 +85,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         .toList();
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(
         actions: [
           NavBarTextButton(
@@ -119,14 +119,14 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         record.typeLabel,
                         style: AppFonts.monoStyle(
                           fontSize: 12,
-                          color: AppColors.gold,
+                          color: context.colors.accent,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         record.title,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
+                        style: TextStyle(
+                          color: context.colors.textPrimary,
                           fontSize: 26,
                           fontWeight: FontWeight.w700,
                           height: 1.25,
@@ -146,18 +146,18 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                                 record.artistOrAuthor,
                                 style: TextStyle(
                                   color: isLive
-                                      ? AppColors.gold
-                                      : AppColors.textSecondary,
+                                      ? context.colors.accent
+                                      : context.colors.textSecondary,
                                   fontSize: 18,
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ),
                             if (isLive)
-                              const Icon(
+                              Icon(
                                 CupertinoIcons.chevron_forward,
                                 size: 16,
-                                color: AppColors.gold,
+                                color: context.colors.accent,
                               ),
                           ],
                         ),
@@ -178,7 +178,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   formatJapaneseDate(record.date, includeWeekday: true),
                   style: AppFonts.monoStyle(
                     fontSize: 15,
-                    color: AppColors.textSecondary,
+                    color: context.colors.textSecondary,
                   ),
                 ),
               ),
@@ -187,9 +187,9 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   title: 'チケット取得元',
                   additionalInfo: Text(
                     record.ticketSource!,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
-                      color: AppColors.textSecondary,
+                      color: context.colors.textSecondary,
                     ),
                   ),
                 ),
@@ -209,7 +209,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         (i + 1).toString().padLeft(2, '0'),
                         style: AppFonts.monoStyle(
                           fontSize: 14,
-                          color: AppColors.gold,
+                          color: context.colors.accent,
                         ),
                       ),
                       title: song,
@@ -251,11 +251,11 @@ class _TicketImage extends StatelessWidget {
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
+          boxShadow: [
             BoxShadow(
-              color: Color(0x80000000),
+              color: context.colors.shadow,
               blurRadius: 24,
-              offset: Offset(0, 12),
+              offset: const Offset(0, 12),
             ),
           ],
         ),
@@ -275,14 +275,14 @@ class _TicketImage extends StatelessWidget {
                   logicalWidth: constraints.maxWidth,
                   fit: BoxFit.fitWidth,
                   placeholderHeight: 240,
-                  errorBuilder: (context, error, stackTrace) => const SizedBox(
+                  errorBuilder: (context, error, stackTrace) => SizedBox(
                     height: 200,
                     child: ColoredBox(
-                      color: AppColors.card,
+                      color: context.colors.card,
                       child: Icon(
                         CupertinoIcons.photo,
                         size: 44,
-                        color: AppColors.textDisabled,
+                        color: context.colors.textDisabled,
                       ),
                     ),
                   ),
@@ -317,8 +317,8 @@ class _TextSection extends StatelessWidget {
             content.isEmpty ? '未入力' : content,
             style: TextStyle(
               color: content.isEmpty
-                  ? AppColors.textDisabled
-                  : AppColors.textPrimary,
+                  ? context.colors.textDisabled
+                  : context.colors.textPrimary,
               fontSize: 16,
               height: 1.6,
             ),

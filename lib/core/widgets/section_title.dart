@@ -33,16 +33,16 @@ class SectionTitle extends StatelessWidget {
                   title,
                   style: AppFonts.monoStyle(
                     fontSize: 11,
-                    color: AppColors.gold,
+                    color: context.colors.accent,
                   ).copyWith(letterSpacing: 1.6),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   japaneseLabel,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 21,
                     fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
+                    color: context.colors.textPrimary,
                     letterSpacing: -0.2,
                   ),
                 ),

@@ -37,7 +37,7 @@ class ScaffoldWithNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final mediaQuery = MediaQuery.of(context);
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       // キーボードはタブバーの上に重なればよく、枠組みごと縮める必要はない
       resizeToAvoidBottomInset: false,
       body: Stack(

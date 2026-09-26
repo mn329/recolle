@@ -50,7 +50,7 @@ class SongDetailScreen extends ConsumerWidget {
     );
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       appBar: AppBar(),
       body: CustomScrollView(
         slivers: [
@@ -64,7 +64,7 @@ class SongDetailScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.5),
+                          color: context.colors.shadow,
                           blurRadius: 24,
                           offset: const Offset(0, 12),
                         ),
@@ -77,7 +77,7 @@ class SongDetailScreen extends ConsumerWidget {
                             width: artworkSize,
                             height: artworkSize,
                             decoration: BoxDecoration(
-                              color: AppColors.card,
+                              color: context.colors.card,
                               borderRadius: BorderRadius.circular(16),
                             ),
                             child: const CupertinoActivityIndicator(radius: 14),
@@ -93,8 +93,8 @@ class SongDetailScreen extends ConsumerWidget {
                   Text(
                     title,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: context.colors.textPrimary,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                       height: 1.3,
@@ -117,7 +117,7 @@ class SongDetailScreen extends ConsumerWidget {
                       artistName,
                       style: AppFonts.displayStyle(
                         fontSize: 20,
-                        color: AppColors.gold,
+                        color: context.colors.accent,
                       ),
                     ),
                   ),
@@ -130,10 +130,10 @@ class SongDetailScreen extends ConsumerWidget {
                       size: 64,
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       '30秒試聴',
                       style: TextStyle(
-                        color: AppColors.textDisabled,
+                        color: context.colors.textDisabled,
                         fontSize: 11,
                       ),
                     ),
@@ -144,8 +144,8 @@ class SongDetailScreen extends ConsumerWidget {
                       child: Text(
                         toUserFriendlyMessage(songAsync.error),
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: context.colors.textSecondary,
                           fontSize: 12,
                         ),
                       ),
@@ -198,10 +198,7 @@ class _SongMeta extends StatelessWidget {
           Text(
             song.albumName!,
             textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
+            style: TextStyle(color: context.colors.textSecondary, fontSize: 13),
           ),
         if (parts.isNotEmpty)
           Padding(
@@ -210,7 +207,7 @@ class _SongMeta extends StatelessWidget {
               parts.join('  ·  '),
               style: AppFonts.monoStyle(
                 fontSize: 12,
-                color: AppColors.textDisabled,
+                color: context.colors.textDisabled,
               ),
             ),
           ),

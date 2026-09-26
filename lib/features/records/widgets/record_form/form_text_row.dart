@@ -55,16 +55,16 @@ class FormTextRow extends StatelessWidget {
               : OverlayVisibilityMode.editing,
           decoration: null,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          cursorColor: AppColors.gold,
-          style: const TextStyle(
+          cursorColor: context.colors.accent,
+          style: TextStyle(
             fontSize: 16,
             height: 1.4,
-            color: AppColors.textPrimary,
+            color: context.colors.textPrimary,
           ),
-          placeholderStyle: const TextStyle(
+          placeholderStyle: TextStyle(
             fontSize: 16,
             height: 1.4,
-            color: AppColors.textDisabled,
+            color: context.colors.textDisabled,
           ),
         ),
         if (limit != null)
@@ -83,8 +83,8 @@ class FormTextRow extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 11,
                     color: length >= limit
-                        ? AppColors.destructive
-                        : AppColors.textSecondary,
+                        ? context.colors.destructive
+                        : context.colors.textSecondary,
                   ),
                 ),
               );

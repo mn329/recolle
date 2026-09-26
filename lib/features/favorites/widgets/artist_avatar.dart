@@ -116,8 +116,8 @@ class _InitialFallback extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.gold.withValues(alpha: 0.35),
-            AppColors.surfaceLight,
+            context.colors.accent.withValues(alpha: 0.35),
+            context.colors.card,
           ],
         ),
       ),
@@ -126,7 +126,7 @@ class _InitialFallback extends StatelessWidget {
           initial.toUpperCase(),
           style: AppFonts.displayStyle(
             fontSize: size * 0.42,
-            color: AppColors.gold,
+            color: context.colors.accent,
           ),
         ),
       ),

@@ -168,7 +168,7 @@ class _SuggestionPanel extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         child: Text(
           toUserFriendlyMessage(snapshot.error),
-          style: const TextStyle(color: AppColors.textSecondary, fontSize: 12),
+          style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
         ),
       );
     } else if (!isEmpty) {
@@ -200,7 +200,7 @@ class _SuggestionPanel extends StatelessWidget {
               width: double.infinity,
               margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
-                color: AppColors.cardPressed,
+                color: context.colors.cardPressed,
                 borderRadius: BorderRadius.circular(12),
               ),
               clipBehavior: Clip.antiAlias,
@@ -240,7 +240,7 @@ class _SuggestionRow extends StatelessWidget {
                 Icon(
                   icon,
                   size: 20,
-                  color: AppColors.gold.withValues(alpha: 0.8),
+                  color: context.colors.accent.withValues(alpha: 0.8),
                 ),
             const SizedBox(width: 12),
             Expanded(
@@ -251,8 +251,8 @@ class _SuggestionRow extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: AppColors.textPrimary,
+                    style: TextStyle(
+                      color: context.colors.textPrimary,
                       fontSize: 14,
                     ),
                   ),
@@ -261,18 +261,18 @@ class _SuggestionRow extends StatelessWidget {
                       subtitle!,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
+                      style: TextStyle(
+                        color: context.colors.textSecondary,
                         fontSize: 11,
                       ),
                     ),
                 ],
               ),
             ),
-            const Icon(
+            Icon(
               CupertinoIcons.arrow_up_left,
               size: 16,
-              color: AppColors.textDisabled,
+              color: context.colors.textDisabled,
             ),
           ],
         ),

@@ -103,7 +103,7 @@ class AccountPage extends HookConsumerWidget {
     ];
 
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: context.colors.background,
       body: ListenableBuilder(
         listenable: AuthReauthInProgress.instance,
         builder: (context, _) => LargeTitleScrollView(
@@ -195,10 +195,10 @@ class _GuestPanel extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(32, 20, 32, 8),
           child: Text(
             showConnectionRecovery ? 'ログイン' : '記録を引き継げるようにする',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 13,
               fontWeight: FontWeight.w500,
-              color: AppColors.textSecondary,
+              color: context.colors.textSecondary,
             ),
           ),
         ),
@@ -213,10 +213,10 @@ class _GuestPanel extends StatelessWidget {
                 ? '以前 Apple / Google で登録した方は、同じアカウントで記録を復元できます。'
                 : 'いまの記録はこの端末にだけ紐づいています。Apple または Google と連携すると、機種変更しても引き継げます。'
                       '\n\n以前メールアドレスで登録した方は、同じメールアドレスの Google アカウントでログインすると記録を引き継げます。',
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               height: 1.45,
-              color: AppColors.textSecondary,
+              color: context.colors.textSecondary,
             ),
           ),
         ),

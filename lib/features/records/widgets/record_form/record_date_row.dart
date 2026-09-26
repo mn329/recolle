@@ -46,9 +46,9 @@ class _RecordDateRowState extends State<RecordDateRow> {
               Expanded(
                 child: Text(
                   widget.label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
-                    color: AppColors.textPrimary,
+                    color: context.colors.textPrimary,
                   ),
                 ),
               ),
@@ -59,7 +59,7 @@ class _RecordDateRowState extends State<RecordDateRow> {
                   vertical: 6,
                 ),
                 decoration: BoxDecoration(
-                  color: const Color(0x3D767680),
+                  color: context.colors.fill,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -70,7 +70,9 @@ class _RecordDateRowState extends State<RecordDateRow> {
                   ),
                   style: AppFonts.monoStyle(
                     fontSize: 15,
-                    color: _expanded ? AppColors.gold : AppColors.textPrimary,
+                    color: _expanded
+                        ? context.colors.accent
+                        : context.colors.textPrimary,
                   ),
                 ),
               ),

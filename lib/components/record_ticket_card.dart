@@ -77,7 +77,7 @@ class _RecordTicketCardState extends State<RecordTicketCard>
                   logicalHeight: constraints.maxHeight,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
-                    return Container(color: AppColors.surfaceLight);
+                    return Container(color: context.colors.card);
                   },
                 );
               },
@@ -105,118 +105,106 @@ class TicketFace extends StatelessWidget {
   final String artistOrAuthor;
   final DateTime date;
 
-  /// 券面いっぱいに敷く画像など。文字が読めるよう上に暗いグラデーションを重ねる。
+  /// 券面いっぱいに敷く画像など。文字が読めるよう上に紙色のグラデーションを重ねる。
   final Widget background;
-
-  static const _textShadow = [
-    Shadow(color: Colors.black, offset: Offset(1, 1), blurRadius: 2),
-  ];
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    final colors = context.colors;
+    final textShadow = [
+      Shadow(
+        color: colors.ticketTextShadow,
+        offset: const Offset(1, 1),
+        blurRadius: 2,
       ),
-      child: ClipPath(
-        clipper: TicketClipper(),
-        child: SizedBox(
-          height: height,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              const ColoredBox(color: AppColors.surface),
-              background,
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.black.withValues(alpha: 0.9),
-                      Colors.black.withValues(alpha: 0.6),
-                      Colors.black.withValues(alpha: 0.4),
-                    ],
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                  ),
+    ];
+    // 影も切り欠きのある券面の形に沿わせる（四角い影だと明るい背景で帯が浮く）
+    return PhysicalShape(
+      clipper: TicketClipper(),
+      clipBehavior: Clip.antiAlias,
+      color: colors.ticketBase,
+      shadowColor: colors.shadow,
+      elevation: 8,
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            background,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: colors.ticketScrim,
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
               ),
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 16,
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            title,
-                            style: AppFonts.displayStyle(
-                              fontSize: 24,
-                              color: AppColors.gold,
-                              shadows: _textShadow,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            artistOrAuthor,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              shadows: _textShadow,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: 1,
-                      margin: const EdgeInsets.symmetric(horizontal: 16),
-                      child: CustomPaint(
-                        painter: DashedLinePainter(
-                          color: Colors.white.withValues(alpha: 0.3),
-                        ),
-                      ),
-                    ),
-                    Column(
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         Text(
-                          date.year.toString(),
-                          style: AppFonts.monoStyle(
-                            fontSize: 12,
-                            color: AppColors.gold.withValues(alpha: 0.8),
+                          title,
+                          style: AppFonts.displayStyle(
+                            fontSize: 24,
+                            color: colors.accent,
+                            shadows: textShadow,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
+                        const SizedBox(height: 6),
                         Text(
-                          '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}',
-                          style: AppFonts.monoStyle(
-                            fontSize: 20,
-                            color: Colors.white,
+                          artistOrAuthor,
+                          style: TextStyle(
+                            color: colors.ticketText,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            shadows: textShadow,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                  ],
-                ),
+                  ),
+                  Container(
+                    width: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: CustomPaint(
+                      painter: DashedLinePainter(color: colors.ticketDivider),
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        date.year.toString(),
+                        style: AppFonts.monoStyle(
+                          fontSize: 12,
+                          color: colors.accent.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      Text(
+                        '${date.month.toString().padLeft(2, '0')}.${date.day.toString().padLeft(2, '0')}',
+                        style: AppFonts.monoStyle(
+                          fontSize: 20,
+                          color: colors.ticketText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -305,5 +293,6 @@ class DashedLinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

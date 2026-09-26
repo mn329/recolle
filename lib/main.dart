@@ -74,7 +74,10 @@ class MyApp extends StatelessWidget {
       title: 'recolle',
       debugShowCheckedModeBanner: false,
       // 3. テーマ設定: 別ファイルの AppTheme クラスで定義したダークテーマを適用
-      theme: AppTheme.darkTheme,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      // 端末の外観設定（ライト・ダーク）に合わせる
+      themeMode: ThemeMode.system,
 
       // 4. ルーティング設定: router.dart で定義した画面遷移ルールを適用
       routerConfig: router,
