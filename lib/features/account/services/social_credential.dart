@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:recolle/core/utils/user_facing_exception.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -102,9 +103,22 @@ Future<SocialCredential> obtainAppleCredential(GoTrueClient auth) async {
     if (e.code == AuthorizationErrorCode.canceled) {
       throw const SocialSignInCancelled();
     }
-    rethrow;
+    debugPrint('Sign in with Apple failed: $e');
+    throw UserFacingException(appleSignInErrorMessage(e.code));
   }
 }
+
+/// Apple のサインインが失敗したときに見せる文言。
+///
+/// unknown（エラー 1000）は、端末が Apple アカウントにサインインしていないときや、
+/// App ID で Sign In with Apple が有効になっていないときに返る。
+String appleSignInErrorMessage(AuthorizationErrorCode code) => switch (code) {
+  AuthorizationErrorCode.unknown =>
+    'Apple でサインインできませんでした。端末の「設定」で Apple アカウントにサインインしているか確認してください。',
+  AuthorizationErrorCode.notHandled || AuthorizationErrorCode.notInteractive =>
+    'Apple でのサインインを完了できませんでした。もう一度お試しください。',
+  _ => 'Apple でのサインインに失敗しました。しばらくして再度お試しください。',
+};
 
 const _googleScopes = ['email', 'profile'];
 

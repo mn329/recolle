@@ -1,6 +1,7 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recolle/features/account/services/social_credential.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
 void main() {
   test('Google のクライアント ID が空なら、Google のログインを出さない', () {
@@ -21,5 +22,15 @@ void main() {
 
     expect(isGoogleSignInConfigured, isTrue);
     expect(availableSocialProviders, contains(SocialProvider.google));
+  });
+
+  test('Apple のエラー 1000 は、端末の Apple アカウントを確かめるよう案内する', () {
+    expect(
+      appleSignInErrorMessage(AuthorizationErrorCode.unknown),
+      contains('Apple アカウントにサインインしているか'),
+    );
+    for (final code in AuthorizationErrorCode.values) {
+      expect(appleSignInErrorMessage(code), isNotEmpty);
+    }
   });
 }

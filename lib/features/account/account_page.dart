@@ -203,20 +203,6 @@ class _GuestPanel extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: SocialSignInButtons(isBusy: isBusy, onPressed: onContinueWith),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(32, 10, 32, 0),
-          child: Text(
-            showConnectionRecovery
-                ? '以前 Apple / Google で登録した方は、同じアカウントで記録を復元できます。'
-                : 'いまの記録はこの端末にだけ紐づいています。Apple または Google と連携すると、機種変更しても引き継げます。'
-                      '\n\n以前メールアドレスで登録した方は、同じメールアドレスの Google アカウントでログインすると記録を引き継げます。',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.45,
-              color: context.colors.textSecondary,
-            ),
-          ),
-        ),
       ],
     );
   }
