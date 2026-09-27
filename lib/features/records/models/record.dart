@@ -218,6 +218,12 @@ class ClockTime implements Comparable<ClockTime> {
     return ClockTime(hour, minute);
   }
 
+  /// [minutes] 分ずらした時刻。日をまたいだら 0:00〜23:59 に折り返す。
+  ClockTime shiftedBy(int minutes) {
+    final total = (hour * 60 + minute + minutes) % (24 * 60);
+    return ClockTime(total ~/ 60, total % 60);
+  }
+
   /// "18:00" の形。
   String format() =>
       '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
