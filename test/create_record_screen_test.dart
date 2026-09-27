@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/account/providers/auth_providers.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
@@ -12,6 +15,7 @@ import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/records/data/records_repository.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -112,6 +116,32 @@ class _FakeWorkSearchClient extends WorkSearchClient {
   }) async => const [];
 }
 
+class _FakeRecordsRepository implements RecordsRepository {
+  final inserted = <Map<String, dynamic>>[];
+
+  @override
+  Future<Record> insertRecord(Map<String, dynamic> row) async {
+    inserted.add(row);
+    return Record.fromJson({...row, 'id': 'new'});
+  }
+
+  @override
+  Future<Record> updateRecord(String id, Map<String, dynamic> row) async =>
+      Record.fromJson({...row, 'id': id});
+
+  @override
+  Future<String> uploadTicketImage({
+    required String userId,
+    required File file,
+  }) async => '';
+
+  @override
+  Future<void> deleteRecord(String id) async {}
+}
+
+/// 作成画面が閉じるときに返した記録。
+Record? _savedResult;
+
 Future<void> _pumpScreen(
   WidgetTester tester, {
   Record? recordToEdit,
@@ -121,7 +151,9 @@ Future<void> _pumpScreen(
   ConcertDiscoveryClient? discoveryClient,
   SetlistFmClient? setlistFmClient,
   ItunesClient? itunesClient,
+  _FakeRecordsRepository? repository,
 }) async {
+  _savedResult = null;
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -149,21 +181,37 @@ Future<void> _pumpScreen(
           discoveryClient ?? _FakeDiscoveryClient(const []),
         ),
         workSearchClientProvider.overrideWithValue(_FakeWorkSearchClient()),
+        authUserProvider.overrideWith(
+          (ref) => Stream.value(
+            User(
+              id: 'u1',
+              appMetadata: const {},
+              userMetadata: const {},
+              aud: 'authenticated',
+              createdAt: '2026-01-01T00:00:00Z',
+            ),
+          ),
+        ),
+        recordsRepositoryProvider.overrideWithValue(
+          repository ?? _FakeRecordsRepository(),
+        ),
       ],
       child: MaterialApp(
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
               child: CupertinoButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute<void>(
-                    builder: (_) => CreateRecordScreen(
-                      recordToEdit: recordToEdit,
-                      prefill: prefill,
+                onPressed: () async {
+                  _savedResult = await Navigator.push<Record>(
+                    context,
+                    CupertinoPageRoute<Record>(
+                      builder: (_) => CreateRecordScreen(
+                        recordToEdit: recordToEdit,
+                        prefill: prefill,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
                 child: const Text('open'),
               ),
             ),
@@ -196,6 +244,25 @@ void main() {
 
     expect(find.textContaining('必須です'), findsNothing);
     expect(_navButton(tester, '追加').onPressed, isNotNull);
+  });
+
+  testWidgets('追加を押すと記録を登録し、登録した記録を返して閉じる', (tester) async {
+    final repository = _FakeRecordsRepository();
+    await _pumpScreen(tester, repository: repository);
+    await tester.enterText(_field('アーティスト'), 'YOASOBI');
+    await tester.enterText(_field('公演名・ツアー名'), 'ZEPP TOUR');
+    await tester.enterText(_field('あとで読み返したいことを自由に'), 'よかった');
+    await tester.pump();
+
+    await tester.tap(find.text('追加'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('open'), findsOneWidget);
+    expect(repository.inserted.single['user_id'], 'u1');
+    expect(repository.inserted.single['impressions'], 'よかった');
+    expect(_savedResult?.id, 'new');
+    expect(_savedResult?.artistOrAuthor, 'YOASOBI');
+    expect(_savedResult?.title, 'ZEPP TOUR');
   });
 
   testWidgets('種別に応じて入力欄の呼び方とライブ専用欄が切り替わる', (tester) async {
