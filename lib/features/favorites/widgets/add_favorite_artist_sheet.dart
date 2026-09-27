@@ -30,8 +30,10 @@ Future<void> showAddFavoriteArtistSheet(
   await Navigator.push(
     context,
     CupertinoPageRoute<void>(
-      builder: (_) =>
-          ArtistDetailScreen(artistName: picked.name, itunesArtistId: picked.id),
+      builder: (_) => ArtistDetailScreen(
+        artistName: picked.name,
+        itunesArtistId: picked.id,
+      ),
     ),
   );
 }
@@ -69,7 +71,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
       try {
         String? artworkUrl;
         try {
-          artworkUrl = await itunes.findArtistArtwork(name);
+          artworkUrl = await ref.read(artistArtworkFinderProvider).find(name);
         } catch (e) {
           // アートワークは任意項目なので、取得失敗でも登録は続ける
           debugPrint('Artwork lookup failed for $name: $e');

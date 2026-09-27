@@ -1,12 +1,23 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:recolle/features/music/data/artist_artwork_finder.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/preview_player.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
+
+final deezerClientProvider = Provider<DeezerClient>((ref) => DeezerClient());
+
+final artistArtworkFinderProvider = Provider<ArtistArtworkFinder>(
+  (ref) => ArtistArtworkFinder(
+    deezer: ref.watch(deezerClientProvider),
+    itunes: ref.watch(itunesClientProvider),
+  ),
+);
 
 final setlistFmClientProvider = Provider<SetlistFmClient>(
   (ref) => SetlistFmClient(Supabase.instance.client.functions),
@@ -80,5 +91,5 @@ final artistArtworkProvider = FutureProvider.family<String?, String>((
   artistName,
 ) async {
   ref.keepAlive();
-  return ref.read(itunesClientProvider).findArtistArtwork(artistName);
+  return ref.read(artistArtworkFinderProvider).find(artistName);
 });

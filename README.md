@@ -73,6 +73,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 - **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。追加シートで候補を選ぶとアーティスト詳細を開くだけで、登録は詳細の ☆ で行います（見たいだけのアーティストが登録されないように）。ライブを記録すると、そのアーティスト（対バン・フェスはお目当ての 1 組）を自動でお気に入りに追加します。編集では新しく加わったアーティストだけを追加し、自分で外したお気に入りは戻しません（`features/favorites/auto_favorite.dart`）。
 - **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
+- **アーティスト画像**: iTunes にはアーティスト画像がないため、[Deezer API](https://developers.deezer.com/api)（キー不要）の画像を優先し、見つからなければ iTunes の代表アルバムのジャケットで代用します。以前ジャケットで保存したお気に入りは、起動時に順次アーティスト画像へ置き換えます。
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **メールから入力**: 作成画面の「メールから入力」に e+・ローチケ・チケットぴあなどの購入／当選メール本文を貼ると、公演名・出演者・公演日・取得元を入力欄に入れます（`features/records/ticket_mail_parser.dart`）。各社とも公開 API がなく、サイトの自動取得は利用規約に抵触しうるため、本文を端末内で読み取る方式にしています。
 - **setlist.fm 連携**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索し、下の「公演名の候補」に使います（下記の設定が必要）。
@@ -80,8 +81,8 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - **公演名の候補**: ライブの作成画面でアーティストを入れてから公演名欄に触れると、今後の公演（上の AI 検索。検索済みなら自動、未検索なら「これからの公演を探す」から）・setlist.fm の直近 100 公演（曲が未登録の公演も含む。ツアー名の途中までの入力でも見つかるよう多めに取る）・自分の過去の記録を候補に出し、入力した文字で絞り込みます。手元の候補に一致するものがなく 3 文字以上入力したときだけ、setlist.fm をツアー名でも検索し、直近にない公演も出します（setlist.fm の一致は単語単位で、単語の途中までの入力では見つかりません）。setlist.fm の上限（1 日 1,440 回）は API キー単位で全ユーザー共有のため、Edge Function は同じ検索の結果を 24 時間キャッシュ（`setlistfm_cache`）します。候補の一覧は高さを抑えてスクロールできます（`features/records/concert_candidates.dart`、`ConcertSuggestions`）。選ぶと公演名に加えて日付・会場・開場／開演、セトリが空なら setlist.fm のセトリも入ります（setlist.fm はローマ字で登録されがちな曲名を、iTunes で日本語の曲名に直します）。セトリを setlist.fm から入れる方法はこの候補に一本化しています。過去の記録はツアーの別日向けなので公演名だけを入れます。
 - **映画・本の題名候補**: 映画・本の作成画面で題名を入力すると候補を出し、選ぶと題名と監督／著者を入れます（`features/records/data/work_search_client.dart`、`WorkSuggestions`）。映画は [Wikidata](https://www.wikidata.org/wiki/Wikidata:Data_access)（キー不要）で、説明文が映画のものだけを残し、監督と公開年を添えます。iTunes Search API の映画検索は結果を返さなくなり、Google Books はキーなしの共有枠が 0 件のため、本は iTunes の電子書籍を使います（紙の本だけの作品は出ないことがあります）。どちらも入力はデバウンスし、結果はメモリにキャッシュします。
 - **ホームの絞り込み**: お気に入りアーティストのチップはライブのときだけ出し、映画・本などに切り替えると絞り込みも外します。
-- **公演・チケット情報**: ライブの記録には開場・開演・終演の時刻、会場・座席・チケット代を残せます（`records` の `open_time` / `start_time` / `end_time` / `venue` / `seat` / `ticket_price`）。終演が開演より前の時刻なら翌日（オールナイトなど）とみなします。
 - **対バン・フェス**: ライブは「ワンマン／対バン／フェス」を選べます（`records.event_format`）。対バン・フェスでは出演者ごとにセトリを入れ、★ でお目当てに印を付けます（`records.acts`、`[{artist, songs, is_main, day}]`、`widgets/record_form/acts_editor.dart`）。対バンは最初から 2 組分の欄を出し、セトリは出演者のカードの中で開閉します。`artist_or_author` にはお目当て（いなければ全員）を「／」でつないだ見出しを入れ、一覧やチケットに出します。フェスは最終日（`records.end_date`）を入れると複数日を 1 件にまとめ、開催日から最終日までの日数分「DAY 1・DAY 2…」に分けて出演者を入力でき（`day`）、カレンダーでは期間中の毎日に出し、最終日が終わるまで「これから」に残ります。統計・検索・アーティスト／曲の画面・お気に入りの絞り込みは出演者全員を対象にします（`Record.performances` / `features` / `songsBy`）。ワンマンと従来の記録は `artist_or_author` と `setlist` だけを使います。
+- **公演・チケット情報**: ライブの記録には開場・開演・終演の時刻、会場・座席・チケット代を残せます（`records` の `open_time` / `start_time` / `end_time` / `venue` / `seat` / `ticket_price`）。終演が開演より前の時刻なら翌日（オールナイトなど）とみなします。
 - **これから / これまで**: ホームは「これから」と「これまで」に分けます（終演時刻があれば終演した時点で、なければ日付が変わった時点で「これまで」へ）。直近の公演は、開場まで → 開演まで → 公演中・終演までと段階的に秒単位でカウントダウンし、これからの記録の詳細画面にも同じカウントダウンを出します（`features/records/record_timeline.dart`、`widgets/event_countdown.dart`）。
 - **振り返り**: 記録のカレンダーと、年別の件数・よく行ったアーティスト／会場・チケット代合計などの集計（`record_calendar.dart` / `record_stats.dart`）。対バン・フェスは出演者全員を「観た」として数え、ライブ数にワンマン・対バン・フェスの内訳と観たアーティスト数を添えます。よく聴いた曲はアーティストと曲名の組で数え、行から曲の詳細へ移れます。ホームと同じお気に入りアーティストのチップ（`favorite_artist_chips.dart`）か、ランキングの行でアーティストを選ぶと、カレンダーも集計もそのアーティストだけになり、初めて・最後に行った日、次の公演、よく聴いた曲、行ったライブの一覧を出します（よく聴いた曲は、対バン・フェスでもそのアーティストの曲だけ）。カレンダーは月の記録を下に一覧し、日を押すとその日に絞ります。集計のライブ数や月別グラフの棒を押すと、その期間に行ったライブの一覧（`live_list_screen.dart`）を開きます。
 - **記録の詳細**: 日付・開場／開演／終演を上に、会場・座席・料金・取得元を切り取り線の下に並べた券面（`widgets/ticket_stub_card.dart`）。セトリ・MCメモ・感想は入力があるものだけ出し、未入力のものは「編集」から追加できる旨をまとめて案内します。
@@ -94,7 +95,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 - `core/` … ルーター、テーマ、定数、エラーメッセージなど共通基盤
 - `features/records/` … レコード一覧・作成・詳細、モデル、プロバイダ
 - `features/favorites/` … お気に入りアーティスト（タブ・追加シート・アーティスト別一覧）
-- `features/music/` … iTunes Search API / setlist.fm のクライアント
+- `features/music/` … iTunes Search API / Deezer API / setlist.fm のクライアント
 - `features/account/` … 認証サービス、プロバイダ、アカウント UI
 - `components/` … ナビ付きスキャフォールド、チケット風カードなど
 

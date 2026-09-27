@@ -50,8 +50,8 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
           String? artworkUrl;
           try {
             artworkUrl = await ref
-                .read(itunesClientProvider)
-                .findArtistArtwork(artistName);
+                .read(artistArtworkFinderProvider)
+                .find(artistName);
           } catch (e) {
             // アートワークは任意項目なので、取得失敗でも登録は続ける
             debugPrint('Artwork lookup failed for $artistName: $e');

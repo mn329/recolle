@@ -1,9 +1,14 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/data/json_list_file_cache.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/features/account/providers/auth_providers.dart';
 import 'package:recolle/features/favorites/data/favorite_artists_repository.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
+import 'package:recolle/features/music/data/artist_artwork_finder.dart';
+import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final favoriteArtistsRepositoryProvider = Provider<FavoriteArtistsRepository>(
@@ -43,7 +48,44 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
         .read(favoriteArtistsRepositoryProvider)
         .fetchAll();
     await _saveCache(favorites);
+    unawaited(_upgradeArtworks(favorites));
     return favorites;
+  }
+
+  /// このセッションで画像の置き換えを試したお気に入り。
+  /// 見つからなかったものを再取得（接続状態の変化など）のたびに問い合わせないため。
+  final _artworkUpgradeAttempted = <String>{};
+
+  /// 画像なし・アルバムジャケットで代用しているお気に入りを、アーティスト画像に置き換える。
+  /// 以前はアルバムジャケットしか保存していなかったので、その分も順に更新していく。
+  Future<void> _upgradeArtworks(List<FavoriteArtist> favorites) async {
+    final targets = favorites.where((f) {
+      final url = f.artworkUrl;
+      return (url == null || ArtistArtworkFinder.isAlbumArtworkFallback(url)) &&
+          _artworkUpgradeAttempted.add(f.id);
+    }).toList();
+    if (targets.isEmpty) return;
+
+    final finder = ref.read(artistArtworkFinderProvider);
+    final repository = ref.read(favoriteArtistsRepositoryProvider);
+    for (final favorite in targets) {
+      final image = await finder.findArtistImage(favorite.name);
+      if (image == null || !ref.mounted) continue;
+      try {
+        await repository.updateArtwork(favorite.id, image);
+      } catch (e) {
+        debugPrint('Artwork update failed for ${favorite.name}: $e');
+        continue;
+      }
+      final current = state.asData?.value;
+      if (current == null || !ref.mounted) return;
+      final next = [
+        for (final f in current)
+          f.id == favorite.id ? f.copyWith(artworkUrl: image) : f,
+      ];
+      state = AsyncData(next);
+      await _saveCache(next);
+    }
   }
 
   Future<FavoriteArtist> add({

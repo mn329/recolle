@@ -139,8 +139,6 @@ class ItunesClient {
     ];
   }
 
-  /// アーティスト検索は日本のストアでも英字の正式名（例: "sakanaction"）を返すが、
-  /// 曲の検索結果のアーティスト名は日本語表記（"サカナクション"）になる。
   /// 日本語で探した人には日本語名で見せたいので、曲の検索から artistId ごとの日本語名を拾う。
   /// 補助的な情報なので、失敗しても英字名のまま出せるよう空で返す。
   Future<Map<int, String>> _japaneseArtistNames(String term) async {
@@ -247,6 +245,7 @@ class ItunesClient {
   }
 
   /// アーティスト画像は API にないので、代表アルバムのジャケットで代用する。
+  /// 通常は Deezer の画像を優先する `ArtistArtworkFinder` 経由で使う。
   Future<String?> findArtistArtwork(String artistName) async {
     final artist = artistName.trim();
     if (artist.isEmpty) return null;
