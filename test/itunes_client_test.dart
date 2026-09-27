@@ -335,6 +335,46 @@ void main() {
     expect(songs.last.previewUrl, isNull);
   });
 
+  test('ID が分かっていれば、アーティストと人気曲を 1 回の通信で引く', () async {
+    final requests = <Uri>[];
+    final client = ItunesClient(
+      httpClient: MockClient((req) async {
+        requests.add(req.url);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return _json({
+          'results': [
+            {
+              'wrapperType': 'artist',
+              'artistId': 1,
+              'artistName': 'YOASOBI',
+              'artistLinkUrl': 'https://music.apple.com/jp/artist/1',
+            },
+            {
+              'wrapperType': 'track',
+              'trackId': 10,
+              'trackName': 'アイドル',
+              'artistName': 'YOASOBI',
+              'artistId': 1,
+            },
+          ],
+        });
+      }),
+    );
+
+    final (artist, songs) = await (
+      client.findArtist('YOASOBI', artistId: 1),
+      client.topSongs(1),
+    ).wait;
+
+    expect(requests, hasLength(1));
+    expect(requests.single.queryParameters['entity'], 'song');
+    expect(
+      artist?.appleMusicUrl.toString(),
+      'https://music.apple.com/jp/artist/1',
+    );
+    expect(songs.single.title, 'アイドル');
+  });
+
   test('findArtist は完全一致を優先する', () async {
     final client = ItunesClient(
       httpClient: MockClient((req) async {

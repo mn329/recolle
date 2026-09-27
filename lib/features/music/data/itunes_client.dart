@@ -173,8 +173,12 @@ class ItunesClient {
   /// 名前に一致するアーティスト。[artistId] が分かっていればそれで引く。
   Future<ItunesArtist?> findArtist(String artistName, {int? artistId}) async {
     if (artistId != null) {
-      final results = await _get('/lookup', {'id': '$artistId'});
-      final found = results.map(ItunesArtist.tryParse).nonNulls.firstOrNull;
+      final results = await _artistLookup(artistId);
+      final found = results
+          .where((r) => r['wrapperType'] == 'artist')
+          .map(ItunesArtist.tryParse)
+          .nonNulls
+          .firstOrNull;
       if (found != null) return found;
     }
     final candidates = await searchArtists(artistName, limit: 5);
@@ -186,12 +190,9 @@ class ItunesClient {
   }
 
   /// アーティストの人気曲（iTunes の lookup は人気順で返す）。同名曲は 1 つにまとめる。
+  /// [limit] は [_artistLookupSongs] までで、同名曲をまとめた分だけ少なくなることがある。
   Future<List<ItunesSong>> topSongs(int artistId, {int limit = 10}) async {
-    final results = await _get('/lookup', {
-      'id': '$artistId',
-      'entity': 'song',
-      'limit': '${limit * 2}',
-    });
+    final results = await _artistLookup(artistId);
     final seenTitles = <String>{};
     return results
         .map(ItunesSong.tryParse)
@@ -200,6 +201,15 @@ class ItunesClient {
         .take(limit)
         .toList();
   }
+
+  static const _artistLookupSongs = 20;
+
+  /// 先頭にアーティスト自身、続いて人気順の曲が入る。findArtist と topSongs で URL をそろえ、
+  /// アーティスト詳細を開いたときの 2 つの問い合わせを 1 回の通信で済ませる。
+  Future<List<Map<String, dynamic>>> _artistLookup(int artistId) => _get(
+    '/lookup',
+    {'id': '$artistId', 'entity': 'song', 'limit': '$_artistLookupSongs'},
+  );
 
   /// 記録のセトリの曲名から iTunes の曲を探す。見つからなければ null。
   Future<ItunesSong?> findSong({
