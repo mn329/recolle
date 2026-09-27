@@ -94,20 +94,18 @@ void main() {
   });
 
   group('addAutoFavorites', () {
-    test('画像の取得や 1 組の追加に失敗しても、残りは追加する', () async {
-      final saved = <(String, String?)>[];
+    test('1 組の追加に失敗しても、残りは追加する', () async {
+      final saved = <String>[];
       final added = await addAutoFavorites(
         ['A', 'B', 'C'],
-        findArtwork: (name) async =>
-            name == 'A' ? throw Exception('offline') : 'https://img/$name',
-        add: (name, artworkUrl) async {
+        add: (name) async {
           if (name == 'B') throw Exception('duplicate');
-          saved.add((name, artworkUrl));
+          saved.add(name);
         },
       );
 
       expect(added, ['A', 'C']);
-      expect(saved, [('A', null), ('C', 'https://img/C')]);
+      expect(saved, ['A', 'C']);
     });
   });
 }

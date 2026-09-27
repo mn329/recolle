@@ -69,16 +69,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
       isSaving.value = true;
       final navigator = Navigator.of(context);
       try {
-        String? artworkUrl;
-        try {
-          artworkUrl = await ref.read(artistArtworkFinderProvider).find(name);
-        } catch (e) {
-          // アートワークは任意項目なので、取得失敗でも登録は続ける
-          debugPrint('Artwork lookup failed for $name: $e');
-        }
-        await ref
-            .read(favoriteArtistsProvider.notifier)
-            .add(name: name, artworkUrl: artworkUrl);
+        await ref.read(favoriteArtistsProvider.notifier).add(name: name);
         HapticFeedback.lightImpact();
         navigator.pop();
         AppToast.show(

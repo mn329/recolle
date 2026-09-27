@@ -15,9 +15,17 @@ class ArtistArtworkFinder {
   final DeezerClient _deezer;
   final ItunesClient _itunes;
 
+  /// アートワークは任意項目で、取得できなくても呼び出し側の処理は続けたいので、
+  /// 失敗しても例外は投げず null を返す。
   Future<String?> find(String artistName) async {
     final image = await findArtistImage(artistName);
-    return image ?? await _itunes.findArtistArtwork(artistName);
+    if (image != null) return image;
+    try {
+      return await _itunes.findArtistArtwork(artistName);
+    } catch (e) {
+      debugPrint('iTunes artwork lookup failed for $artistName: $e');
+      return null;
+    }
   }
 
   /// アルバムジャケットでの代用はせず、アーティスト画像だけを探す。

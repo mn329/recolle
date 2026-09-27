@@ -245,7 +245,7 @@ class ItunesClient {
   }
 
   /// アーティスト画像は API にないので、代表アルバムのジャケットで代用する。
-  /// 通常は Deezer の画像を優先する `ArtistArtworkFinder` 経由で使う。
+  /// `ArtistArtworkFinder` が、Deezer にアーティスト画像がないときの代用として使う。
   Future<String?> findArtistArtwork(String artistName) async {
     final artist = artistName.trim();
     if (artist.isEmpty) return null;

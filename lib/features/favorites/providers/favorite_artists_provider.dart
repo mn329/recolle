@@ -15,15 +15,21 @@ final favoriteArtistsRepositoryProvider = Provider<FavoriteArtistsRepository>(
   (ref) => FavoriteArtistsRepository(Supabase.instance.client),
 );
 
+final favoriteArtistsCacheProvider = Provider<JsonListFileCache>(
+  (ref) => const JsonListFileCache('favorite_artists_cache'),
+);
+
 final favoriteArtistsProvider =
     AsyncNotifierProvider<FavoriteArtistsNotifier, List<FavoriteArtist>>(
       FavoriteArtistsNotifier.new,
     );
 
 class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
-  static const _cache = JsonListFileCache('favorite_artists_cache');
-
   String? _userId;
+
+  /// このセッションで画像の置き換えを試したお気に入り。
+  /// 見つからなかったものを再取得（接続状態の変化など）のたびに問い合わせないため。
+  final _artworkUpgradeAttempted = <String>{};
 
   @override
   Future<List<FavoriteArtist>> build() async {
@@ -40,7 +46,7 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
       ),
     );
     if (!online) {
-      final rows = await _cache.load(userId);
+      final rows = await ref.read(favoriteArtistsCacheProvider).load(userId);
       return [for (final row in rows) FavoriteArtist.fromJson(row)];
     }
 
@@ -51,10 +57,6 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
     unawaited(_upgradeArtworks(favorites));
     return favorites;
   }
-
-  /// このセッションで画像の置き換えを試したお気に入り。
-  /// 見つからなかったものを再取得（接続状態の変化など）のたびに問い合わせないため。
-  final _artworkUpgradeAttempted = <String>{};
 
   /// 画像なし・アルバムジャケットで代用しているお気に入りを、アーティスト画像に置き換える。
   /// 以前はアルバムジャケットしか保存していなかったので、その分も順に更新していく。
@@ -88,11 +90,12 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
     }
   }
 
+  /// [name] をお気に入りに追加する。画像はここで探し、見つからなくても登録は続ける。
   Future<FavoriteArtist> add({
     required String name,
     int? itunesArtistId,
-    String? artworkUrl,
   }) async {
+    final artworkUrl = await ref.read(artistArtworkFinderProvider).find(name);
     final added = await ref
         .read(favoriteArtistsRepositoryProvider)
         .add(
@@ -119,6 +122,8 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
   Future<void> _saveCache(List<FavoriteArtist> favorites) async {
     final userId = _userId;
     if (userId == null) return;
-    await _cache.save(userId, [for (final f in favorites) f.toJson()]);
+    await ref.read(favoriteArtistsCacheProvider).save(userId, [
+      for (final f in favorites) f.toJson(),
+    ]);
   }
 }

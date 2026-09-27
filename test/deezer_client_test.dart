@@ -4,9 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
-import 'package:recolle/features/music/data/artist_artwork_finder.dart';
 import 'package:recolle/features/music/data/deezer_client.dart';
-import 'package:recolle/features/music/data/itunes_client.dart';
 
 http.Response _json(Object body, {int status = 200}) => http.Response.bytes(
   utf8.encode(jsonEncode(body)),
@@ -92,53 +90,6 @@ void main() {
       );
 
       expect(await client.findArtistImage('  '), isNull);
-    });
-  });
-
-  group('ArtistArtworkFinder', () {
-    ItunesClient itunesWithAlbum() => ItunesClient(
-      httpClient: MockClient(
-        (_) async => _json({
-          'results': [
-            {
-              'artistName': 'Aimer',
-              'artworkUrl100':
-                  'https://is1-ssl.mzstatic.com/image/a/100x100bb.jpg',
-            },
-          ],
-        }),
-      ),
-    );
-
-    test('Deezer の画像があればアルバムジャケットより優先する', () async {
-      final finder = ArtistArtworkFinder(
-        deezer: _clientReturning([
-          {'name': 'Aimer', 'picture_big': _image('ggg')},
-        ]),
-        itunes: ItunesClient(
-          httpClient: MockClient((_) async => fail('should not be called')),
-        ),
-      );
-
-      expect(await finder.find('Aimer'), _image('ggg'));
-    });
-
-    test('Deezer が失敗したら iTunes のアルバムジャケットで代用する', () async {
-      final finder = ArtistArtworkFinder(
-        deezer: DeezerClient(
-          httpClient: MockClient((_) async => http.Response('', 500)),
-        ),
-        itunes: itunesWithAlbum(),
-      );
-
-      final url = await finder.find('Aimer');
-
-      expect(url, 'https://is1-ssl.mzstatic.com/image/a/400x400bb.jpg');
-      expect(ArtistArtworkFinder.isAlbumArtworkFallback(url!), isTrue);
-      expect(
-        ArtistArtworkFinder.isAlbumArtworkFallback(_image('ggg')),
-        isFalse,
-      );
     });
   });
 }

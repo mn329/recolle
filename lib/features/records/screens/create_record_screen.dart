@@ -511,7 +511,6 @@ class CreateRecordScreen extends HookConsumerWidget {
           icon: CupertinoIcons.checkmark_circle_fill,
         );
         final favoritesNotifier = ref.read(favoriteArtistsProvider.notifier);
-        final itunes = ref.read(itunesClientProvider);
         final favorites = ref.read(favoriteArtistsProvider).asData?.value;
         if (context.mounted) Navigator.of(context).pop(saved);
         if (favorites != null) {
@@ -525,9 +524,7 @@ class CreateRecordScreen extends HookConsumerWidget {
             unawaited(
               addAutoFavorites(
                 names,
-                add: (name, artworkUrl) =>
-                    favoritesNotifier.add(name: name, artworkUrl: artworkUrl),
-                findArtwork: itunes.findArtistArtwork,
+                add: (name) => favoritesNotifier.add(name: name),
               ).then((added) {
                 if (added.isEmpty) return;
                 AppToast.show(

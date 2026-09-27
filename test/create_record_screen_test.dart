@@ -2,10 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
@@ -133,6 +136,13 @@ Future<void> _pumpScreen(
         ),
         itunesClientProvider.overrideWithValue(
           itunesClient ?? _FakeItunesClient(const {}),
+        ),
+        deezerClientProvider.overrideWithValue(
+          DeezerClient(
+            httpClient: MockClient(
+              (_) async => http.Response('{"data":[]}', 200),
+            ),
+          ),
         ),
         recordsProvider.overrideWith((ref) => Stream.value(records)),
         concertDiscoveryClientProvider.overrideWithValue(
