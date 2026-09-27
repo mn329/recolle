@@ -111,6 +111,7 @@ class ItunesClient {
 
   /// Dart の Map リテラルは挿入順を保つので、先頭が最も古いエントリになる。
   final _cache = <Uri, List<Map<String, dynamic>>>{};
+  final _inFlight = <Uri, Future<List<Map<String, dynamic>>>>{};
 
   Future<List<ItunesArtist>> searchArtists(String term, {int limit = 8}) async {
     final trimmed = term.trim();
@@ -269,6 +270,8 @@ class ItunesClient {
   /// 返り値は「元の曲名 → 日本語表記」。見つからなかった曲は含めない。
   /// 1. 米国ストア（ローマ字名）と日本ストアの同じ trackId を突き合わせる（2 リクエスト）
   /// 2. 残りは日本ストアで 1 曲ずつ検索する。レート制限を考えて [maxIndividualLookups] 曲まで
+  ///
+  /// どのリクエストも待ち時間を足し合わせないよう同時に投げる。
   Future<Map<String, String>> localizeSongTitles({
     required String artistName,
     required List<String> titles,
@@ -281,15 +284,10 @@ class ItunesClient {
     };
     if (artist.isEmpty || pending.isEmpty) return {};
 
-    Future<List<Map<String, dynamic>>> catalog(String country) => _search({
-      'term': artist,
-      'entity': 'song',
-      'attribute': 'artistTerm',
-      'limit': '200',
-    }, country: country);
-
-    final jpCatalog = await catalog('JP');
-    final usCatalog = await catalog('US');
+    final [jpCatalog, usCatalog] = await Future.wait([
+      _songCatalog(artist, 'JP'),
+      _songCatalog(artist, 'US'),
+    ]);
 
     final japaneseNameById = <int, String>{
       for (final r in jpCatalog)
@@ -331,33 +329,67 @@ class ItunesClient {
               !result.containsKey(t) &&
               !officialNames.contains(normalizeArtistName(t)),
         )
-        .take(maxIndividualLookups);
-    for (final title in unresolved) {
-      final List<Map<String, dynamic>> hits;
-      try {
-        hits = await _search({
-          'term': '$artist $title',
-          'entity': 'song',
-          'limit': '5',
-        });
-      } on UserFacingException catch (e) {
-        // レート制限などで続けても失敗するだけなので、ここまでの結果で打ち切る
-        debugPrint('Song title lookup stopped at "$title": ${e.userMessage}');
-        break;
-      }
-      for (final r in hits) {
-        final name = r['trackName'];
-        final songArtist = r['artistName'];
-        if (name is String &&
-            songArtist is String &&
-            artistMatches(songArtist, artist) &&
-            _containsJapanese(name)) {
-          result[title] = _baseTitle(name);
-          break;
-        }
-      }
+        .take(maxIndividualLookups)
+        .toList();
+    final found = await Future.wait([
+      for (final title in unresolved) _findJapaneseTitle(artist, title),
+    ]);
+    for (final (i, japanese) in found.indexed) {
+      if (japanese != null) result[unresolved[i]] = japanese;
     }
     return result;
+  }
+
+  /// セトリの日本語化に使うカタログを先に読んでおく。
+  /// 公演の候補を選んでからの待ち時間を減らすためで、失敗しても何もしない。
+  Future<void> prefetchSongCatalog(String artistName) async {
+    final artist = artistName.trim();
+    if (artist.isEmpty) return;
+    try {
+      await Future.wait([
+        _songCatalog(artist, 'JP'),
+        _songCatalog(artist, 'US'),
+      ]);
+    } catch (e) {
+      debugPrint('Song catalog prefetch failed for $artist: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _songCatalog(
+    String artist,
+    String country,
+  ) => _search({
+    'term': artist,
+    'entity': 'song',
+    'attribute': 'artistTerm',
+    'limit': '200',
+  }, country: country);
+
+  /// 日本ストアで [title] を検索し、日本語の曲名を返す。
+  /// 日本語化は補助なので、レート制限などで失敗したら null にして元の表記を使ってもらう。
+  Future<String?> _findJapaneseTitle(String artist, String title) async {
+    final List<Map<String, dynamic>> hits;
+    try {
+      hits = await _search({
+        'term': '$artist $title',
+        'entity': 'song',
+        'limit': '5',
+      });
+    } on UserFacingException catch (e) {
+      debugPrint('Song title lookup failed for "$title": ${e.userMessage}');
+      return null;
+    }
+    for (final r in hits) {
+      final name = r['trackName'];
+      final songArtist = r['artistName'];
+      if (name is String &&
+          songArtist is String &&
+          artistMatches(songArtist, artist) &&
+          _containsJapanese(name)) {
+        return _baseTitle(name);
+      }
+    }
+    return null;
   }
 
   static final _japaneseChars = RegExp(r'[\u3040-\u30ff\u3400-\u9fff]');
@@ -396,7 +428,20 @@ class ItunesClient {
       _cache[uri] = cached;
       return cached;
     }
+    // 先読み中の同じ検索に相乗りし、レート制限の枠を二重に使わない
+    final inFlight = _inFlight[uri];
+    if (inFlight != null) return inFlight;
 
+    final request = _fetch(uri);
+    _inFlight[uri] = request;
+    try {
+      return await request;
+    } finally {
+      _inFlight.remove(uri);
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetch(Uri uri) async {
     final http.Response res;
     try {
       res = await _http.get(uri).timeout(_timeout);

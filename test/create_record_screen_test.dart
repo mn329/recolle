@@ -74,6 +74,11 @@ class _FakeItunesClient extends ItunesClient {
   final Map<String, String> japaneseTitles;
   final bool fails;
   final requests = <({String artist, List<String> titles})>[];
+  final prefetched = <String>[];
+
+  @override
+  Future<void> prefetchSongCatalog(String artistName) async =>
+      prefetched.add(artistName);
 
   @override
   Future<Map<String, String>> localizeSongTitles({
@@ -653,6 +658,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ARENA TOUR 2025'), findsOneWidget);
+      // 選ぶ前から、曲名の日本語化に使うカタログを読み始めている
+      expect(itunes.prefetched, ['King Gnu']);
       await tester.tap(find.text('ARENA TOUR 2025'));
       await tester.pumpAndSettle();
 

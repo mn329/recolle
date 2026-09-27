@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -211,6 +212,83 @@ void main() {
       );
 
       expect(result, {'Shukufuku': '祝福'});
+    });
+
+    test('カタログも個別検索も、前のリクエストを待たずに同時に投げる', () async {
+      final started = <String>[];
+      final release = Completer<void>();
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          started.add(
+            q['attribute'] == 'artistTerm' ? q['country']! : q['term']!,
+          );
+          await release.future;
+          return _json({'results': const []});
+        }),
+      );
+
+      final result = client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Shukufuku', 'Gekijyo'],
+      );
+      await pumpEventQueue();
+      expect(started, unorderedEquals(['JP', 'US']));
+
+      release.complete();
+      await result;
+      expect(
+        started.skip(2),
+        unorderedEquals(['YOASOBI Shukufuku', 'YOASOBI Gekijyo']),
+      );
+    });
+
+    test('個別検索の一部がレート制限で失敗しても、見つかった曲は日本語にする', () async {
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          if (q['attribute'] == 'artistTerm') {
+            return _json({'results': const []});
+          }
+          if (q['term'] == 'YOASOBI Gekijyo') return http.Response('', 403);
+          return _json({
+            'results': [
+              {'trackId': 9, 'trackName': '祝福', 'artistName': 'YOASOBI'},
+            ],
+          });
+        }),
+      );
+
+      final result = await client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Gekijyo', 'Shukufuku'],
+      );
+
+      expect(result, {'Shukufuku': '祝福'});
+    });
+
+    test('先読み中のカタログには相乗りし、同じリクエストを二重に投げない', () async {
+      var catalogRequests = 0;
+      final release = Completer<void>();
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          if (req.url.queryParameters['attribute'] == 'artistTerm') {
+            catalogRequests++;
+            await release.future;
+          }
+          return _json({'results': const []});
+        }),
+      );
+
+      final prefetch = client.prefetchSongCatalog('YOASOBI');
+      final result = client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Gekijyo'],
+      );
+      release.complete();
+      await Future.wait([prefetch, result]);
+
+      expect(catalogRequests, 2);
     });
   });
 
