@@ -1,85 +1,108 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'app_colors.dart';
+import 'app_fonts.dart';
 
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData get darkTheme {
+  static ThemeData get lightTheme => _build(AppPalette.light);
+
+  static ThemeData get darkTheme => _build(AppPalette.dark);
+
+  static ThemeData _build(AppPalette c) {
+    final baseScheme = c.isDark
+        ? const ColorScheme.dark()
+        : const ColorScheme.light();
     return ThemeData(
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.gold,
-        surface: AppColors.surface,
-        onSurface: AppColors.textPrimary,
+      brightness: c.brightness,
+      // Android 端末でも iOS と同じ遷移（右からスライド・左端スワイプで戻る）、
+      // バウンススクロール、戻るボタンの山括弧、中央寄せタイトルにそろえる
+      platform: TargetPlatform.iOS,
+      extensions: [c],
+      scaffoldBackgroundColor: c.background,
+      colorScheme: baseScheme.copyWith(
+        primary: c.accent,
+        onPrimary: c.onAccent,
+        surface: c.background,
+        onSurface: c.textPrimary,
+        error: c.destructive,
       ),
       useMaterial3: true,
-      fontFamily: 'Roboto',
+      fontFamily: AppFonts.body,
+      // iOS はタップで波紋を出さず、押している間だけ淡くハイライトする
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: c.textPrimary.withValues(alpha: 0.06),
+      dividerColor: c.separator,
+      cupertinoOverrideTheme: CupertinoThemeData(
+        brightness: c.brightness,
+        primaryColor: c.accent,
+        scaffoldBackgroundColor: c.background,
+        barBackgroundColor: c.bar,
+        textTheme: CupertinoTextThemeData(
+          primaryColor: c.accent,
+          textStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 16,
+            color: c.textPrimary,
+            letterSpacing: -0.2,
+          ),
+          navTitleTextStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
+            color: c.textPrimary,
+          ),
+          navLargeTitleTextStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            color: c.textPrimary,
+            letterSpacing: -0.4,
+          ),
+          actionTextStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 17,
+            color: c.accent,
+          ),
+          dateTimePickerTextStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 21,
+            color: c.textPrimary,
+          ),
+          pickerTextStyle: TextStyle(
+            fontFamily: AppFonts.body,
+            fontSize: 21,
+            color: c.textPrimary,
+          ),
+        ),
+      ),
 
-      // AppBar: 全画面で surface 帯＋ゴールドタイトル＋控えめなアイコンに統一（個別画面は title のみ差し替え可）
-      appBarTheme: const AppBarTheme(
-        backgroundColor: AppColors.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: WidgetStateColor.resolveWith(
+          (states) => states.contains(WidgetState.scrolledUnder)
+              ? c.card
+              : c.background,
+        ),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         scrolledUnderElevation: 0,
         centerTitle: true,
         titleTextStyle: TextStyle(
-          color: AppColors.gold,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
+          fontFamily: AppFonts.body,
+          color: c.textPrimary,
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
         ),
-        iconTheme: IconThemeData(color: AppColors.textSecondary),
-        actionsIconTheme: IconThemeData(color: AppColors.textSecondary),
+        iconTheme: IconThemeData(color: c.accent),
+        actionsIconTheme: IconThemeData(color: c.accent),
       ),
 
-      // Navigation Bar Theme
-      navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: AppColors.surface,
-        indicatorColor: AppColors.gold.withValues(alpha: 0.15),
-        surfaceTintColor: Colors.transparent,
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const TextStyle(
-              color: AppColors.gold,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            );
-          }
-          return TextStyle(
-            color: AppColors.textPrimary.withValues(alpha: 0.5),
-            fontSize: 12,
-          );
-        }),
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return const IconThemeData(color: AppColors.gold);
-          }
-          return IconThemeData(color: AppColors.textPrimary.withValues(alpha: 0.5));
-        }),
-      ),
-
-      // Floating Action Button Theme
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.gold,
-        foregroundColor: Colors.black,
-      ),
-
-      // Outlined Button Theme
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.gold,
-          side: const BorderSide(color: AppColors.gold),
-          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        ),
-      ),
-
-      // SnackBar: M3 既定の floating は IME の直上に出ることがあるため fixed に統一する。
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.fixed,
-        backgroundColor: AppColors.surfaceLight,
-        contentTextStyle: const TextStyle(color: AppColors.textPrimary),
-        actionTextColor: AppColors.gold,
+      textSelectionTheme: TextSelectionThemeData(
+        cursorColor: c.accent,
+        selectionColor: c.accent.withValues(alpha: 0.33),
+        selectionHandleColor: c.accent,
       ),
     );
   }

@@ -1,165 +1,238 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:recolle/components/record_ticket_card.dart';
+import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:recolle/components/record_ticket_list.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/error_messages.dart';
+import 'package:recolle/core/widgets/content_switcher.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/favorites/models/favorite_artist.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/favorites/widgets/favorite_artist_chips.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/screens/create_record_screen.dart';
-import 'package:recolle/features/records/screens/detail_screen.dart';
+import 'package:recolle/features/records/record_actions.dart';
+import 'package:recolle/features/records/record_timeline.dart';
+import 'package:recolle/features/records/widgets/next_event_card.dart';
+import 'package:recolle/features/search/screens/search_screen.dart';
 
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends HookConsumerWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(recordsProvider);
     final readOnlyOffline = ref.watch(isOfflineReadOnlyProvider);
+    final favorites =
+        ref.watch(favoriteArtistsProvider).asData?.value ??
+        const <FavoriteArtist>[];
+    final selectedType = useState(RecordType.live);
+    final selectedArtistName = useState<String?>(null);
 
-    return DefaultTabController(
-      length: 4,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text(
-            'Recolle',
-            style: TextStyle(
-              fontFamily: 'Serif',
-              letterSpacing: 1.5,
-              fontWeight: FontWeight.bold,
-              color: AppColors.gold,
-              fontSize: 22,
-            ),
-          ),
-          actions: [
-            IconButton(
-              icon: Icon(
-                Icons.add,
-                color: readOnlyOffline
-                    ? AppColors.textDisabled
-                    : AppColors.gold,
+    // お気に入りはアーティストなので、ライブ以外では出さず絞り込みもしない
+    final isLive = selectedType.value == RecordType.live;
+    // 選択中のお気に入りが削除されたら絞り込みを解除する
+    final selectedFavorite = isLive
+        ? favorites.where((f) => f.name == selectedArtistName.value).firstOrNull
+        : null;
+
+    void openEditor() => openRecordEditor(
+      context,
+      initialType: selectedType.value,
+      initialArtist: selectedFavorite?.name,
+    );
+
+    return Scaffold(
+      backgroundColor: context.colors.background,
+      body: LargeTitleScrollView(
+        title: 'RECOLLE',
+        enTitle: 'RECOLLE',
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            NavBarIconButton(
+              icon: CupertinoIcons.search,
+              semanticLabel: '検索',
+              onPressed: () => Navigator.push(
+                context,
+                CupertinoPageRoute<void>(builder: (_) => const SearchScreen()),
               ),
-              tooltip:
-                  readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
-              onPressed: readOnlyOffline
-                  ? null
-                  : () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const CreateRecordScreen(),
-                          fullscreenDialog: true,
-                        ),
-                      );
-                    },
+            ),
+            NavBarIconButton(
+              icon: CupertinoIcons.plus_circle_fill,
+              semanticLabel: readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
+              onPressed: readOnlyOffline ? null : openEditor,
             ),
           ],
-          bottom: TabBar(
-            isScrollable: false,
-            indicatorColor: AppColors.gold,
-            labelColor: AppColors.gold,
-            unselectedLabelColor: AppColors.textSecondary,
-            tabs: RecordType.values
-                .map((t) => Tab(text: t.japaneseLabel))
-                .toList(),
-          ),
         ),
-        body: recordsAsync.when(
-          data: (records) => Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (readOnlyOffline)
-                Container(
-                  width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  color: AppColors.surfaceLight,
-                  child: const Row(
-                    children: [
-                      Icon(
-                        Icons.wifi_off_rounded,
-                        size: 18,
-                        color: AppColors.textSecondary,
+        bottom: _HomeFilterBar(
+          selectedType: selectedType.value,
+          onTypeChanged: (t) => selectedType.value = t,
+          favorites: isLive ? favorites : const [],
+          selectedArtistName: selectedFavorite?.name,
+          onArtistSelected: (name) => selectedArtistName.value = name,
+        ),
+        onRefresh: () => ref.refresh(recordsProvider.future),
+        contentKey: (selectedType.value, selectedFavorite?.name),
+        slivers: [
+          if (readOnlyOffline)
+            const SliverToBoxAdapter(child: _OfflineBanner()),
+          SliverContentSwitcher(
+            contentKey: (selectedType.value, selectedFavorite?.name),
+            sliver: recordsAsync.when(
+              data: (records) {
+                final visible = records.where(
+                  (r) =>
+                      r.type == selectedType.value &&
+                      (selectedFavorite == null ||
+                          r.features(selectedFavorite.name)),
+                );
+                final (:upcoming, :past) = splitByDate(visible, DateTime.now());
+                if (upcoming.isNotEmpty) {
+                  return SliverMainAxisGroup(
+                    slivers: [
+                      SliverToBoxAdapter(
+                        child: NextEventCard(record: upcoming.first),
                       ),
-                      SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          'オフラインです。キャッシュがある記録は閲覧のみできます。',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
+                      _SectionHeader('これから・${upcoming.length}件'),
+                      SliverRecordTicketList(records: upcoming),
+                      if (past.isNotEmpty) ...[
+                        _SectionHeader('これまで・${past.length}件'),
+                        SliverRecordTicketList(records: past),
+                      ],
                     ],
-                  ),
-                ),
-              Expanded(
-                child: TabBarView(
-                  children: [
-                    _buildRecordList(context, records, RecordType.live),
-                    _buildRecordList(context, records, RecordType.movie),
-                    _buildRecordList(context, records, RecordType.book),
-                    _buildRecordList(context, records, RecordType.other),
-                  ],
-                ),
+                  );
+                }
+                return SliverRecordTicketList(
+                  records: past,
+                  emptyTitle: selectedFavorite == null
+                      ? '${selectedType.value.japaneseLabel}の記録はまだありません'
+                      : '${selectedFavorite.name} の記録はまだありません',
+                  emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
+                  emptyActionLabel: readOnlyOffline ? null : '記録を追加',
+                  onEmptyAction: readOnlyOffline ? null : openEditor,
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CupertinoActivityIndicator(radius: 14)),
               ),
-            ],
-          ),
-          loading: () => const Center(
-            child: CircularProgressIndicator(color: AppColors.gold),
-          ),
-          error: (error, stack) => Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                toUserFriendlyMessage(error),
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.textSecondary),
+              error: (error, stack) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: IosEmptyState(
+                  icon: CupertinoIcons.exclamationmark_triangle,
+                  message: toUserFriendlyMessage(error),
+                  actionLabel: '再読み込み',
+                  onAction: () => ref.invalidate(recordsProvider),
+                ),
               ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildRecordList(
-    BuildContext context,
-    List<Record> allRecords,
-    RecordType type,
-  ) {
-    final filteredRecords = allRecords
-        .where((record) => record.type == type)
-        .toList();
+/// ナビゲーションバーの下に固定する、種別の切り替えとお気に入りの絞り込み。
+class _HomeFilterBar extends StatelessWidget implements PreferredSizeWidget {
+  const _HomeFilterBar({
+    required this.selectedType,
+    required this.onTypeChanged,
+    required this.favorites,
+    required this.selectedArtistName,
+    required this.onArtistSelected,
+  });
 
-    if (filteredRecords.isEmpty) {
-      return const Center(
-        child: Text(
-          '記録がありません',
-          style: TextStyle(color: AppColors.textDisabled),
+  final RecordType selectedType;
+  final ValueChanged<RecordType> onTypeChanged;
+  final List<FavoriteArtist> favorites;
+  final String? selectedArtistName;
+  final ValueChanged<String?> onArtistSelected;
+
+  static const double _segmentHeight = 48;
+
+  @override
+  Size get preferredSize => Size.fromHeight(
+    _segmentHeight + (favorites.isEmpty ? 0 : FavoriteArtistChips.height),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          height: _segmentHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: IosSegmentedControl<RecordType>(
+              value: selectedType,
+              segments: {for (final t in RecordType.values) t: t.japaneseLabel},
+              onChanged: onTypeChanged,
+            ),
+          ),
         ),
-      );
-    }
+        if (favorites.isNotEmpty)
+          FavoriteArtistChips(
+            favorites: favorites,
+            selectedName: selectedArtistName,
+            onSelected: onArtistSelected,
+          ),
+      ],
+    );
+  }
+}
 
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      itemCount: filteredRecords.length,
-      itemBuilder: (context, index) {
-        final record = filteredRecords[index];
-        return RecordTicketCard(
-          record: record,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => DetailScreen(record: record),
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(28, 20, 28, 0),
+        child: Text(label, style: sectionHeaderTextStyle(context)),
+      ),
+    );
+  }
+}
+
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: context.colors.card,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            CupertinoIcons.wifi_slash,
+            size: 18,
+            color: context.colors.accent,
+          ),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'オフラインです。キャッシュがある記録は閲覧のみできます。',
+              style: TextStyle(
+                color: context.colors.textSecondary,
+                fontSize: 13,
               ),
-            );
-          },
-        );
-      },
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

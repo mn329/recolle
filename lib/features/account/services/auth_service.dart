@@ -1,21 +1,29 @@
 import 'package:recolle/core/auth/auth_reauth_in_progress.dart';
-import 'package:recolle/core/auth/password_recovery_nav_flag.dart';
-import 'package:recolle/core/auth/recovery_session.dart';
-import 'package:recolle/core/constants/auth_redirect.dart';
+import 'package:recolle/features/account/services/social_credential.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+/// Apple / Google アカウントが既に別ユーザーに連携済みで、今のユーザーへは連携できない。
+///
+/// [switchToExistingAccount] に [credential] を渡すとそのアカウントへ切り替えられる。
+class SocialIdentityInUseException implements Exception {
+  const SocialIdentityInUseException(this.credential);
+
+  final SocialCredential credential;
+}
 
 class AuthService {
   AuthService(this._client);
 
   final SupabaseClient _client;
 
-  /// メール内リンクの戻り先（Supabase ダッシュボードの Redirect URLs に同じURLを登録する）。
-  String get _emailAuthRedirectTo => supabaseEmailRedirectToForPlatform();
-
   User? get currentUser => _client.auth.currentUser;
   Session? get currentSession => _client.auth.currentSession;
 
-  String? get currentEmail => _client.auth.currentUser?.email;
+  /// 連携済みの Apple / Google を表す provider 名。
+  Set<String> get linkedProviders => {
+    for (final identity in currentUser?.identities ?? const <UserIdentity>[])
+      identity.provider,
+  };
 
   Future<void> updateDisplayName(String displayName) async {
     final trimmed = displayName.trim();
@@ -24,148 +32,51 @@ class AuthService {
     );
   }
 
-  Future<void> signInWithPassword({
-    required String email,
-    required String password,
-  }) async {
-    await _client.auth.signInWithPassword(
-      email: email.trim(),
-      password: password,
-    );
-  }
-
-  Future<void> signUpWithPassword({
-    required String email,
-    required String password,
-  }) async {
-    await signUpWithEmailPassword(email: email, password: password);
-  }
-
-  /// メールでの新規登録。
+  /// Apple / Google で続行する。
   ///
-  /// - セッションなし: `signUp`
-  /// - 匿名: メール＋パスワードへの昇格（`updateUser`）
-  /// - メール未確認の非匿名: 入力ミス後の訂正として `updateUser` で再送
+  /// - セッションあり（匿名・連携済みユーザー）: 今のユーザーに連携し、記録を引き継ぐ
+  /// - セッションなし: そのアカウントでサインイン（未登録なら新規作成）
   ///
-  /// メール確認済みのユーザーが呼ぶと [AuthException] を投げます。
-  Future<void> signUpWithEmailPassword({
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    final user = currentUser;
-    final trimmedEmail = email.trim();
-
-    final data = <String, dynamic>{};
-    final trimmedName = displayName?.trim();
-    if (trimmedName != null && trimmedName.isNotEmpty) {
-      data['display_name'] = trimmedName;
-    }
-
-    if (user == null) {
-      await _client.auth.signUp(
-        email: trimmedEmail,
-        password: password,
-        emailRedirectTo: _emailAuthRedirectTo,
-      );
-      return;
-    }
-
-    if (user.isAnonymous ||
-        (!user.isAnonymous && user.emailConfirmedAt == null)) {
-      await _updatePendingEmailUser(
-        trimmedEmail: trimmedEmail,
-        password: password,
-        userMetadata: data.isEmpty ? null : data,
-      );
-      return;
-    }
-
-    throw const AuthException('既にログイン（登録）済みのアカウントです。');
-  }
-
-  /// メール未確認ユーザー向けの更新。
-  ///
-  /// メール訂正でパスワードが初回と同一のとき、GoTrue が `same_password`（422）を返すため、
-  /// メールのみの更新に切り替える。
-  Future<void> _updatePendingEmailUser({
-    required String trimmedEmail,
-    required String password,
-    Map<String, dynamic>? userMetadata,
-  }) async {
-    try {
-      await _client.auth.updateUser(
-        UserAttributes(
-          email: trimmedEmail,
-          password: password,
-          data: userMetadata,
-        ),
-        emailRedirectTo: _emailAuthRedirectTo,
-      );
-    } on AuthException catch (e) {
-      if (e.code != 'same_password') {
+  /// 連携先が既に別ユーザーで使われていると [SocialIdentityInUseException]、
+  /// サインイン画面を閉じたときは [SocialSignInCancelled] を投げる。
+  Future<void> continueWith(SocialProvider provider) async {
+    final credential = await _obtainCredential(provider);
+    if (currentUser == null) {
+      await _signInWithCredential(credential);
+    } else {
+      try {
+        await _client.auth.linkIdentityWithIdToken(
+          provider: credential.oauthProvider,
+          idToken: credential.idToken,
+          accessToken: credential.accessToken,
+          nonce: credential.rawNonce,
+        );
+      } on AuthException catch (e) {
+        // email_exists: 同じメールアドレスの別ユーザーがいる。そちらでサインインすれば
+        // Supabase がメールアドレスで自動リンクするので、切り替えで入れる
+        if (e.code == 'identity_already_exists' || e.code == 'email_exists') {
+          throw SocialIdentityInUseException(credential);
+        }
         rethrow;
       }
-      await _client.auth.updateUser(
-        UserAttributes(email: trimmedEmail, data: userMetadata),
-        emailRedirectTo: _emailAuthRedirectTo,
-      );
+    }
+    await _applyDisplayNameIfMissing(credential.displayName);
+  }
+
+  /// [SocialIdentityInUseException] のアカウントへ切り替える。
+  /// 今の匿名ユーザーの記録は切り替え先に移らない。
+  Future<void> switchToExistingAccount(SocialCredential credential) async {
+    AuthReauthInProgress.instance.begin();
+    try {
+      await _signInWithCredential(credential);
+    } finally {
+      AuthReauthInProgress.instance.end();
     }
   }
 
-  /// 匿名ログインします（開発中の動作確認などに利用）。
-  ///
   /// Supabase 側で Anonymous Sign-ins が有効である必要があります。
   Future<void> signInAnonymously() async {
     await _client.auth.signInAnonymously();
-  }
-
-  /// パスワードリセットメールを送信します。
-  ///
-  /// 注意: Supabase 側で Email Provider が有効でないと失敗します。
-  Future<void> requestPasswordResetEmail({required String email}) async {
-    await _client.auth.resetPasswordForEmail(
-      email.trim(),
-      redirectTo: _emailAuthRedirectTo,
-    );
-  }
-
-  /// 確認メール（サインアップ/メール変更時など）の再送。
-  Future<void> resendSignupConfirmationEmail({required String email}) async {
-    await _client.auth.resend(
-      type: OtpType.signup,
-      email: email.trim(),
-      emailRedirectTo: _emailAuthRedirectTo,
-    );
-  }
-
-  /// メールアドレスを変更します（通常は確認メールが送られます）。
-  Future<void> updateEmail(String email) async {
-    await _client.auth.updateUser(
-      UserAttributes(email: email.trim()),
-      emailRedirectTo: _emailAuthRedirectTo,
-    );
-  }
-
-  /// パスワードを変更します。
-  Future<void> updatePassword(String password) async {
-    final wasRecoveryFlow = sessionRequiresNewPasswordAfterRecovery(
-      _client.auth.currentSession,
-    );
-    await _client.auth.updateUser(UserAttributes(password: password));
-    if (wasRecoveryFlow) {
-      try {
-        await _client.auth.refreshSession();
-      } catch (_) {}
-      final s = _client.auth.currentSession;
-      if (s != null && !accessTokenRequiresPasswordRecovery(s.accessToken)) {
-        PasswordRecoveryNavFlag.instance.clear();
-      } else {
-        PasswordRecoveryNavFlag.instance.markPostRecoveryPasswordUpdateSuccess();
-      }
-    } else {
-      PasswordRecoveryNavFlag.instance.clear();
-    }
   }
 
   /// セッション更新（期限切れ対策）。
@@ -173,24 +84,9 @@ class AuthService {
     await _client.auth.refreshSession();
   }
 
-  /// 匿名ユーザーを Email/Password ユーザーへ昇格します。
-  ///
-  /// Supabase 側で Anonymous Sign-ins と Email Provider が有効である必要があります。
-  Future<void> upgradeAnonymousToPassword({
-    required String email,
-    required String password,
-    String? displayName,
-  }) async {
-    await signUpWithEmailPassword(
-      email: email,
-      password: password,
-      displayName: displayName,
-    );
-  }
-
   Future<void> signOut() async {
     await _client.auth.signOut();
-    PasswordRecoveryNavFlag.instance.clear();
+    await signOutFromGoogle();
   }
 
   /// 現在のセッションを破棄して、匿名セッションに戻します。
@@ -198,14 +94,14 @@ class AuthService {
   Future<void> resetToAnonymous() async {
     AuthReauthInProgress.instance.begin();
     try {
-      await _client.auth.signOut();
+      await signOut();
       await _client.auth.signInAnonymously();
     } finally {
       AuthReauthInProgress.instance.end();
     }
   }
 
-  /// メール登録済みユーザーをアプリ上から完全削除（Edge Function `delete-account`）。
+  /// 登録済みユーザーをアプリ上から完全削除（Edge Function `delete-account`）。
   /// 成功後、匿名利用に戻る。
   Future<void> deleteRegisteredAccount() async {
     final user = currentUser;
@@ -213,7 +109,7 @@ class AuthService {
       throw const AuthException('セッションがありません。');
     }
     if (user.isAnonymous) {
-      throw const AuthException('メールで登録したアカウントのみ削除できます。');
+      throw const AuthException('登録済みのアカウントのみ削除できます。');
     }
 
     try {
@@ -223,9 +119,7 @@ class AuthService {
       if (e.details is Map) {
         final m = e.details as Map<dynamic, dynamic>;
         final err = m['error'] ?? m['message'];
-        msg = err == null
-            ? 'アカウントの削除に失敗しました。'
-            : err.toString();
+        msg = err == null ? 'アカウントの削除に失敗しました。' : err.toString();
       } else {
         msg = e.details?.toString() ?? 'アカウントの削除に失敗しました。';
       }
@@ -235,7 +129,7 @@ class AuthService {
     AuthReauthInProgress.instance.begin();
     try {
       try {
-        await _client.auth.signOut();
+        await signOut();
       } catch (_) {}
       try {
         await _client.auth.signInAnonymously();
@@ -244,6 +138,33 @@ class AuthService {
       }
     } finally {
       AuthReauthInProgress.instance.end();
+    }
+  }
+
+  Future<SocialCredential> _obtainCredential(SocialProvider provider) {
+    return switch (provider) {
+      SocialProvider.apple => obtainAppleCredential(_client.auth),
+      SocialProvider.google => obtainGoogleCredential(_client.auth),
+    };
+  }
+
+  Future<void> _signInWithCredential(SocialCredential credential) async {
+    await _client.auth.signInWithIdToken(
+      provider: credential.oauthProvider,
+      idToken: credential.idToken,
+      accessToken: credential.accessToken,
+      nonce: credential.rawNonce,
+    );
+  }
+
+  Future<void> _applyDisplayNameIfMissing(String? name) async {
+    if (name == null || name.trim().isEmpty) return;
+    final current = currentUser?.userMetadata?['display_name'];
+    if (current is String && current.trim().isNotEmpty) return;
+    try {
+      await updateDisplayName(name);
+    } catch (_) {
+      // 表示名はあとから変更できるため、連携自体は成功扱いにする。
     }
   }
 }

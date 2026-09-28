@@ -37,8 +37,7 @@ final recordsProvider = StreamProvider<List<Record>>((ref) async* {
       .eq('user_id', userId)
       .order('date', ascending: false)
       .asyncMap((maps) async {
-        final records =
-            maps.map((map) => Record.fromJson(map)).toList();
+        final records = maps.map((map) => Record.fromJson(map)).toList();
         await cache.save(userId, records);
         return records;
       });

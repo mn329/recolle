@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
@@ -8,1117 +12,936 @@ import 'package:recolle/core/constants/field_limits.dart';
 import 'package:recolle/core/constants/ticket_image_settings.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/error_messages.dart';
-import 'package:recolle/core/utils/japanese_date_format.dart';
 import 'package:recolle/core/utils/ticket_image_compress.dart';
-import 'package:recolle/core/widgets/decoded_network_image.dart';
+import 'package:recolle/core/widgets/app_toast.dart';
+import 'package:recolle/core/widgets/confirm_dialog.dart';
+import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/favorites/auto_favorite.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/music/data/setlist_localization.dart';
+import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/screens/detail_screen.dart';
-import 'package:recolle/features/records/widgets/number_date_picker_sheet.dart';
-import 'package:recolle/features/records/widgets/record_form_text_field.dart';
+import 'package:recolle/features/records/widgets/music_suggestions.dart';
+import 'package:recolle/features/records/widgets/ticket_mail_import_sheet.dart';
+import 'package:recolle/features/records/widgets/record_form/acts_editor.dart';
+import 'package:recolle/features/records/widgets/record_form/form_section.dart';
+import 'package:recolle/features/records/widgets/record_form/form_text_row.dart';
+import 'package:recolle/features/records/widgets/record_form/record_date_row.dart';
+import 'package:recolle/features/records/widgets/record_form/record_time_row.dart';
+import 'package:recolle/features/records/widgets/record_form/setlist_editor.dart';
+import 'package:recolle/features/records/widgets/record_form/ticket_preview_picker.dart';
+import 'package:recolle/features/records/ticket_mail_parser.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-/// 並び替え時に [ReorderableListView] 用の安定キーとなる行。
-class _SetlistLine {
-  const _SetlistLine({required this.id, required this.text});
-
-  final String id;
-  final String text;
-}
-
+/// 記録の作成・編集フォーム。保存したら [Record] を返して閉じる。
+///
+/// 通常は `openRecordEditor` から iOS のシートとして開く。
 class CreateRecordScreen extends HookConsumerWidget {
-  const CreateRecordScreen({super.key, this.recordToEdit});
+  const CreateRecordScreen({
+    super.key,
+    this.recordToEdit,
+    this.initialArtist,
+    this.initialType,
+    this.prefill,
+  });
 
-  /// 指定時は編集モード。保存後は更新された [Record] を [Navigator.pop] で返す。
+  /// 指定時は編集モード。
   final Record? recordToEdit;
+
+  /// 新規作成時にアーティスト欄へあらかじめ入れておく名前。
+  final String? initialArtist;
+
+  /// 新規作成時の種別。省略時はライブ。
+  final RecordType? initialType;
+
+  /// 新規作成時にあらかじめ入れておく公演の情報（公演検索の結果など）。
+  final TicketMailInfo? prefill;
+
+  /// キーボード表示中でも、入力欄の下に出る候補リストまで見えるようにする余白。
+  static const _fieldScrollPadding = EdgeInsets.fromLTRB(20, 24, 20, 160);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recordToEdit = this.recordToEdit;
     final editingRecord = recordToEdit;
     final isEditMode = editingRecord != null;
+    final draft = isEditMode ? null : prefill;
 
-    // State
-    final setlistIdCounter = useRef(1);
-    final selectedType = useState<RecordType>(
-      recordToEdit?.type ?? RecordType.live,
+    final startType = editingRecord?.type ?? initialType ?? RecordType.live;
+    final initialDate = useMemoized(
+      () => editingRecord?.date ?? draft?.date ?? DateTime.now(),
     );
-    final date = useState<DateTime>(recordToEdit?.date ?? DateTime.now());
-    final setlistLines = useState<List<_SetlistLine>>(() {
-      final s = recordToEdit?.setlist;
-      if (s == null || s.isEmpty) return <_SetlistLine>[];
-      return s
+    final initialSongs = useMemoized(
+      () => (editingRecord?.setlist ?? '')
           .split('\n')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
-          .map(
-            (t) => _SetlistLine(id: 'sl_${setlistIdCounter.value++}', text: t),
-          )
-          .toList(growable: false);
-    }());
-    final selectedImage = useState<File?>(null);
-    final isLoading = useState(false);
+          .toList(growable: false),
+    );
 
-    // Controllers
-    final titleController = useTextEditingController(text: recordToEdit?.title);
+    final type = useState(startType);
+    final date = useState(initialDate);
+    final startFormat = editingRecord?.eventFormat ?? EventFormat.oneman;
+    final eventFormat = useState(startFormat);
+    final initialEndDate = editingRecord?.endDate;
+    final endDate = useState(initialEndDate);
+    final initialActs = editingRecord?.acts ?? const <RecordAct>[];
+    final acts = useState(initialActs);
+    // 形式の切り替えや候補の取り込みで出演者を差し替えたときに、出演者欄を作り直す
+    final actsEditorGeneration = useState(0);
+    final initialOpenTime = editingRecord?.openTime ?? draft?.openTime;
+    final initialStartTime = editingRecord?.startTime ?? draft?.startTime;
+    final initialEndTime = editingRecord?.endTime ?? draft?.endTime;
+    final openTime = useState(initialOpenTime);
+    final startTime = useState(initialStartTime);
+    final endTime = useState(initialEndTime);
+    final songs = useState(initialSongs);
+    final selectedImage = useState<File?>(null);
+    final removeSavedImage = useState(false);
+    final isSaving = useState(false);
+
+    final titleController = useTextEditingController(
+      text: editingRecord?.title ?? draft?.title,
+    );
     final artistController = useTextEditingController(
-      text: recordToEdit?.artistOrAuthor,
+      text: editingRecord?.artistOrAuthor ?? draft?.artist ?? initialArtist,
     );
     final sourceController = useTextEditingController(
-      text: recordToEdit?.ticketSource,
+      text: editingRecord?.ticketSource ?? draft?.ticketSource,
     );
-    final currentSongController = useTextEditingController();
+    final venueController = useTextEditingController(
+      text: editingRecord?.venue ?? draft?.venue,
+    );
+    final seatController = useTextEditingController(text: editingRecord?.seat);
+    final priceController = useTextEditingController(
+      text: editingRecord?.ticketPrice?.toString(),
+    );
     final mcMemoController = useTextEditingController(
-      text: recordToEdit?.mcMemo,
+      text: editingRecord?.mcMemo,
     );
     final impressionsController = useTextEditingController(
-      text: recordToEdit?.impressions,
+      text: editingRecord?.impressions,
     );
+    final textControllers = [
+      titleController,
+      artistController,
+      sourceController,
+      venueController,
+      seatController,
+      priceController,
+      mcMemoController,
+      impressionsController,
+    ];
+    final initialTexts = useMemoized(
+      () => [for (final c in textControllers) c.text],
+    );
+    useListenable(useMemoized(() => Listenable.merge(textControllers)));
 
-    final scrollController = useScrollController();
-    final currentSongFocusNode = useFocusNode();
-    final addSetlistSectionKey = useMemoized(GlobalKey.new);
+    final artistFocusNode = useFocusNode();
+    useListenable(artistFocusNode);
+    // 候補から選んだ直後は同じ候補を出し直さない
+    final artistTypedSincePick = useState(false);
+    final titleFocusNode = useFocusNode();
+    useListenable(titleFocusNode);
+    final titlePicked = useState(false);
+    // 候補から取り込んだセトリを反映するため、セトリ欄を作り直す
+    final setlistEditorGeneration = useState(0);
 
-    void tryAddSongToSetlist() {
-      final line = currentSongController.text.trim();
-      if (line.isEmpty) return;
-      if (line.length > RecordFieldLimits.setlistSongLine) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('曲名は最大${RecordFieldLimits.setlistSongLine}文字までです。'),
-          ),
-        );
-        return;
-      }
-      final candidate = [
-        ...setlistLines.value.map((e) => e.text),
-        line,
-      ].join('\n');
-      if (candidate.length > RecordFieldLimits.setlistTotal) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。',
-            ),
-          ),
-        );
-        return;
-      }
-      final newLine = _SetlistLine(
-        id: 'sl_${setlistIdCounter.value++}',
-        text: line,
+    final title = titleController.text.trim();
+    final artist = artistController.text.trim();
+    final isLive = type.value == RecordType.live;
+    final kind = type.value;
+    final isMultiAct = isLive && eventFormat.value.hasMultipleActs;
+    final isFestival = isLive && eventFormat.value == EventFormat.festival;
+    final namedActs = [
+      for (final a in acts.value)
+        if (a.artist.trim().isNotEmpty) a.copyWith(artist: a.artist.trim()),
+    ];
+    final leadAct =
+        namedActs.where((a) => a.isMain).firstOrNull ?? namedActs.firstOrNull;
+    // 対バン・フェスではお目当て（いなければ先頭）の出演者で公演名の候補やセトリを引く
+    final headline = isMultiAct ? Record.headlineFor(namedActs) : artist;
+    final lookupArtist = isMultiAct ? leadAct?.artist ?? '' : artist;
+    final dayCount = isFestival
+        ? Record.dayCountBetween(date.value, endDate.value)
+        : 1;
+    final festivalDays = [
+      if (dayCount > 1)
+        for (var i = 0; i < dayCount; i++)
+          DateTime(date.value.year, date.value.month, date.value.day + i),
+    ];
+    final titleLabel = isMultiAct
+        ? 'イベント名・${eventFormat.value.label}名'
+        : kind.titleFieldLabel;
+    final hasVenue = kind.venueLabel != null;
+    final hasSeat = kind.seatPlaceholder != null;
+    final savedImageUrl = removeSavedImage.value
+        ? null
+        : editingRecord?.ticketImageUrl;
+
+    final isDirty =
+        type.value != startType ||
+        date.value != initialDate ||
+        eventFormat.value != startFormat ||
+        endDate.value != initialEndDate ||
+        !listEquals(acts.value, initialActs) ||
+        openTime.value != initialOpenTime ||
+        startTime.value != initialStartTime ||
+        endTime.value != initialEndTime ||
+        selectedImage.value != null ||
+        removeSavedImage.value ||
+        !_sameList(songs.value, initialSongs) ||
+        [
+          for (final (i, c) in textControllers.indexed)
+            c.text != initialTexts[i],
+        ].any((changed) => changed);
+
+    final missingLabels = [
+      if (isMultiAct && namedActs.isEmpty)
+        '出演者'
+      else if (!isMultiAct && artist.isEmpty)
+        type.value.creatorFieldLabel,
+      if (title.isEmpty) titleLabel,
+    ];
+    final canSave = missingLabels.isEmpty && !isSaving.value;
+
+    void pickArtist(String name) {
+      artistController.value = TextEditingValue(
+        text: name,
+        selection: TextSelection.collapsed(offset: name.length),
       );
-      setlistLines.value = [...setlistLines.value, newLine];
-      currentSongController.clear();
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+      artistTypedSincePick.value = false;
+      artistFocusNode.unfocus();
+    }
+
+    void pickWork(WorkSuggestion work) {
+      final picked = work.title.length > RecordFieldLimits.title
+          ? work.title.substring(0, RecordFieldLimits.title)
+          : work.title;
+      titleController.value = TextEditingValue(
+        text: picked,
+        selection: TextSelection.collapsed(offset: picked.length),
+      );
+      final creator = work.creator;
+      if (creator != null &&
+          creator.length <= RecordFieldLimits.artistOrAuthor) {
+        artistController.text = creator;
+      }
+      titlePicked.value = true;
+      titleFocusNode.unfocus();
+    }
+
+    void changeFormat(EventFormat next) {
+      final previous = eventFormat.value;
+      if (next == previous) return;
+      // 入力済みのアーティストとセトリは、形式を変えても引き継ぐ
+      if (next.hasMultipleActs && !previous.hasMultipleActs) {
+        if (namedActs.isEmpty &&
+            (artist.isNotEmpty || songs.value.isNotEmpty)) {
+          acts.value = [
+            RecordAct(artist: artist, songs: songs.value, isMain: true),
+          ];
+          actsEditorGeneration.value++;
+        }
+      } else if (!next.hasMultipleActs && previous.hasMultipleActs) {
+        final lead = leadAct;
+        if (artist.isEmpty && lead != null) {
+          artistController.text = lead.artist;
+          if (songs.value.isEmpty && lead.songs.isNotEmpty) {
+            songs.value = lead.songs;
+            setlistEditorGeneration.value++;
+          }
+        }
+      }
+      if (next != EventFormat.festival) endDate.value = null;
+      eventFormat.value = next;
+    }
+
+    void changeDate(DateTime d) {
+      date.value = d;
+      final end = endDate.value;
+      if (end != null && !end.isAfter(d)) endDate.value = null;
+    }
+
+    Future<void> pickConcert(ConcertCandidate c) async {
+      final title = c.title.length > RecordFieldLimits.title
+          ? c.title.substring(0, RecordFieldLimits.title)
+          : c.title;
+      titleController.value = TextEditingValue(
+        text: title,
+        selection: TextSelection.collapsed(offset: title.length),
+      );
+      titlePicked.value = true;
+      titleFocusNode.unfocus();
+
+      final filled = [titleLabel];
+      if (c.fillsDetails) {
+        if (c.date case final d?) {
+          changeDate(d);
+          filled.add('公演日');
+        }
+        if (c.venue case final v? when hasVenue) {
+          venueController.text = v.length > RecordFieldLimits.venue
+              ? v.substring(0, RecordFieldLimits.venue)
+              : v;
+          filled.add(kind.venueLabel!);
+        }
+        if (c.openTime case final t? when kind.hasOpenTime) {
+          openTime.value = t;
+          filled.add('開場');
+        }
+        if (c.startTime case final t? when kind.hasSchedule) {
+          startTime.value = t;
+          filled.add(kind.startTimeLabel);
+        }
+      }
+      HapticFeedback.selectionClick();
+
+      // 入力済みのセトリは上書きしない
+      final lead = leadAct;
+      final targetEmpty = isMultiAct
+          ? lead != null && lead.songs.isEmpty
+          : songs.value.isEmpty;
+      if (c.fillsDetails && c.songs.isNotEmpty && targetEmpty) {
+        final localized = await localizeSetlistSongs(
+          ref.read(itunesClientProvider),
+          artistName: lookupArtist,
+          songs: c.songs,
+        );
         if (!context.mounted) return;
-        final target = addSetlistSectionKey.currentContext;
-        if (target != null) {
-          Scrollable.ensureVisible(
-            target,
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeOutCubic,
-            alignment: 1,
-            alignmentPolicy: ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+        final fits =
+            localized.join('\n').length <= RecordFieldLimits.setlistTotal;
+        // 日本語化を待つ間に手で入れた曲も上書きしない
+        if (fits && isMultiAct && lead != null) {
+          final index = acts.value.indexWhere(
+            (a) => a.artist.trim() == lead.artist && a.songs.isEmpty,
           );
+          if (index >= 0) {
+            acts.value = [
+              for (final (i, a) in acts.value.indexed)
+                i == index ? a.copyWith(songs: localized) : a,
+            ];
+            actsEditorGeneration.value++;
+            filled.add('${lead.artist}のセットリスト');
+          }
+        } else if (fits && !isMultiAct && songs.value.isEmpty) {
+          songs.value = localized;
+          setlistEditorGeneration.value++;
+          filled.add('セットリスト');
         }
-        if (currentSongFocusNode.canRequestFocus) {
-          currentSongFocusNode.requestFocus();
-        }
-      });
+      }
+      AppToast.show(
+        '${filled.join('・')}を入力しました',
+        icon: CupertinoIcons.checkmark_circle_fill,
+      );
     }
 
     Future<void> pickImage() async {
-      final picker = ImagePicker();
-      final pickedFile = await picker.pickImage(
+      FocusScope.of(context).unfocus();
+      final picked = await ImagePicker().pickImage(
         source: ImageSource.gallery,
         maxWidth: TicketImageSettings.maxPickDimension,
         maxHeight: TicketImageSettings.maxPickDimension,
         imageQuality: TicketImageSettings.pickImageQuality,
       );
-
-      if (pickedFile != null) {
-        final raw = File(pickedFile.path);
-        selectedImage.value = await compressTicketImageForUpload(raw);
-      }
+      if (picked == null) return;
+      final compressed = await compressTicketImageForUpload(File(picked.path));
+      if (!context.mounted) return;
+      selectedImage.value = compressed;
+      removeSavedImage.value = false;
     }
 
-    Future<void> saveRecord() async {
-      if (isLoading.value) return;
+    void removeImage() {
+      selectedImage.value = null;
+      removeSavedImage.value = true;
+    }
 
-      final title = titleController.text.trim();
-      final artist = artistController.text.trim();
-      if (title.isEmpty || artist.isEmpty) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('タイトルとアーティスト名は必須です')));
-        return;
+    Future<void> importFromMail() async {
+      FocusScope.of(context).unfocus();
+      final info = await showTicketMailImportSheet(context);
+      if (info == null || !context.mounted) return;
+
+      void fill(TextEditingController c, String? value, int maxLength) {
+        if (value == null) return;
+        c.text = value.length > maxLength
+            ? value.substring(0, maxLength)
+            : value;
       }
 
-      if (title.length > RecordFieldLimits.title ||
-          artist.length > RecordFieldLimits.artistOrAuthor) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('タイトルまたはアーティスト名が文字数上限を超えています。')),
-        );
-        return;
-      }
-
-      final sourceTrimmed = sourceController.text.trim();
-      if (sourceTrimmed.length > RecordFieldLimits.ticketSource) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('取得元は最大${RecordFieldLimits.ticketSource}文字までです。'),
-          ),
-        );
-        return;
-      }
-
-      final setlistJoined = setlistLines.value.isEmpty
-          ? null
-          : setlistLines.value.map((e) => e.text).join('\n');
-      if (setlistJoined != null &&
-          setlistJoined.length > RecordFieldLimits.setlistTotal) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。',
-            ),
-          ),
-        );
-        return;
-      }
-
-      final mcTrimmed = mcMemoController.text.trim();
-      final impressionsTrimmed = impressionsController.text.trim();
-      if (mcTrimmed.length > RecordFieldLimits.mcMemo ||
-          impressionsTrimmed.length > RecordFieldLimits.impressions) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('MCメモまたは感想が文字数上限を超えています。')),
-        );
-        return;
-      }
-
-      isLoading.value = true;
-
-      try {
-        final userId = Supabase.instance.client.auth.currentUser?.id;
-        if (userId == null) {
-          if (context.mounted) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(const SnackBar(content: Text('ログインしてください')));
-          }
-          isLoading.value = false;
-          return;
+      fill(titleController, info.title, RecordFieldLimits.title);
+      if (isMultiAct) {
+        final name = info.artist?.trim() ?? '';
+        final truncated = name.length > RecordFieldLimits.artistOrAuthor
+            ? name.substring(0, RecordFieldLimits.artistOrAuthor)
+            : name;
+        if (truncated.isNotEmpty &&
+            namedActs.every((a) => a.artist != truncated)) {
+          acts.value = [
+            ...namedActs,
+            RecordAct(artist: truncated, isMain: true),
+          ];
+          actsEditorGeneration.value++;
         }
+      } else {
+        fill(artistController, info.artist, RecordFieldLimits.artistOrAuthor);
+      }
+      fill(sourceController, info.ticketSource, RecordFieldLimits.ticketSource);
+      if (info.date != null) changeDate(info.date!);
+      final priceFits =
+          info.ticketPrice != null &&
+          info.ticketPrice! <= RecordFieldLimits.ticketPriceMax;
+      final useOpen = kind.hasOpenTime && info.openTime != null;
+      final useStart = kind.hasSchedule && info.startTime != null;
+      final useEnd = kind.hasSchedule && info.endTime != null;
+      final useVenue = hasVenue && info.venue != null;
+      final useSeat = hasSeat && info.seat != null;
+      if (useVenue) fill(venueController, info.venue, RecordFieldLimits.venue);
+      if (useSeat) fill(seatController, info.seat, RecordFieldLimits.seat);
+      if (priceFits) priceController.text = '${info.ticketPrice}';
+      if (useOpen) openTime.value = info.openTime;
+      if (useStart) startTime.value = info.startTime;
+      if (useEnd) endTime.value = info.endTime;
+      artistTypedSincePick.value = false;
 
+      final filled = [
+        if (info.title != null) titleLabel,
+        if (info.artist != null) isMultiAct ? '出演者' : kind.creatorFieldLabel,
+        if (info.date != null) isLive ? '公演日' : '日付',
+        if (useOpen) '開場',
+        if (useStart) kind.startTimeLabel,
+        if (useEnd) kind.endTimeLabel,
+        if (useVenue) kind.venueLabel!,
+        if (useSeat) '座席',
+        if (priceFits) kind.priceLabel,
+        if (info.ticketSource != null) '取得元',
+      ];
+      AppToast.show(
+        '${filled.join('・')}を入力しました',
+        icon: CupertinoIcons.envelope_open_fill,
+      );
+    }
+
+    Future<void> save() async {
+      if (!canSave) return;
+      FocusScope.of(context).unfocus();
+
+      final setlist = isLive && !isMultiAct && songs.value.isNotEmpty
+          ? songs.value.join('\n')
+          : null;
+      if (setlist != null && setlist.length > RecordFieldLimits.setlistTotal) {
+        AppToast.error('セットリスト全体は最大${RecordFieldLimits.setlistTotal}文字までです。');
+        return;
+      }
+
+      final price = int.tryParse(priceController.text.trim());
+      if (price != null && price > RecordFieldLimits.ticketPriceMax) {
+        AppToast.error('${kind.priceLabel}が大きすぎます。金額を確認してください。');
+        return;
+      }
+
+      final open = openTime.value;
+      final start = startTime.value;
+      if (kind.hasOpenTime &&
+          open != null &&
+          start != null &&
+          open.compareTo(start) > 0) {
+        AppToast.error('開場は開演より前の時刻にしてください。');
+        return;
+      }
+
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        AppToast.error('ログインしてください');
+        return;
+      }
+
+      isSaving.value = true;
+      try {
         final repo = ref.read(recordsRepositoryProvider);
+        final image = selectedImage.value;
+        final ticketImageUrl = image != null
+            ? await repo.uploadTicketImage(userId: userId, file: image)
+            : savedImageUrl ?? '';
 
-        String ticketImageUrl = recordToEdit?.ticketImageUrl ?? '';
-        if (selectedImage.value != null) {
-          debugPrint('Uploading ticket image…');
-          ticketImageUrl = await repo.uploadTicketImage(
-            userId: userId,
-            file: selectedImage.value!,
-          );
-          debugPrint('Image uploaded, URL: $ticketImageUrl');
+        String? nullIfEmpty(TextEditingController c) {
+          final text = c.text.trim();
+          return text.isEmpty ? null : text;
         }
 
         final record = Record(
-          id: recordToEdit?.id ?? '',
-          type: selectedType.value,
+          id: editingRecord?.id ?? '',
+          type: type.value,
           title: title,
-          artistOrAuthor: artist,
+          artistOrAuthor: headline,
           date: date.value,
+          eventFormat: isLive ? eventFormat.value : EventFormat.oneman,
+          endDate: isFestival && (endDate.value?.isAfter(date.value) ?? false)
+              ? endDate.value
+              : null,
+          acts: isMultiAct
+              ? [
+                  for (final a in namedActs)
+                    a.withDay(
+                      dayCount > 1 ? (a.day ?? 1).clamp(1, dayCount) : null,
+                    ),
+                ]
+              : const [],
           ticketImageUrl: ticketImageUrl,
-          ticketSource: sourceTrimmed.isEmpty ? null : sourceTrimmed,
-          setlist: setlistJoined == null || setlistJoined.isEmpty
-              ? null
-              : setlistJoined,
-          mcMemo: mcTrimmed.isEmpty ? null : mcTrimmed,
-          impressions: impressionsTrimmed.isEmpty ? null : impressionsTrimmed,
+          ticketSource: nullIfEmpty(sourceController),
+          venue: hasVenue ? nullIfEmpty(venueController) : null,
+          seat: hasSeat ? nullIfEmpty(seatController) : null,
+          ticketPrice: price,
+          openTime: kind.hasOpenTime ? openTime.value : null,
+          startTime: kind.hasSchedule ? startTime.value : null,
+          endTime: kind.hasSchedule ? endTime.value : null,
+          setlist: setlist,
+          mcMemo: isLive ? nullIfEmpty(mcMemoController) : null,
+          impressions: nullIfEmpty(impressionsController),
         );
 
-        if (editingRecord != null) {
-          final updated = await repo.updateRecord(
-            editingRecord.id,
-            record.toJson(),
+        final saved = editingRecord != null
+            ? await repo.updateRecord(editingRecord.id, record.toJson())
+            : await repo.insertRecord({...record.toJson(), 'user_id': userId});
+        ref.invalidate(recordsProvider);
+        HapticFeedback.mediumImpact();
+        AppToast.show(
+          isEditMode ? '記録を更新しました' : '記録を保存しました',
+          icon: CupertinoIcons.checkmark_circle_fill,
+        );
+        final favoritesNotifier = ref.read(favoriteArtistsProvider.notifier);
+        final itunes = ref.read(itunesClientProvider);
+        final favorites = ref.read(favoriteArtistsProvider).asData?.value;
+        if (context.mounted) Navigator.of(context).pop(saved);
+        if (favorites != null) {
+          final names = artistsToAutoFavorite(
+            saved,
+            previous: editingRecord,
+            favorites: favorites,
           );
-          debugPrint('Record updated: ${updated.id}');
-          if (context.mounted) {
-            ref.invalidate(recordsProvider);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('記録を更新しました'),
-                backgroundColor: AppColors.gold,
-              ),
-            );
-            Navigator.of(context).pop(updated);
-          }
-        } else {
-          final recordData = record.toJson();
-          recordData['user_id'] = userId;
-
-          debugPrint('Inserting record: $recordData');
-
-          final newRecord = await repo.insertRecord(recordData);
-          debugPrint('Record inserted: ${newRecord.id}');
-
-          if (context.mounted) {
-            ref.invalidate(recordsProvider);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('記録を保存しました'),
-                backgroundColor: AppColors.gold,
-              ),
-            );
-            Navigator.of(context).pop();
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (context) => DetailScreen(record: newRecord),
-              ),
+          // 画面を閉じた後に追加する（画像の検索で保存の完了を待たせないため）
+          if (names.isNotEmpty) {
+            unawaited(
+              addAutoFavorites(
+                names,
+                add: (name, artworkUrl) =>
+                    favoritesNotifier.add(name: name, artworkUrl: artworkUrl),
+                findArtwork: itunes.findArtistArtwork,
+              ).then((added) {
+                if (added.isEmpty) return;
+                AppToast.show(
+                  '「${added.join('」「')}」をお気に入りに追加しました',
+                  icon: CupertinoIcons.star_fill,
+                );
+              }),
             );
           }
         }
       } catch (e, stackTrace) {
-        debugPrint('Error saving record: $e');
-        debugPrint('Stack trace: $stackTrace');
-        if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(toUserFriendlyMessage(e))));
-        }
+        debugPrint('Error saving record: $e\n$stackTrace');
+        AppToast.error(toUserFriendlyMessage(e));
       } finally {
-        isLoading.value = false;
+        if (context.mounted) isSaving.value = false;
       }
     }
 
-    final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
-    final fieldScrollPadding = EdgeInsets.fromLTRB(
-      20,
-      24,
-      20,
-      keyboardInset + 120,
+    final artistBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FormTextRow(
+          controller: artistController,
+          focusNode: artistFocusNode,
+          placeholder: type.value.creatorFieldLabel,
+          icon: switch (type.value) {
+            RecordType.live => CupertinoIcons.music_mic,
+            RecordType.book => CupertinoIcons.pencil,
+            RecordType.movie || RecordType.other => CupertinoIcons.person_2,
+          },
+          enLabel: type.value.creatorFieldEnLabel,
+          maxLength: RecordFieldLimits.artistOrAuthor,
+          scrollPadding: _fieldScrollPadding,
+          onChanged: (_) => artistTypedSincePick.value = true,
+        ),
+        // iTunes のカタログとお気に入りは音楽のみなので、ライブのときだけ出す
+        if (isLive && artistFocusNode.hasFocus && artistTypedSincePick.value)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: ArtistSuggestions(
+              query: artistController.text,
+              onPick: (a) => pickArtist(a.name),
+            ),
+          ),
+        if (isLive)
+          FavoriteArtistQuickPick(
+            currentArtist: artistController.text,
+            onPick: (a) => pickArtist(a.name),
+          ),
+      ],
+    );
+    final titleRow = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        FormTextRow(
+          controller: titleController,
+          focusNode: titleFocusNode,
+          placeholder: titleLabel,
+          icon: switch (type.value) {
+            RecordType.live => CupertinoIcons.music_note_2,
+            RecordType.movie => CupertinoIcons.film,
+            RecordType.book => CupertinoIcons.book,
+            RecordType.other => CupertinoIcons.star,
+          },
+          enLabel: 'TITLE',
+          maxLength: RecordFieldLimits.title,
+          scrollPadding: _fieldScrollPadding,
+          onChanged: (_) => titlePicked.value = false,
+        ),
+        if (isLive &&
+            lookupArtist.isNotEmpty &&
+            titleFocusNode.hasFocus &&
+            !titlePicked.value)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: ConcertSuggestions(
+              artist: lookupArtist,
+              query: titleController.text,
+              onPick: pickConcert,
+            ),
+          ),
+        if ((kind == RecordType.movie || kind == RecordType.book) &&
+            titleFocusNode.hasFocus &&
+            !titlePicked.value)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: WorkSuggestions(
+              key: ValueKey(kind),
+              type: kind,
+              query: titleController.text,
+              onPick: pickWork,
+            ),
+          ),
+      ],
     );
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(isEditMode ? '編集' : '新規登録'),
-        leading: IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        actions: [
-          if (isLoading.value)
-            const Center(
-              child: Padding(
-                padding: EdgeInsets.only(right: 16.0),
-                child: SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    color: AppColors.gold,
-                    strokeWidth: 2,
-                  ),
-                ),
-              ),
-            )
-          else
-            TextButton(
-              onPressed: saveRecord,
-              child: const Text(
-                '保存',
-                style: TextStyle(
-                  color: AppColors.gold,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
+    final sourceRow = FormTextRow(
+      controller: sourceController,
+      placeholder: kind.sourcePlaceholder,
+      icon: kind == RecordType.book
+          ? CupertinoIcons.bag
+          : CupertinoIcons.tickets,
+      enLabel: kind.sourceEnLabel,
+      maxLength: RecordFieldLimits.ticketSource,
+      scrollPadding: _fieldScrollPadding,
+    );
+
+    return PopScope(
+      canPop: !isDirty && !isSaving.value,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop || isSaving.value) return;
+        final discard = await showActionSheet<bool>(
+          context,
+          message: isEditMode ? '編集内容は保存されません。' : '入力した内容は保存されません。',
+          actions: [
+            SheetAction(
+              label: isEditMode ? '変更を破棄' : '記録を破棄',
+              value: true,
+              isDestructive: true,
             ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        controller: scrollController,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 1. Genre Selection
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: RecordType.values.map((type) {
-                  final isSelected = selectedType.value == type;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: ChoiceChip(
-                      label: Text(
-                        type.japaneseLabel,
-                        style: TextStyle(
-                          color: isSelected
-                              ? Colors.black
-                              : AppColors.textSecondary,
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) selectedType.value = type;
-                      },
-                      selectedColor: AppColors.gold,
-                      backgroundColor: AppColors.surface,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
-                          color: isSelected
-                              ? Colors.transparent
-                              : AppColors.textDisabled,
-                        ),
-                      ),
-                      // Remove checkmark
-                      showCheckmark: false,
-                    ),
-                  );
-                }).toList(),
-              ),
+          ],
+          cancelText: '編集を続ける',
+        );
+        if (discard == true && context.mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
+        backgroundColor: context.colors.background,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          leadingWidth: 124,
+          leading: Align(
+            alignment: Alignment.centerLeft,
+            child: NavBarTextButton(
+              label: 'キャンセル',
+              onPressed: () => Navigator.maybePop(context),
             ),
-
-            const SizedBox(height: 24),
-
-            // 2. Image Placeholder
-            Container(
-              height: 200,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                  color: AppColors.textDisabled.withValues(alpha: 0.3),
-                ),
+          ),
+          title: Text(isEditMode ? '記録を編集' : '新規記録'),
+          actions: [
+            if (isSaving.value)
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: CupertinoActivityIndicator(),
+              )
+            else
+              NavBarTextButton(
+                label: isEditMode ? '保存' : '追加',
+                isBold: true,
+                onPressed: canSave ? save : null,
               ),
-              child: InkWell(
-                onTap: pickImage,
-                borderRadius: BorderRadius.circular(16),
-                child: selectedImage.value != null
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.file(
-                          selectedImage.value!,
-                          fit: BoxFit.cover,
-                          width: double.infinity,
-                          height: double.infinity,
-                        ),
-                      )
-                    : (recordToEdit?.ticketImageUrl.isNotEmpty ?? false)
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            return DecodedNetworkImage(
-                              url: recordToEdit!.ticketImageUrl,
-                              logicalWidth: constraints.maxWidth,
-                              logicalHeight: constraints.maxHeight,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.broken_image,
-                                      size: 48,
-                                      color: AppColors.gold.withValues(
-                                        alpha: 0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      '画像を読み込めません',
-                                      style: TextStyle(
-                                        color: AppColors.textSecondary
-                                            .withValues(alpha: 0.7),
-                                      ),
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      )
-                    : Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.add_photo_alternate_outlined,
-                            size: 48,
-                            color: AppColors.gold.withValues(alpha: 0.5),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'チケット画像を追加',
-                            style: TextStyle(
-                              color: AppColors.textSecondary.withValues(
-                                alpha: 0.7,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // 3. Basic Info Form
-            RecordFormTextField(
-              controller: titleController,
-              label: 'タイトル',
-              icon: Icons.title,
-              maxLength: RecordFieldLimits.title,
-              scrollPadding: fieldScrollPadding,
-            ),
-            const SizedBox(height: 16),
-            RecordFormTextField(
-              controller: artistController,
-              label: 'アーティスト / 作者',
-              icon: Icons.person_outline,
-              maxLength: RecordFieldLimits.artistOrAuthor,
-              scrollPadding: fieldScrollPadding,
-            ),
-            const SizedBox(height: 16),
-
-            // Date Picker (Custom Number Picker)
-            InkWell(
-              onTap: () {
-                showModalBottomSheet(
-                  context: context,
-                  backgroundColor: AppColors.surface,
-                  builder: (BuildContext context) {
-                    return SizedBox(
-                      height: MediaQuery.of(context).size.height / 3 + 50,
-                      child: Column(
-                        children: [
-                          // Toolbar with Done button
-                          Container(
-                            height: 50,
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.surface,
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: AppColors.textDisabled.withValues(
-                                    alpha: 0.2,
-                                  ),
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text(
-                                    '決定',
-                                    style: TextStyle(
-                                      color: AppColors.gold,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Picker
-                          Expanded(
-                            child: NumberDatePickerSheet(
-                              initialDate: date.value,
-                              onDateChanged: (newDate) {
-                                date.value = newDate;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                );
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: AppColors.textDisabled.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today,
-                      color: AppColors.gold,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      formatJapaneseDate(
-                        date.value,
-                        includeWeekday: true,
-                        padMonthDay: true,
-                      ),
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 16,
-                        fontFamily: 'Courier',
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 16),
-            RecordFormTextField(
-              controller: sourceController,
-              label: '取得元 (e+, Amazon等)',
-              icon: Icons.confirmation_number_outlined,
-              maxLength: RecordFieldLimits.ticketSource,
-              scrollPadding: fieldScrollPadding,
-            ),
-
-            const SizedBox(height: 32),
-
-            // 4. Detailed Info (Conditional)
-            if (selectedType.value == RecordType.live) ...[
-              const Text(
-                'レポート',
-                style: TextStyle(
-                  color: AppColors.gold,
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Setlist UI
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    const Icon(
-                      Icons.queue_music_rounded,
-                      color: AppColors.gold,
-                      size: 22,
-                    ),
-                    const SizedBox(width: 10),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'セットリスト',
-                            style: TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(height: 2),
-                          Text(
-                            '左のつまみをドラッグして並び替え',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                              height: 1.3,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // List of songs（編集・並び替え）
-              if (setlistLines.value.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: ReorderableListView(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    buildDefaultDragHandles: false,
-                    padding: EdgeInsets.zero,
-                    onReorder: (oldIndex, newIndex) {
-                      final items = [...setlistLines.value];
-                      if (newIndex > oldIndex) newIndex--;
-                      final moved = items.removeAt(oldIndex);
-                      items.insert(newIndex, moved);
-                      setlistLines.value = items;
-                    },
-                    children: [
-                      ...setlistLines.value.asMap().entries.map((entry) {
-                        final i = entry.key;
-                        final line = entry.value;
-                        final lineId = line.id;
-                        final isLast = i == setlistLines.value.length - 1;
-                        return Padding(
-                          key: ValueKey(lineId),
-                          padding: EdgeInsets.only(bottom: isLast ? 0 : 10),
-                          child: _SetlistSongRow(
-                            scrollPadding: fieldScrollPadding,
-                            indexOneBased: i + 1,
-                            line: line,
-                            onTextChanged: (newText) {
-                              setlistLines.value = [
-                                for (final e in setlistLines.value)
-                                  if (e.id == lineId)
-                                    _SetlistLine(id: lineId, text: newText)
-                                  else
-                                    e,
-                              ];
-                            },
-                            onDelete: () {
-                              setlistLines.value = setlistLines.value
-                                  .where((e) => e.id != lineId)
-                                  .toList();
-                            },
-                            dragIndex: i,
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-
-              // Add Song Input
-              DecoratedBox(
-                key: addSetlistSectionKey,
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppColors.gold.withValues(alpha: 0.14),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_rounded,
-                        color: AppColors.gold.withValues(alpha: 0.85),
-                        size: 22,
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: currentSongController,
-                          focusNode: currentSongFocusNode,
-                          maxLength: RecordFieldLimits.setlistSongLine,
-                          scrollPadding: fieldScrollPadding,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 15,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: '曲名を追加',
-                            hintStyle: TextStyle(
-                              color: AppColors.textSecondary.withValues(
-                                alpha: 0.45,
-                              ),
-                            ),
-                            isDense: true,
-                            filled: false,
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 4,
-                            ),
-                            counterText: '',
-                          ),
-                          onSubmitted: (_) => tryAddSongToSetlist(),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      FilledButton.tonal(
-                        onPressed: tryAddSongToSetlist,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.gold.withValues(
-                            alpha: 0.22,
-                          ),
-                          foregroundColor: AppColors.gold,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          minimumSize: const Size(0, 40),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text(
-                          '追加',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
-              RecordFormTextField(
-                controller: mcMemoController,
-                label: 'MCメモ',
-                icon: Icons.mic_none,
-                maxLines: 3,
-                maxLength: RecordFieldLimits.mcMemo,
-                scrollPadding: fieldScrollPadding,
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            RecordFormTextField(
-              controller: impressionsController,
-              label: '感想',
-              icon: Icons.edit_note,
-              maxLines: 5,
-              maxLength: RecordFieldLimits.impressions,
-              scrollPadding: fieldScrollPadding,
-            ),
-
-            SizedBox(height: 40 + keyboardInset),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _SetlistSongRow extends StatefulWidget {
-  const _SetlistSongRow({
-    required this.scrollPadding,
-    required this.indexOneBased,
-    required this.line,
-    required this.onTextChanged,
-    required this.onDelete,
-    required this.dragIndex,
-  });
-
-  final EdgeInsets scrollPadding;
-  final int indexOneBased;
-  final _SetlistLine line;
-  final ValueChanged<String> onTextChanged;
-  final VoidCallback onDelete;
-  final int dragIndex;
-
-  @override
-  State<_SetlistSongRow> createState() => _SetlistSongRowState();
-}
-
-class _SetlistSongRowState extends State<_SetlistSongRow>
-    with SingleTickerProviderStateMixin {
-  static const double _deleteRevealWidth = 92;
-
-  late TextEditingController _controller;
-  final FocusNode _focusNode = FocusNode();
-  late AnimationController _slideController;
-  late Animation<double> _slideOffset;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.line.text);
-    _slideController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 240),
-    );
-    _slideOffset = Tween<double>(begin: 0, end: _deleteRevealWidth).animate(
-      CurvedAnimation(
-        parent: _slideController,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
-      ),
-    );
-  }
-
-  @override
-  void didUpdateWidget(covariant _SetlistSongRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.line.id != oldWidget.line.id) {
-      _slideController.value = 0;
-      _controller.dispose();
-      _controller = TextEditingController(text: widget.line.text);
-      return;
-    }
-    if (!_focusNode.hasFocus && widget.line.text != _controller.text) {
-      _controller.value = TextEditingValue(
-        text: widget.line.text,
-        selection: TextSelection.collapsed(offset: widget.line.text.length),
-      );
-    }
-  }
-
-  @override
-  void dispose() {
-    _slideController.dispose();
-    _controller.dispose();
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  void _toggleDeleteReveal() {
-    if (_slideController.isCompleted) {
-      _slideController.reverse();
-    } else {
-      _slideController.forward();
-    }
-  }
-
-  void _confirmDelete() {
-    _slideController.reverse();
-    widget.onDelete();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(14),
-      child: Stack(
-        clipBehavior: Clip.hardEdge,
-        children: [
-          Positioned(
-            top: 0,
-            right: 0,
-            bottom: 0,
-            width: _deleteRevealWidth,
-            child: Material(
-              color: const Color(0xFFB71C1C),
-              child: InkWell(
-                onTap: _confirmDelete,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+        // ListView だと画面外に出たセトリ入力欄が破棄されフォーカスを失うため、一括で組み立てる
+        body: SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          padding: EdgeInsets.fromLTRB(
+            16,
+            8,
+            16,
+            32 + MediaQuery.paddingOf(context).bottom,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              IosSegmentedControl<RecordType>(
+                value: type.value,
+                segments: {
+                  for (final t in RecordType.values) t: t.japaneseLabel,
+                },
+                onChanged: (t) => type.value = t,
+              ),
+              if (isLive) ...[
+                const SizedBox(height: 10),
+                IosSegmentedControl<EventFormat>(
+                  value: eventFormat.value,
+                  segments: {for (final f in EventFormat.values) f: f.label},
+                  onChanged: changeFormat,
+                ),
+              ],
+              const SizedBox(height: 20),
+              TicketPreviewPicker(
+                type: type.value,
+                title: title,
+                artistOrAuthor: headline,
+                date: date.value,
+                endDate: isFestival ? endDate.value : null,
+                localImage: selectedImage.value,
+                remoteImageUrl: savedImageUrl,
+                onPickImage: pickImage,
+                onRemoveImage: removeImage,
+              ),
+              FormSection(
+                header: '基本情報',
+                trailing: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  onPressed: importFromMail,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        Icons.delete_outline_rounded,
-                        color: Colors.white.withValues(alpha: 0.95),
-                        size: 24,
+                        CupertinoIcons.envelope,
+                        size: 15,
+                        color: context.colors.accent,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(width: 4),
                       Text(
-                        '削除',
+                        'メールから入力',
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.95),
-                          fontSize: 12,
+                          fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          letterSpacing: 0.5,
+                          color: context.colors.accent,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-            ),
-          ),
-          AnimatedBuilder(
-            animation: _slideOffset,
-            builder: (context, child) {
-              return Transform.translate(
-                offset: Offset(-_slideOffset.value, 0),
-                child: child,
-              );
-            },
-            child: Material(
-              color: Colors.transparent,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceLight,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: AppColors.gold.withValues(alpha: 0.14),
+                footer: missingLabels.isEmpty
+                    ? null
+                    : '${missingLabels.join('と')}は必須です。',
+                children: [
+                  // ライブはアーティストから決めることが多く、候補や setlist.fm もそこから引く
+                  if (isMultiAct)
+                    titleRow
+                  else
+                    ...isLive
+                        ? [artistBlock, titleRow]
+                        : [titleRow, artistBlock],
+                  RecordDateRow(
+                    label: isFestival ? '開催日' : (isLive ? '公演日' : '日付'),
+                    icon: CupertinoIcons.calendar,
+                    enLabel: 'DATE',
+                    date: date.value,
+                    onChanged: changeDate,
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
+                  if (isFestival)
+                    RecordDateRow(
+                      label: '最終日',
+                      icon: CupertinoIcons.calendar_badge_plus,
+                      enLabel: 'LAST DAY',
+                      date: endDate.value ?? date.value,
+                      minimumDate: date.value,
+                      onChanged: (d) =>
+                          endDate.value = d.isAfter(date.value) ? d : null,
+                    ),
+                ],
+              ),
+              if (isMultiAct)
+                FormSection(
+                  header: '出演者',
+                  trailing: namedActs.isEmpty
+                      ? null
+                      : Text(
+                          '${namedActs.length}組',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                  footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになり、お気に入りにも追加されます。',
+                  wrapInCard: false,
+                  children: [
+                    ActsEditor(
+                      // 日数が変わったら日ごとの欄を作り直す
+                      key: ValueKey((actsEditorGeneration.value, dayCount)),
+                      initialActs: acts.value,
+                      minimumActs: eventFormat.value == EventFormat.taiban
+                          ? 2
+                          : 1,
+                      days: festivalDays,
+                      scrollPadding: _fieldScrollPadding,
+                      onChanged: (next) => acts.value = next,
                     ),
                   ],
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(6, 8, 6, 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      Tooltip(
-                        message: 'ドラッグして並び替え',
-                        waitDuration: const Duration(milliseconds: 400),
-                        child: ReorderableDragStartListener(
-                          index: widget.dragIndex,
-                          child: Material(
-                            color: AppColors.surface.withValues(alpha: 0.85),
-                            borderRadius: BorderRadius.circular(10),
-                            child: SizedBox(
-                              width: 40,
-                              height: 40,
-                              child: Icon(
-                                Icons.drag_indicator_rounded,
-                                color: AppColors.textSecondary.withValues(
-                                  alpha: 0.75,
-                                ),
-                                size: 22,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      SizedBox(
-                        width: 30,
-                        height: 30,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: AppColors.gold.withValues(alpha: 0.14),
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppColors.gold.withValues(alpha: 0.35),
-                              width: 0.6,
-                            ),
-                          ),
-                          child: Center(
-                            child: Text(
-                              '${widget.indexOneBased}',
-                              style: const TextStyle(
-                                color: AppColors.gold,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                                height: 1,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: _controller,
-                          focusNode: _focusNode,
-                          scrollPadding: widget.scrollPadding,
-                          maxLength: RecordFieldLimits.setlistSongLine,
-                          maxLines: 2,
-                          minLines: 1,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontSize: 15,
-                            height: 1.35,
-                          ),
-                          strutStyle: const StrutStyle(
-                            fontSize: 15,
-                            height: 1.35,
-                            forceStrutHeight: true,
-                          ),
-                          decoration: InputDecoration(
-                            counterText: '',
-                            hintText: '曲名',
-                            hintStyle: TextStyle(
-                              color: AppColors.textSecondary.withValues(
-                                alpha: 0.42,
-                              ),
-                              fontSize: 15,
-                            ),
-                            isDense: true,
-                            filled: true,
-                            fillColor: AppColors.surface.withValues(
-                              alpha: 0.65,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 11,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(11),
-                              borderSide: BorderSide(
-                                color: AppColors.textDisabled.withValues(
-                                  alpha: 0.22,
-                                ),
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(11),
-                              borderSide: BorderSide(
-                                color: AppColors.textDisabled.withValues(
-                                  alpha: 0.22,
-                                ),
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(11),
-                              borderSide: BorderSide(
-                                color: AppColors.gold.withValues(alpha: 0.75),
-                                width: 1.2,
-                              ),
-                            ),
-                          ),
-                          onChanged: widget.onTextChanged,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      ListenableBuilder(
-                        listenable: _slideController,
-                        builder: (context, _) {
-                          return Tooltip(
-                            message: _slideController.isCompleted
-                                ? '閉じる'
-                                : '削除パネルを表示',
-                            waitDuration: const Duration(milliseconds: 400),
-                            child: IconButton(
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(
-                                minWidth: 36,
-                                minHeight: 36,
-                              ),
-                              icon: Icon(
-                                Icons.remove_circle_outline_rounded,
-                                size: 22,
-                                color: AppColors.textSecondary.withValues(
-                                  alpha: 0.65,
-                                ),
-                              ),
-                              style: IconButton.styleFrom(
-                                foregroundColor: AppColors.textSecondary,
-                              ),
-                              onPressed: _toggleDeleteReveal,
-                            ),
-                          );
-                        },
+              FormSection(
+                header: kind.detailsSectionLabel,
+                children: [
+                  if (kind.hasOpenTime)
+                    RecordTimeRow(
+                      label: '開場',
+                      icon: CupertinoIcons.clock,
+                      enLabel: 'OPEN',
+                      time: openTime.value,
+                      defaultTime:
+                          _shift(startTime.value, -60) ??
+                          const ClockTime(17, 0),
+                      onChanged: (t) => openTime.value = t,
+                    ),
+                  if (kind.hasSchedule) ...[
+                    RecordTimeRow(
+                      label: kind.startTimeLabel,
+                      icon: CupertinoIcons.play_circle,
+                      enLabel: 'START',
+                      time: startTime.value,
+                      defaultTime:
+                          _shift(openTime.value, 60) ?? const ClockTime(18, 0),
+                      onChanged: (t) => startTime.value = t,
+                    ),
+                    RecordTimeRow(
+                      label: kind.endTimeLabel,
+                      icon: CupertinoIcons.stop_circle,
+                      enLabel: 'END',
+                      time: endTime.value,
+                      defaultTime:
+                          _shift(startTime.value, 120) ??
+                          const ClockTime(20, 0),
+                      onChanged: (t) => endTime.value = t,
+                    ),
+                  ],
+                  if (hasVenue)
+                    FormTextRow(
+                      controller: venueController,
+                      placeholder: kind.venueLabel!,
+                      icon: CupertinoIcons.location,
+                      enLabel: kind.venueEnLabel,
+                      maxLength: RecordFieldLimits.venue,
+                      scrollPadding: _fieldScrollPadding,
+                    ),
+                  if (hasSeat)
+                    FormTextRow(
+                      controller: seatController,
+                      placeholder: kind.seatPlaceholder!,
+                      icon: CupertinoIcons.square_grid_2x2,
+                      enLabel: 'SEAT',
+                      maxLength: RecordFieldLimits.seat,
+                      scrollPadding: _fieldScrollPadding,
+                    ),
+                  FormTextRow(
+                    controller: priceController,
+                    placeholder: kind.priceLabel,
+                    icon: CupertinoIcons.money_yen,
+                    enLabel: 'PRICE',
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(
+                        '${RecordFieldLimits.ticketPriceMax}'.length,
                       ),
                     ],
+                    suffix: '円',
+                    scrollPadding: _fieldScrollPadding,
                   ),
-                ),
+                  sourceRow,
+                ],
               ),
-            ),
+              if (isLive && !isMultiAct)
+                FormSection(
+                  header: 'セットリスト',
+                  trailing: songs.value.isEmpty
+                      ? null
+                      : Text(
+                          '${songs.value.length}曲',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: context.colors.textSecondary,
+                          ),
+                        ),
+                  wrapInCard: false,
+                  children: [
+                    SetlistEditor(
+                      key: ValueKey(setlistEditorGeneration.value),
+                      initialSongs: songs.value,
+                      artistName: artist,
+                      scrollPadding: _fieldScrollPadding,
+                      onChanged: (next) => songs.value = next,
+                    ),
+                  ],
+                ),
+              if (isLive)
+                FormSection(
+                  header: 'MCメモ',
+                  children: [
+                    FormTextRow(
+                      controller: mcMemoController,
+                      placeholder: '印象に残った MC や演出',
+                      maxLines: 6,
+                      maxLength: RecordFieldLimits.mcMemo,
+                      scrollPadding: _fieldScrollPadding,
+                    ),
+                  ],
+                ),
+              FormSection(
+                header: '感想',
+                children: [
+                  FormTextRow(
+                    controller: impressionsController,
+                    placeholder: 'あとで読み返したいことを自由に',
+                    minLines: 5,
+                    maxLines: 12,
+                    maxLength: RecordFieldLimits.impressions,
+                    scrollPadding: _fieldScrollPadding,
+                  ),
+                ],
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
+  }
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+
+  /// 未設定の時刻行を開いたときの初期値に使う。開演の 1 時間前を開場、2 時間後を終演とする。
+  static ClockTime? _shift(ClockTime? time, int minutes) {
+    if (time == null) return null;
+    final total = (time.hour * 60 + time.minute + minutes) % (24 * 60);
+    return ClockTime(total ~/ 60, total % 60);
   }
 }

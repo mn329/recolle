@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/features/records/models/record.dart';
 
@@ -62,155 +63,164 @@ class _RecordTicketCardState extends State<RecordTicketCard>
         onTapDown: _handleTapDown,
         onTapUp: _handleTapUp,
         onTapCancel: _handleTapCancel,
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          decoration: BoxDecoration(
-            color: Colors.transparent,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.5),
-                blurRadius: 15,
-                offset: const Offset(0, 8),
-              ),
-            ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          child: TicketFace(
+            title: widget.record.title,
+            artistOrAuthor: widget.record.artistOrAuthor,
+            date: widget.record.date,
+            endDate: widget.record.isMultiDay ? widget.record.lastDate : null,
+            background: LayoutBuilder(
+              builder: (context, constraints) {
+                return DecodedNetworkImage(
+                  url: widget.record.ticketImageUrl,
+                  logicalWidth: constraints.maxWidth,
+                  logicalHeight: constraints.maxHeight,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(color: context.colors.card);
+                  },
+                );
+              },
+            ),
           ),
-          child: ClipPath(
-            clipper: TicketClipper(),
-            child: Container(
-              height: 120, // 少し高さを調整
-              decoration: const BoxDecoration(color: AppColors.surface),
-              child: Stack(
-                fit: StackFit.expand,
+        ),
+      ),
+    );
+  }
+}
+
+String _monthDay(DateTime d) =>
+    '${d.month.toString().padLeft(2, '0')}.${d.day.toString().padLeft(2, '0')}';
+
+/// 一覧に並ぶチケットの見た目。作成画面のプレビューとも共有する。
+class TicketFace extends StatelessWidget {
+  const TicketFace({
+    super.key,
+    required this.title,
+    required this.artistOrAuthor,
+    required this.date,
+    required this.background,
+    this.endDate,
+  });
+
+  static const double height = 120;
+
+  final String title;
+  final String artistOrAuthor;
+  final DateTime date;
+
+  /// 複数日の公演の最終日。
+  final DateTime? endDate;
+
+  /// 券面いっぱいに敷く画像など。文字が読めるよう上に紙色のグラデーションを重ねる。
+  final Widget background;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textShadow = [
+      Shadow(
+        color: colors.ticketTextShadow,
+        offset: const Offset(1, 1),
+        blurRadius: 2,
+      ),
+    ];
+    // 影も切り欠きのある券面の形に沿わせる（四角い影だと明るい背景で帯が浮く）
+    return PhysicalShape(
+      clipper: TicketClipper(),
+      clipBehavior: Clip.antiAlias,
+      color: colors.ticketBase,
+      shadowColor: colors.shadow,
+      elevation: 8,
+      child: SizedBox(
+        height: height,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            background,
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: colors.ticketScrim,
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              child: Row(
                 children: [
-                  // 1. Background Image with Dark Overlay
-                  LayoutBuilder(
-                    builder: (context, constraints) {
-                      return DecodedNetworkImage(
-                        url: widget.record.ticketImageUrl,
-                        logicalWidth: constraints.maxWidth,
-                        logicalHeight: constraints.maxHeight,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(color: AppColors.surfaceLight);
-                        },
-                      );
-                    },
-                  ),
-                  // Dark Gradient Overlay to make text readable
-                  Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          Colors.black.withValues(
-                            alpha: 0.9,
-                          ), // Left (Text side)
-                          Colors.black.withValues(alpha: 0.6), // Center
-                          Colors.black.withValues(alpha: 0.4), // Right
-                        ],
-                        begin: Alignment.centerLeft,
-                        end: Alignment.centerRight,
-                      ),
-                    ),
-                  ),
-
-                  // 2. Content
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 16,
-                    ),
-                    child: Row(
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Main Info (Left)
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              // Title (Main)
-                              Text(
-                                widget.record.title,
-                                style: const TextStyle(
-                                  color: AppColors.gold,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.0,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 6),
-                              // Artist Name
-                              Text(
-                                widget.record.artistOrAuthor,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black,
-                                      offset: Offset(1, 1),
-                                      blurRadius: 2,
-                                    ),
-                                  ],
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
+                        Text(
+                          title,
+                          style: AppFonts.titleStyle(
+                            fontSize: 20,
+                            color: colors.accent,
+                            shadows: textShadow,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-
-                        // Dashed Line Divider
-                        Container(
-                          width: 1,
-                          margin: const EdgeInsets.symmetric(horizontal: 16),
-                          child: CustomPaint(
-                            painter: DashedLinePainter(
-                              color: Colors.white.withValues(alpha: 0.3),
-                            ),
+                        const SizedBox(height: 6),
+                        Text(
+                          artistOrAuthor,
+                          style: TextStyle(
+                            color: colors.ticketText,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            shadows: textShadow,
                           ),
-                        ),
-
-                        // Date (Right)
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              widget.record.date.year.toString(),
-                              style: TextStyle(
-                                color: AppColors.gold.withValues(alpha: 0.8),
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${widget.record.date.month.toString().padLeft(2, '0')}.${widget.record.date.day.toString().padLeft(2, '0')}',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                fontFamily: 'Courier',
-                              ),
-                            ),
-                          ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
+                  Container(
+                    width: 1,
+                    margin: const EdgeInsets.symmetric(horizontal: 16),
+                    child: CustomPaint(
+                      painter: DashedLinePainter(color: colors.ticketDivider),
+                    ),
+                  ),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        date.year.toString(),
+                        style: AppFonts.monoStyle(
+                          fontSize: 12,
+                          color: colors.accent.withValues(alpha: 0.8),
+                        ),
+                      ),
+                      Text(
+                        _monthDay(date),
+                        style: AppFonts.monoStyle(
+                          fontSize: 20,
+                          color: colors.ticketText,
+                        ),
+                      ),
+                      if (endDate case final end?)
+                        Text(
+                          '– ${_monthDay(end)}',
+                          style: AppFonts.monoStyle(
+                            fontSize: 13,
+                            color: colors.ticketText,
+                          ),
+                        ),
+                    ],
+                  ),
                 ],
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -299,5 +309,6 @@ class DashedLinePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
+  bool shouldRepaint(DashedLinePainter oldDelegate) =>
+      oldDelegate.color != color;
 }

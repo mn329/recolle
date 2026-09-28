@@ -21,21 +21,21 @@ jobs:
       - name: Query records table
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
 
           if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_KEY}" ]; then
-            echo "::error::GitHub Secrets に SUPABASE_URL と SUPABASE_ANON_KEY を設定してください。"
+            echo "::error::GitHub Secrets に SUPABASE_URL と SUPABASE_PUBLISHABLE_KEY を設定してください。"
             exit 1
           fi
 
           url="${SUPABASE_URL%/}/rest/v1/records?select=id&limit=1"
 
+          # publishable キーは JWT ではないため Authorization: Bearer には載せない。
           status=$(curl --silent --show-error --output /dev/null --write-out "%{http_code}" \
             --max-time 30 --retry 3 --retry-delay 10 --retry-all-errors \
             --header "apikey: ${SUPABASE_KEY}" \
-            --header "Authorization: Bearer ${SUPABASE_KEY}" \
             "${url}") || {
             echo "::error::Supabase に接続できません。プロジェクトが一時停止されていないか、ダッシュボードで確認してください。"
             exit 1
