@@ -29,6 +29,7 @@ import 'package:recolle/features/records/widgets/record_form/record_title_field.
 import 'package:recolle/features/records/widgets/record_form/setlist_editor.dart';
 import 'package:recolle/features/records/widgets/record_form/ticket_preview_picker.dart';
 import 'package:recolle/features/records/widgets/ticket_mail_import_sheet.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 /// 記録の作成・編集フォーム。保存したら [Record] を返して閉じる。
 ///
@@ -127,18 +128,36 @@ class CreateRecordScreen extends HookConsumerWidget {
       );
     }
 
-    Future<void> pickImage() async {
+    Future<void> pickImages() async {
       FocusScope.of(context).unfocus();
-      final picked = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: TicketImageSettings.maxPickDimension,
-        maxHeight: TicketImageSettings.maxPickDimension,
-        imageQuality: TicketImageSettings.pickImageQuality,
-      );
-      if (picked == null) return;
-      final compressed = await compressTicketImageForUpload(File(picked.path));
+      final room = form.remainingImageSlots;
+      if (room == 0) return;
+      final picker = ImagePicker();
+      const maxDimension = TicketImageSettings.maxPickDimension;
+      const quality = TicketImageSettings.pickImageQuality;
+      // 複数選択は上限に 2 未満を渡せないので、残り 1 枚なら 1 枚だけ選ばせる
+      final picked = room == 1
+          ? [
+              ?await picker.pickImage(
+                source: ImageSource.gallery,
+                maxWidth: maxDimension,
+                maxHeight: maxDimension,
+                imageQuality: quality,
+              ),
+            ]
+          : await picker.pickMultiImage(
+              maxWidth: maxDimension,
+              maxHeight: maxDimension,
+              imageQuality: quality,
+              limit: room,
+            );
+      if (picked.isEmpty) return;
+      final compressed = await Future.wait([
+        for (final file in picked.take(room))
+          compressTicketImageForUpload(File(file.path)),
+      ]);
       if (!context.mounted) return;
-      vm.setImage(compressed);
+      vm.addImages(compressed);
     }
 
     Future<void> importFromMail() async {
@@ -155,6 +174,8 @@ class CreateRecordScreen extends HookConsumerWidget {
 
     Future<void> save() async {
       FocusScope.of(context).unfocus();
+      // 入力欄が離れたときに書きかけの曲などが反映されるのを待ってから保存する
+      await Future<void>.delayed(Duration.zero);
       switch (await vm.save()) {
         case null:
           return;
@@ -226,183 +247,192 @@ class CreateRecordScreen extends HookConsumerWidget {
         );
         if (discard == true && context.mounted) Navigator.of(context).pop();
       },
-      child: Scaffold(
-        backgroundColor: context.colors.background,
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          leadingWidth: 124,
-          leading: Align(
-            alignment: Alignment.centerLeft,
-            child: NavBarTextButton(
-              label: 'キャンセル',
-              onPressed: () => Navigator.maybePop(context),
+      child: AppBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          appBar: AppBar(
+            automaticallyImplyLeading: false,
+            leadingWidth: 124,
+            leading: Align(
+              alignment: Alignment.centerLeft,
+              child: NavBarTextButton(
+                label: 'キャンセル',
+                onPressed: () => Navigator.maybePop(context),
+              ),
             ),
-          ),
-          title: Text(isEditMode ? '記録を編集' : '新規記録'),
-          actions: [
-            if (form.isSaving)
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24),
-                child: CupertinoActivityIndicator(),
-              )
-            else
-              NavBarTextButton(
-                label: isEditMode ? '保存' : '追加',
-                isBold: true,
-                onPressed: form.canSave ? save : null,
-              ),
-          ],
-        ),
-        // ListView だと画面外に出たセトリ入力欄が破棄されフォーカスを失うため、一括で組み立てる
-        body: SingleChildScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: EdgeInsets.fromLTRB(
-            16,
-            8,
-            16,
-            32 + MediaQuery.paddingOf(context).bottom,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              IosSegmentedControl<RecordType>(
-                value: kind,
-                segments: {
-                  for (final t in RecordType.values) t: t.japaneseLabel,
-                },
-                onChanged: vm.setType,
-              ),
-              if (isLive) ...[
-                const SizedBox(height: 10),
-                IosSegmentedControl<EventFormat>(
-                  value: form.eventFormat,
-                  segments: {for (final f in EventFormat.values) f: f.label},
-                  onChanged: vm.changeFormat,
+            title: Text(isEditMode ? '記録を編集' : '新規記録'),
+            actions: [
+              if (form.isSaving)
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  child: CupertinoActivityIndicator(),
+                )
+              else
+                NavBarTextButton(
+                  label: isEditMode ? '保存' : '追加',
+                  isBold: true,
+                  onPressed: form.canSave ? save : null,
                 ),
-              ],
-              const SizedBox(height: 20),
-              TicketPreviewPicker(
-                type: kind,
-                title: form.title,
-                artistOrAuthor: form.headline,
-                date: form.date,
-                endDate: isFestival ? form.endDate : null,
-                localImage: form.selectedImage,
-                remoteImageUrl: form.savedImageUrl,
-                onPickImage: pickImage,
-                onRemoveImage: vm.removeImage,
-              ),
-              FormSection(
-                header: '基本情報',
-                trailing: _MailImportButton(onPressed: importFromMail),
-                footer: missingLabels.isEmpty
-                    ? null
-                    : '${missingLabels.join('と')}は必須です。',
-                children: [
-                  // ライブはアーティストから決めることが多く、候補や setlist.fm もそこから引く
-                  if (isMultiAct)
-                    titleField
-                  else
-                    ...isLive
-                        ? [creatorField, titleField]
-                        : [titleField, creatorField],
-                  RecordDateRow(
-                    label: isFestival ? '開催日' : (isLive ? '公演日' : '日付'),
-                    icon: CupertinoIcons.calendar,
-                    enLabel: 'DATE',
-                    date: form.date,
-                    onChanged: vm.changeDate,
-                  ),
-                  if (isFestival)
-                    RecordDateRow(
-                      label: '最終日',
-                      icon: CupertinoIcons.calendar_badge_plus,
-                      enLabel: 'LAST DAY',
-                      date: form.endDate ?? form.date,
-                      minimumDate: form.date,
-                      onChanged: vm.setEndDate,
-                    ),
-                ],
-              ),
-              if (isMultiAct)
-                FormSection(
-                  header: '出演者',
-                  trailing: form.namedActs.isEmpty
-                      ? null
-                      : _CountLabel('${form.namedActs.length}組'),
-                  footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになり、お気に入りにも追加されます。',
-                  wrapInCard: false,
-                  children: [
-                    ActsEditor(
-                      // 日数が変わったら日ごとの欄を作り直す
-                      key: ValueKey((form.actsRevision, form.dayCount)),
-                      initialActs: form.acts,
-                      minimumActs: form.eventFormat == EventFormat.taiban
-                          ? 2
-                          : 1,
-                      days: form.festivalDays,
-                      scrollPadding: _fieldScrollPadding,
-                      onChanged: vm.setActs,
-                    ),
-                  ],
-                ),
-              RecordDetailsSection(
-                form: form,
-                controllers: controllers,
-                onTextChanged: vm.updateText,
-                onOpenTimeChanged: vm.setOpenTime,
-                onStartTimeChanged: vm.setStartTime,
-                onEndTimeChanged: vm.setEndTime,
-                scrollPadding: _fieldScrollPadding,
-              ),
-              if (isLive && !isMultiAct)
-                FormSection(
-                  header: 'セットリスト',
-                  trailing: form.songs.isEmpty
-                      ? null
-                      : _CountLabel('${form.songs.length}曲'),
-                  wrapInCard: false,
-                  children: [
-                    SetlistEditor(
-                      key: ValueKey(form.setlistRevision),
-                      initialSongs: form.songs,
-                      artistName: form.artist,
-                      scrollPadding: _fieldScrollPadding,
-                      onChanged: vm.setSongs,
-                    ),
-                  ],
-                ),
-              if (isLive)
-                FormSection(
-                  header: 'MCメモ',
-                  children: [
-                    FormTextRow(
-                      controller: controllers[RecordTextField.mcMemo]!,
-                      placeholder: '印象に残った MC や演出',
-                      maxLines: 6,
-                      maxLength: RecordFieldLimits.mcMemo,
-                      scrollPadding: _fieldScrollPadding,
-                      onChanged: (value) =>
-                          vm.updateText(RecordTextField.mcMemo, value),
-                    ),
-                  ],
-                ),
-              FormSection(
-                header: '感想',
-                children: [
-                  FormTextRow(
-                    controller: controllers[RecordTextField.impressions]!,
-                    placeholder: 'あとで読み返したいことを自由に',
-                    minLines: 5,
-                    maxLines: 12,
-                    maxLength: RecordFieldLimits.impressions,
-                    scrollPadding: _fieldScrollPadding,
-                    onChanged: (value) =>
-                        vm.updateText(RecordTextField.impressions, value),
-                  ),
-                ],
-              ),
             ],
+          ),
+          // ListView だと画面外に出たセトリ入力欄が破棄されフォーカスを失うため、一括で組み立てる
+          // 画像のアップロード中に直した内容は保存に入らないので、保存中は触れないようにする
+          body: IgnorePointer(
+            ignoring: form.isSaving,
+            child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              padding: EdgeInsets.fromLTRB(
+                16,
+                8,
+                16,
+                32 + MediaQuery.paddingOf(context).bottom,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  IosSegmentedControl<RecordType>(
+                    value: kind,
+                    segments: {
+                      for (final t in RecordType.values) t: t.japaneseLabel,
+                    },
+                    onChanged: vm.setType,
+                  ),
+                  if (isLive) ...[
+                    const SizedBox(height: 10),
+                    IosSegmentedControl<EventFormat>(
+                      value: form.eventFormat,
+                      segments: {
+                        for (final f in EventFormat.values) f: f.label,
+                      },
+                      onChanged: vm.changeFormat,
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  TicketPreviewPicker(
+                    type: kind,
+                    title: form.title,
+                    artistOrAuthor: form.headline,
+                    date: form.date,
+                    endDate: isFestival ? form.endDate : null,
+                    images: form.images,
+                    onAddImages: pickImages,
+                    onRemoveImage: vm.removeImageAt,
+                    onMakeCover: vm.makeCover,
+                  ),
+                  FormSection(
+                    header: '基本情報',
+                    trailing: _MailImportButton(onPressed: importFromMail),
+                    footer: missingLabels.isEmpty
+                        ? null
+                        : '${missingLabels.join('と')}は必須です。',
+                    children: [
+                      // ライブはアーティストから決めることが多く、候補や setlist.fm もそこから引く
+                      if (isMultiAct)
+                        titleField
+                      else
+                        ...isLive
+                            ? [creatorField, titleField]
+                            : [titleField, creatorField],
+                      RecordDateRow(
+                        label: isFestival ? '開催日' : (isLive ? '公演日' : '日付'),
+                        icon: CupertinoIcons.calendar,
+                        enLabel: 'DATE',
+                        date: form.date,
+                        onChanged: vm.changeDate,
+                      ),
+                      if (isFestival)
+                        RecordDateRow(
+                          label: '最終日',
+                          icon: CupertinoIcons.calendar_badge_plus,
+                          enLabel: 'LAST DAY',
+                          date: form.endDate ?? form.date,
+                          minimumDate: form.date,
+                          onChanged: vm.setEndDate,
+                        ),
+                    ],
+                  ),
+                  if (isMultiAct)
+                    FormSection(
+                      header: '出演者',
+                      trailing: form.namedActs.isEmpty
+                          ? null
+                          : _CountLabel('${form.namedActs.length}組'),
+                      footer: '★ でお目当てを 1 組選ぶと、チケットの見出しになり、お気に入りにも追加されます。',
+                      wrapInCard: false,
+                      children: [
+                        ActsEditor(
+                          // 日数が変わったら日ごとの欄を作り直す
+                          key: ValueKey((form.actsRevision, form.dayCount)),
+                          initialActs: form.acts,
+                          minimumActs: form.eventFormat == EventFormat.taiban
+                              ? 2
+                              : 1,
+                          days: form.festivalDays,
+                          scrollPadding: _fieldScrollPadding,
+                          onChanged: vm.setActs,
+                        ),
+                      ],
+                    ),
+                  RecordDetailsSection(
+                    form: form,
+                    controllers: controllers,
+                    onTextChanged: vm.updateText,
+                    onOpenTimeChanged: vm.setOpenTime,
+                    onStartTimeChanged: vm.setStartTime,
+                    onEndTimeChanged: vm.setEndTime,
+                    scrollPadding: _fieldScrollPadding,
+                  ),
+                  if (isLive && !isMultiAct)
+                    FormSection(
+                      header: 'セットリスト',
+                      trailing: switch (setlistSongTitles(form.songs).length) {
+                        0 => null,
+                        final count => _CountLabel('$count曲'),
+                      },
+                      wrapInCard: false,
+                      children: [
+                        SetlistEditor(
+                          key: ValueKey(form.setlistRevision),
+                          initialSongs: form.songs,
+                          artistName: form.artist,
+                          scrollPadding: _fieldScrollPadding,
+                          onChanged: vm.setSongs,
+                        ),
+                      ],
+                    ),
+                  if (isLive)
+                    FormSection(
+                      header: 'MCメモ',
+                      children: [
+                        FormTextRow(
+                          controller: controllers[RecordTextField.mcMemo]!,
+                          placeholder: '印象に残った MC や演出',
+                          maxLines: 6,
+                          maxLength: RecordFieldLimits.mcMemo,
+                          scrollPadding: _fieldScrollPadding,
+                          onChanged: (value) =>
+                              vm.updateText(RecordTextField.mcMemo, value),
+                        ),
+                      ],
+                    ),
+                  FormSection(
+                    header: '感想',
+                    children: [
+                      FormTextRow(
+                        controller: controllers[RecordTextField.impressions]!,
+                        placeholder: 'あとで読み返したいことを自由に',
+                        minLines: 5,
+                        maxLines: 12,
+                        maxLength: RecordFieldLimits.impressions,
+                        scrollPadding: _fieldScrollPadding,
+                        onChanged: (value) =>
+                            vm.updateText(RecordTextField.impressions, value),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:recolle/core/utils/artist_name_match.dart';
+import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
 
 class ItunesArtist {
@@ -229,6 +230,74 @@ class ItunesClient {
             .where((s) => normalizeArtistName(_baseTitle(s.title)) == target)
             .firstOrNull ??
         songs.firstOrNull;
+  }
+
+  /// セトリの曲名ごとに Apple Music の曲 ID（iTunes の trackId と同じ）を探す。
+  ///
+  /// 返り値は「曲名 → trackId」で、見つからなかった曲は含めない。プレイリストに別の曲が
+  /// 入らないよう、曲名が一致したもの（付記の違いは許す）だけを使う。
+  /// 1. アーティストの曲一覧（1 リクエスト、セトリの日本語化と共有のキャッシュ）から探す
+  /// 2. 残りはレート制限を考えて [maxIndividualLookups] 曲まで 1 曲ずつ検索する
+  Future<Map<String, int>> findSongIds({
+    required String artistName,
+    required List<String> titles,
+    int maxIndividualLookups = 10,
+  }) async {
+    final artist = artistName.trim();
+    final pending = {
+      for (final t in titles)
+        if (t.trim().isNotEmpty) t,
+    };
+    if (artist.isEmpty || pending.isEmpty) return {};
+
+    int? matchIn(Iterable<Map<String, dynamic>> results, String title) {
+      final target = normalizeArtistName(title);
+      int? loose;
+      for (final r in results) {
+        final id = r['trackId'];
+        final name = r['trackName'];
+        final songArtist = r['artistName'];
+        if (id is! int ||
+            name is! String ||
+            songArtist is! String ||
+            !artistMatches(songArtist, artist)) {
+          continue;
+        }
+        if (normalizeArtistName(name) == target) return id;
+        if (loose == null && normalizeArtistName(_baseTitle(name)) == target) {
+          loose = id;
+        }
+      }
+      return loose;
+    }
+
+    final catalog = await _songCatalog(artist, 'JP');
+    final result = <String, int>{};
+    for (final title in pending) {
+      final id = matchIn(catalog, title);
+      if (id != null) result[title] = id;
+    }
+
+    final unresolved = pending
+        .where((t) => !result.containsKey(t))
+        .take(maxIndividualLookups)
+        .toList();
+    final found = await Future.wait([
+      for (final title in unresolved)
+        _search({
+          'term': '$artist $title',
+          'entity': 'song',
+          'limit': '10',
+        }).then((hits) => matchIn(hits, title)).catchError((Object e) {
+          // 一部の曲の検索が失敗しても、見つかった曲だけでプレイリストは作れる
+          debugPrint('Song id lookup failed for "$title": $e');
+          return null;
+        }, test: (e) => e is UserFacingException),
+    ]);
+    for (final (i, id) in found.indexed) {
+      if (id != null) result[unresolved[i]] = id;
+    }
+    return result;
   }
 
   /// [artistName] の曲から [term] に合うものを返す。曲名の重複（別アルバム収録など）は除く。
@@ -457,6 +526,10 @@ class ItunesClient {
       res = await _http.get(uri).timeout(_timeout);
     } on TimeoutException {
       throw const UserFacingException('曲情報の取得がタイムアウトしました。');
+    } catch (e) {
+      // 接続できない（SocketException / ClientException）。呼び出し側は UserFacingException だけを受けるので変換する
+      debugPrint('iTunes request failed: $e');
+      throw UserFacingException(toUserFriendlyMessage(e));
     }
     if (res.statusCode == 403 || res.statusCode == 429) {
       throw const UserFacingException('曲情報の検索が混み合っています。少し待ってからお試しください。');
@@ -465,7 +538,13 @@ class ItunesClient {
       throw UserFacingException('曲情報を取得できませんでした (${res.statusCode})。');
     }
 
-    final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(utf8.decode(res.bodyBytes));
+    } on FormatException {
+      // 公衆 Wi-Fi のログイン画面などが 200 で HTML を返すことがある
+      throw const UserFacingException('曲情報を読み取れませんでした。ネットワークの接続を確認してください。');
+    }
     final results = decoded is Map && decoded['results'] is List
         ? [
             for (final r in decoded['results'] as List)

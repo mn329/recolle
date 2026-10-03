@@ -14,7 +14,6 @@ Record _record(
   title: 'LIVE $id',
   artistOrAuthor: 'Artist',
   date: date,
-  ticketImageUrl: '',
   startTime: startTime,
   venue: venue,
 );
@@ -60,6 +59,24 @@ void main() {
     expect(payload.map((e) => e['type']).skip(5), ['movie', 'book']);
   });
 
+  test('複数日の公演は、最終日の翌日 0 時まで表示する時刻を渡す', () {
+    final payload = upcomingEventsPayload([
+      Record(
+        id: 'fes',
+        type: RecordType.live,
+        title: 'FES',
+        artistOrAuthor: 'Artist',
+        date: DateTime(2026, 10, 3),
+        endDate: DateTime(2026, 10, 5),
+      ),
+    ], now);
+
+    expect(
+      payload.single['finishesAt'],
+      DateTime(2026, 10, 6).millisecondsSinceEpoch,
+    );
+  });
+
   test('開演時刻・会場・種別をウィジェット用の値にする', () {
     final payload = upcomingEventsPayload([
       _record(
@@ -79,6 +96,7 @@ void main() {
       'hasStartTime': true,
       'opensAt': null,
       'endsAt': null,
+      'finishesAt': DateTime(2026, 10, 4).millisecondsSinceEpoch,
       'venue': '日本武道館',
       'isLive': true,
       'startLabel': '開演',

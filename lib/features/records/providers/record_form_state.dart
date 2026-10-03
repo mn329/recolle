@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:recolle/core/constants/field_limits.dart';
+import 'package:recolle/core/constants/ticket_image_settings.dart';
+import 'package:recolle/core/utils/link_url.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
 
@@ -15,6 +17,41 @@ enum RecordTextField {
   price,
   mcMemo,
   impressions,
+  link,
+}
+
+/// フォームで扱うチケット画像。
+@immutable
+sealed class TicketImage {
+  const TicketImage();
+}
+
+/// 保存済みの画像。
+class SavedTicketImage extends TicketImage {
+  const SavedTicketImage(this.url);
+
+  final String url;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SavedTicketImage && other.url == url;
+
+  @override
+  int get hashCode => url.hashCode;
+}
+
+/// 新しく選び、保存時にアップロードする画像。
+class PickedTicketImage extends TicketImage {
+  const PickedTicketImage(this.file);
+
+  final File file;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PickedTicketImage && other.file.path == file.path;
+
+  @override
+  int get hashCode => file.path.hashCode;
 }
 
 /// 記録フォームを開くときの初期値。
@@ -66,9 +103,7 @@ class RecordFormState {
     this.startTime,
     this.endTime,
     this.songs = const [],
-    this.selectedImage,
-    this.removeSavedImage = false,
-    this.existingImageUrl,
+    this.images = const [],
     this.isSaving = false,
     this.actsRevision = 0,
     this.setlistRevision = 0,
@@ -101,8 +136,12 @@ class RecordFormState {
         RecordTextField.price: editing?.ticketPrice?.toString() ?? '',
         RecordTextField.mcMemo: editing?.mcMemo ?? '',
         RecordTextField.impressions: editing?.impressions ?? '',
+        RecordTextField.link: editing?.linkUrl ?? draft?.linkUrl ?? '',
       }),
-      existingImageUrl: editing?.ticketImageUrl,
+      images: [
+        for (final url in editing?.ticketImageUrls ?? const <String>[])
+          SavedTicketImage(url),
+      ],
     );
   }
 
@@ -123,14 +162,8 @@ class RecordFormState {
   final List<String> songs;
   final Map<RecordTextField, String> texts;
 
-  /// 新しく選んだチケット画像。
-  final File? selectedImage;
-
-  /// 編集中の記録に保存済みの画像を外すか。
-  final bool removeSavedImage;
-
-  /// 編集中の記録に保存済みの画像。
-  final String? existingImageUrl;
+  /// チケット画像。先頭が一覧に出す表紙。
+  final List<TicketImage> images;
   final bool isSaving;
 
   /// 出演者・セトリを入力欄の外から差し替えたときに増やす。
@@ -178,7 +211,21 @@ class RecordFormState {
   String get titleLabel =>
       isMultiAct ? 'イベント名・${eventFormat.label}名' : type.titleFieldLabel;
 
-  String? get savedImageUrl => removeSavedImage ? null : existingImageUrl;
+  /// あと何枚画像を足せるか。
+  int get remainingImageSlots => (TicketImageSettings.maxCount - images.length)
+      .clamp(0, TicketImageSettings.maxCount);
+
+  /// [initial] にあって今は外した、保存済みの画像。
+  List<String> removedImageUrls(RecordFormState initial) {
+    final kept = {
+      for (final image in images)
+        if (image is SavedTicketImage) image.url,
+    };
+    return [
+      for (final image in initial.images)
+        if (image is SavedTicketImage && !kept.contains(image.url)) image.url,
+    ];
+  }
 
   List<String> get missingLabels => [
     if (isMultiAct && namedActs.isEmpty)
@@ -208,17 +255,23 @@ class RecordFormState {
     }
     final open = openTime;
     final start = startTime;
-    if (type.hasOpenTime &&
-        open != null &&
-        start != null &&
-        open.compareTo(start) > 0) {
-      return '開場は開演より前の時刻にしてください。';
+    if (type.hasOpenTime && open != null && start != null) {
+      final gap =
+          (open.hour * 60 + open.minute) - (start.hour * 60 + start.minute);
+      // 開場が開演より 12 時間以上後なら、日をまたぐ公演（開場 23:30・開演 0:30 など）とみなす
+      if (gap > 0 && gap < 12 * 60) {
+        return '開場は開演より前の時刻にしてください。';
+      }
+    }
+    final link = text(RecordTextField.link).trim();
+    if (link.isNotEmpty && parseLinkUrl(link) == null) {
+      return 'リンクの形式が正しくありません（例: https://eplus.jp/…）。';
     }
     return null;
   }
 
   /// 入力内容を保存用の [Record] にする。種別で使わない項目は捨てる。
-  Record toRecord({required String id, required String ticketImageUrl}) {
+  Record toRecord({required String id, required List<String> ticketImageUrls}) {
     String? nullIfEmpty(RecordTextField field) {
       final value = text(field).trim();
       return value.isEmpty ? null : value;
@@ -239,7 +292,7 @@ class RecordFormState {
                 a.withDay(days > 1 ? (a.day ?? 1).clamp(1, days) : null),
             ]
           : const [],
-      ticketImageUrl: ticketImageUrl,
+      ticketImageUrls: ticketImageUrls,
       ticketSource: nullIfEmpty(RecordTextField.source),
       venue: hasVenue ? nullIfEmpty(RecordTextField.venue) : null,
       seat: hasSeat ? nullIfEmpty(RecordTextField.seat) : null,
@@ -250,6 +303,7 @@ class RecordFormState {
       setlist: _setlist,
       mcMemo: isLive ? nullIfEmpty(RecordTextField.mcMemo) : null,
       impressions: nullIfEmpty(RecordTextField.impressions),
+      linkUrl: parseLinkUrl(text(RecordTextField.link)),
     );
   }
 
@@ -263,8 +317,7 @@ class RecordFormState {
       openTime != initial.openTime ||
       startTime != initial.startTime ||
       endTime != initial.endTime ||
-      selectedImage != null ||
-      removeSavedImage ||
+      !listEquals(images, initial.images) ||
       !listEquals(songs, initial.songs) ||
       !mapEquals(texts, initial.texts);
 
@@ -282,8 +335,7 @@ class RecordFormState {
     Object? endTime = _unset,
     List<String>? songs,
     Map<RecordTextField, String>? texts,
-    Object? selectedImage = _unset,
-    bool? removeSavedImage,
+    List<TicketImage>? images,
     bool? isSaving,
     int? actsRevision,
     int? setlistRevision,
@@ -302,11 +354,7 @@ class RecordFormState {
     endTime: identical(endTime, _unset) ? this.endTime : endTime as ClockTime?,
     songs: songs ?? this.songs,
     texts: texts ?? this.texts,
-    selectedImage: identical(selectedImage, _unset)
-        ? this.selectedImage
-        : selectedImage as File?,
-    removeSavedImage: removeSavedImage ?? this.removeSavedImage,
-    existingImageUrl: existingImageUrl,
+    images: images ?? this.images,
     isSaving: isSaving ?? this.isSaving,
     actsRevision: actsRevision ?? this.actsRevision,
     setlistRevision: setlistRevision ?? this.setlistRevision,

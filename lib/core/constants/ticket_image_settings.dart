@@ -2,7 +2,10 @@
 abstract final class TicketImageSettings {
   TicketImageSettings._();
 
-  /// [ImagePicker.pickImage] の長辺上限（px）。
+  /// 1 件の記録に付けられる枚数。DB の制約 `records_ticket_image_urls_count` と揃える。
+  static const int maxCount = 5;
+
+  /// [ImagePicker.pickMultiImage] の長辺上限（px）。
   static const double maxPickDimension = 2048;
 
   /// ギャラリー選択時の JPEG 品質（0–100）。

@@ -14,7 +14,6 @@ Record _record({
   title: 'T',
   artistOrAuthor: artist,
   date: DateTime(2026, 9, 1),
-  ticketImageUrl: '',
   eventFormat: format,
   acts: acts,
 );

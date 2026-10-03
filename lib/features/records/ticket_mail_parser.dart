@@ -17,6 +17,7 @@ class TicketMailInfo {
     this.openTime,
     this.startTime,
     this.endTime,
+    this.linkUrl,
   });
 
   final String? title;
@@ -30,7 +31,11 @@ class TicketMailInfo {
   final ClockTime? startTime;
   final ClockTime? endTime;
 
+  /// 公演ページ・チケットのページの URL。
+  final String? linkUrl;
+
   bool get isEmpty =>
+      linkUrl == null &&
       title == null &&
       artist == null &&
       date == null &&
@@ -79,7 +84,32 @@ TicketMailInfo parseTicketMail(String text, {DateTime? now}) {
       pickLast: true,
     ),
     endTime: _parseTime('終演', [dateText, endLabeled], endLabeled),
+    linkUrl: _findTicketSiteLink(text),
   );
+}
+
+/// メールに載るチケットサイトのドメイン。配信停止などほかのリンクを拾わないよう、これに限る。
+const _ticketSiteHosts = [
+  'eplus.jp',
+  'l-tike.com',
+  'pia.jp',
+  'tickebo.jp',
+  'r-t.jp',
+  'zaiko.io',
+];
+
+final _urlPattern = RegExp(r'''https?://[^\s<>"'（）()「」]+''');
+
+/// 本文にあるチケットサイトの最初の URL。なければ null。
+String? _findTicketSiteLink(String text) {
+  for (final match in _urlPattern.allMatches(text)) {
+    final uri = Uri.tryParse(match.group(0)!);
+    final host = uri?.host.toLowerCase() ?? '';
+    if (_ticketSiteHosts.any((h) => host == h || host.endsWith('.$h'))) {
+      return uri.toString();
+    }
+  }
+  return null;
 }
 
 // 長いラベルを先に並べ、「公演」が「公演日」を横取りしないようにする
@@ -105,6 +135,9 @@ const _sources = [
   (['楽天チケット'], '楽天チケット'),
   (['zaiko'], 'ZAIKO'),
 ];
+
+/// メールから読み取れるチケットサイトの名前（取得元欄の候補にも使う）。
+final ticketSiteNames = [for (final (_, name) in _sources) name];
 
 String _normalize(String text) {
   final buffer = StringBuffer();

@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:recolle/features/music/data/apple_music_playlist.dart';
 import 'package:recolle/features/music/data/artist_artwork_finder.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
 import 'package:recolle/features/music/data/deezer_client.dart';
@@ -9,6 +10,10 @@ import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
+
+final appleMusicPlaylistServiceProvider = Provider<AppleMusicPlaylistService>(
+  (ref) => AppleMusicPlaylistService(),
+);
 
 final deezerClientProvider = Provider<DeezerClient>((ref) => DeezerClient());
 
@@ -66,14 +71,14 @@ final itunesArtistProvider = FutureProvider.family<ItunesArtist?, ArtistQuery>((
   return ref
       .read(itunesClientProvider)
       .findArtist(query.name, artistId: query.itunesArtistId);
-});
+}, retry: (_, _) => null);
 
 final topSongsProvider = FutureProvider.family<List<ItunesSong>, int>((
   ref,
   artistId,
 ) {
   return ref.read(itunesClientProvider).topSongs(artistId);
-});
+}, retry: (_, _) => null);
 
 /// 記録の曲名に対応する iTunes の曲。見つからなければ null。
 final itunesSongProvider = FutureProvider.family<ItunesSong?, SongQuery>((
@@ -83,7 +88,7 @@ final itunesSongProvider = FutureProvider.family<ItunesSong?, SongQuery>((
   return ref
       .read(itunesClientProvider)
       .findSong(artistName: query.artistName, title: query.title);
-});
+}, retry: (_, _) => null);
 
 /// アーティスト名ごとのアートワーク。見つからない・失敗時は null（画像なし表示）。
 final artistArtworkProvider = FutureProvider.family<String?, String>((

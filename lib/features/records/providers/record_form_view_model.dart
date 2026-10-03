@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -10,11 +11,14 @@ import 'package:recolle/features/favorites/providers/favorite_artists_provider.d
 import 'package:recolle/features/music/data/setlist_localization.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/records_local_cache.dart';
+import 'package:recolle/features/records/data/records_repository.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/record_form_state.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
+import 'package:uuid/uuid.dart';
 
 export 'package:recolle/features/records/providers/record_form_state.dart';
 
@@ -59,6 +63,9 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
 
   final RecordFormArgs _args;
   late RecordFormState _initial;
+
+  /// 新しい記録の ID。保存に失敗して保存し直しても同じ記録になるよう、フォームを開いている間は固定する。
+  final _newRecordId = const Uuid().v4();
 
   @override
   RecordFormState build() {
@@ -248,7 +255,11 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
         updated = updated.copyWith(
           acts: [
             ...current.namedActs,
-            RecordAct(artist: name, isMain: true),
+            // お目当てはすでに決まっていれば、そのままにする
+            RecordAct(
+              artist: name,
+              isMain: !current.namedActs.any((a) => a.isMain),
+            ),
           ],
           actsRevision: current.actsRevision + 1,
         );
@@ -279,6 +290,7 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
     }
     if (useSeat) fill(RecordTextField.seat, info.seat, RecordFieldLimits.seat);
     if (priceFits) texts[RecordTextField.price] = '${info.ticketPrice}';
+    fill(RecordTextField.link, info.linkUrl, RecordFieldLimits.linkUrl);
 
     updated = updated.withTexts(texts);
     if (useOpen) updated = updated.copyWith(openTime: info.openTime);
@@ -299,14 +311,32 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
       if (useSeat) '座席',
       if (priceFits) kind.priceLabel,
       if (info.ticketSource != null) '取得元',
+      if (info.linkUrl != null) 'リンク',
     ];
   }
 
-  void setImage(File image) =>
-      state = state.copyWith(selectedImage: image, removeSavedImage: false);
+  /// 選んだ画像を後ろに足す。上限を超える分は捨てる。
+  void addImages(List<File> files) {
+    final room = state.remainingImageSlots;
+    if (room == 0 || files.isEmpty) return;
+    state = state.copyWith(
+      images: [
+        ...state.images,
+        for (final file in files.take(room)) PickedTicketImage(file),
+      ],
+    );
+  }
 
-  void removeImage() =>
-      state = state.copyWith(selectedImage: null, removeSavedImage: true);
+  void removeImageAt(int index) =>
+      state = state.copyWith(images: [...state.images]..removeAt(index));
+
+  /// [index] の画像を先頭（一覧に出す表紙）へ移す。
+  void makeCover(int index) {
+    if (index == 0) return;
+    final images = [...state.images];
+    images.insert(0, images.removeAt(index));
+    state = state.copyWith(images: images);
+  }
 
   /// 記録を保存する。保存できない状態（必須項目の不足・保存中）なら null。
   Future<RecordSaveResult?> save() async {
@@ -324,20 +354,62 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
       final favoritesNotifier = ref.read(favoriteArtistsProvider.notifier);
       final favorites = ref.read(favoriteArtistsProvider).asData?.value;
 
-      final image = form.selectedImage;
-      final ticketImageUrl = image != null
-          ? await repo.uploadTicketImage(userId: userId, file: image)
-          : form.savedImageUrl ?? '';
-      final editing = _args.recordToEdit;
-      final record = form.toRecord(
-        id: editing?.id ?? '',
-        ticketImageUrl: ticketImageUrl,
-      );
-      final saved = editing != null
-          ? await repo.updateRecord(editing.id, record.toJson())
-          : await repo.insertRecord({...record.toJson(), 'user_id': userId});
+      final uploaded = <String>[];
+      final Record saved;
+      try {
+        final ticketImageUrls = await Future.wait([
+          for (final image in form.images)
+            switch (image) {
+              SavedTicketImage(:final url) => Future.value(url),
+              PickedTicketImage(:final file) =>
+                repo.uploadTicketImage(userId: userId, file: file).then((url) {
+                  uploaded.add(url);
+                  return url;
+                }),
+            },
+        ]);
+        final editing = _args.recordToEdit;
+        final record = form.toRecord(
+          id: editing?.id ?? _newRecordId,
+          ticketImageUrls: ticketImageUrls,
+        );
+        try {
+          saved = editing != null
+              ? await repo.updateRecord(editing.id, record.toJson())
+              : await repo.insertRecord({
+                  ...record.toJson(),
+                  'id': _newRecordId,
+                  'user_id': userId,
+                });
+        } on RecordWriteUncertain {
+          // 記録がこれらの画像を指して保存されているかもしれないので消さない。
+          // 保存し直したときに同じ画像を使うよう、アップロード済みとしてフォームに持たせる
+          if (ref.mounted) {
+            state = state.copyWith(
+              images: [
+                for (final url in ticketImageUrls) SavedTicketImage(url),
+              ],
+            );
+          }
+          uploaded.clear();
+          rethrow;
+        }
+      } catch (_) {
+        // 記録に結び付かなかった画像をストレージに残さない
+        _deleteImagesQuietly(repo, uploaded);
+        rethrow;
+      }
+      _deleteImagesQuietly(repo, form.removedImageUrls(_initial));
+      // キャッシュが古いままだと、再読み込みの先頭で保存前の一覧が一瞬出る
+      await RecordsLocalCache()
+          .upsert(userId, saved)
+          .timeout(const Duration(seconds: 2))
+          .catchError((Object e) {
+            debugPrint('Records cache update failed: $e');
+          });
       if (ref.mounted) ref.invalidate(recordsProvider);
 
+      final editing = _args.recordToEdit;
       final names = favorites == null
           ? const <String>[]
           : artistsToAutoFavorite(
@@ -360,6 +432,16 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
     } finally {
       if (ref.mounted) state = state.copyWith(isSaving: false);
     }
+  }
+
+  /// 画像の片付けは、失敗しても保存の結果は変えずにログだけ残す。
+  static void _deleteImagesQuietly(RecordsRepository repo, List<String> urls) {
+    if (urls.isEmpty) return;
+    unawaited(
+      repo.deleteTicketImages(urls).catchError((Object e, StackTrace st) {
+        debugPrint('Failed to delete ticket images: $e\n$st');
+      }),
+    );
   }
 
   static String _fit(String value, int maxLength) =>

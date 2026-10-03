@@ -5,7 +5,9 @@ import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/record_form_state.dart';
 import 'package:recolle/features/records/widgets/record_form/form_section.dart';
 import 'package:recolle/features/records/widgets/record_form/form_text_row.dart';
+import 'package:recolle/features/records/widgets/record_form/record_source_row.dart';
 import 'package:recolle/features/records/widgets/record_form/record_time_row.dart';
+import 'package:recolle/features/records/widgets/record_form/record_venue_row.dart';
 
 /// 開場・開演・終演、会場・座席・料金・取得元をまとめた入力セクション。
 /// 種別で使わない項目は出さない。
@@ -38,8 +40,10 @@ class RecordDetailsSection extends StatelessWidget {
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
     String? suffix,
+    FocusNode? focusNode,
   }) => FormTextRow(
     controller: controllers[field]!,
+    focusNode: focusNode,
     placeholder: placeholder,
     icon: icon,
     enLabel: enLabel,
@@ -89,12 +93,11 @@ class RecordDetailsSection extends StatelessWidget {
           ),
         ],
         if (form.hasVenue)
-          _textRow(
-            RecordTextField.venue,
-            placeholder: kind.venueLabel!,
-            icon: CupertinoIcons.location,
-            enLabel: kind.venueEnLabel,
-            maxLength: RecordFieldLimits.venue,
+          RecordVenueRow(
+            type: kind,
+            controller: controllers[RecordTextField.venue]!,
+            onChanged: (value) => onTextChanged(RecordTextField.venue, value),
+            scrollPadding: scrollPadding,
           ),
         if (form.hasSeat)
           _textRow(
@@ -118,14 +121,19 @@ class RecordDetailsSection extends StatelessWidget {
           ],
           suffix: '円',
         ),
+        RecordSourceRow(
+          type: kind,
+          controller: controllers[RecordTextField.source]!,
+          onChanged: (value) => onTextChanged(RecordTextField.source, value),
+          scrollPadding: scrollPadding,
+        ),
         _textRow(
-          RecordTextField.source,
-          placeholder: kind.sourcePlaceholder,
-          icon: kind == RecordType.book
-              ? CupertinoIcons.bag
-              : CupertinoIcons.tickets,
-          enLabel: kind.sourceEnLabel,
-          maxLength: RecordFieldLimits.ticketSource,
+          RecordTextField.link,
+          placeholder: 'リンク（公演ページ・チケットのページなど）',
+          icon: CupertinoIcons.link,
+          enLabel: 'LINK',
+          maxLength: RecordFieldLimits.linkUrl,
+          keyboardType: TextInputType.url,
         ),
       ],
     );

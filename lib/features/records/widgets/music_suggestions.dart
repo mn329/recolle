@@ -461,7 +461,7 @@ class ConcertSuggestions extends HookConsumerWidget {
           child: Text(
             needsSearch && !willSearch
                 ? '「$trimmedQuery」に一致する公演はありません。'
-                      '$_minTourSearchLength 文字以上入力すると setlist.fm からも探します。'
+                      '$_minTourSearchLength 文字以上入力すると、ほかの人が登録したセトリからも探します。'
                 : '「$trimmedQuery」に一致する公演は見つかりませんでした。',
             style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
           ),

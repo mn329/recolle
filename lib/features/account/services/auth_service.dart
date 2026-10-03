@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart';
 import 'package:recolle/core/auth/auth_reauth_in_progress.dart';
+import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
+import 'package:recolle/features/records/data/records_local_cache.dart';
 import 'package:recolle/features/account/services/social_credential.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -66,9 +69,14 @@ class AuthService {
   /// [SocialIdentityInUseException] のアカウントへ切り替える。
   /// 今の匿名ユーザーの記録は切り替え先に移らない。
   Future<void> switchToExistingAccount(SocialCredential credential) async {
+    final previousUserId = currentUser?.id;
     AuthReauthInProgress.instance.begin();
     try {
       await _signInWithCredential(credential);
+      // 切り替え前の（匿名の）ユーザーの記録は、もう開けないので端末から消す
+      if (previousUserId != null && previousUserId != currentUser?.id) {
+        await _clearLocalCaches(previousUserId);
+      }
     } finally {
       AuthReauthInProgress.instance.end();
     }
@@ -92,10 +100,12 @@ class AuthService {
   /// 現在のセッションを破棄して、匿名セッションに戻します。
   /// このアプリは「ユーザーID単位」でrecordsを見ているため、IDが変わる点に注意。
   Future<void> resetToAnonymous() async {
+    final previousUserId = currentUser?.id;
     AuthReauthInProgress.instance.begin();
     try {
       await signOut();
       await _client.auth.signInAnonymously();
+      if (previousUserId != null) await _clearLocalCaches(previousUserId);
     } finally {
       AuthReauthInProgress.instance.end();
     }
@@ -112,20 +122,28 @@ class AuthService {
       throw const AuthException('登録済みのアカウントのみ削除できます。');
     }
 
+    // 期限切れのトークンで呼ぶと「再ログインしてから」のような失敗になるので、先に更新しておく。
+    // 更新できなくても、サーバーが受け付ければ削除は進められる
     try {
-      await _client.functions.invoke('delete-account');
+      await _client.auth.refreshSession();
+    } catch (_) {}
+
+    try {
+      await _invokeDeleteAccount();
     } on FunctionException catch (e) {
-      String msg;
-      if (e.details is Map) {
-        final m = e.details as Map<dynamic, dynamic>;
-        final err = m['error'] ?? m['message'];
-        msg = err == null ? 'アカウントの削除に失敗しました。' : err.toString();
-      } else {
-        msg = e.details?.toString() ?? 'アカウントの削除に失敗しました。';
+      if (e.status != 401) throw AuthException(_deleteErrorMessage(e));
+      // 401 は期限切れなど。セッションを更新してもう一度だけ試す
+      try {
+        await _client.auth.refreshSession();
+        await _invokeDeleteAccount();
+      } on FunctionException catch (e) {
+        throw AuthException(_deleteErrorMessage(e));
+      } on AuthException {
+        throw const AuthException('アカウントの削除に失敗しました。もう一度お試しください。');
       }
-      throw AuthException(msg);
     }
 
+    await _clearLocalCaches(user.id);
     AuthReauthInProgress.instance.begin();
     try {
       try {
@@ -139,6 +157,35 @@ class AuthService {
     } finally {
       AuthReauthInProgress.instance.end();
     }
+  }
+
+  /// ログアウト・アカウント削除のあと、そのユーザーの記録とお気に入りを端末に残さない。
+  /// 消せなくても本来の操作は成功として扱う。
+  static Future<void> _clearLocalCaches(String userId) async {
+    try {
+      await RecordsLocalCache.clear(userId);
+      await favoriteArtistsCacheFile.delete(userId);
+    } catch (e) {
+      debugPrint('Local cache cleanup failed: $e');
+    }
+  }
+
+  Future<void> _invokeDeleteAccount() async {
+    await _client.functions.invoke('delete-account');
+  }
+
+  static String _deleteErrorMessage(FunctionException e) {
+    const fallback = 'アカウントの削除に失敗しました。もう一度お試しください。';
+    final details = e.details;
+    if (details is Map) {
+      final err = details['error'] ?? details['message'];
+      final text = err?.toString() ?? '';
+      // サーバーの英語メッセージ（Invalid JWT など）はそのまま見せない
+      return RegExp(r'[\u3040-\u30ff\u4e00-\u9faf]').hasMatch(text)
+          ? text
+          : fallback;
+    }
+    return fallback;
   }
 
   Future<SocialCredential> _obtainCredential(SocialProvider provider) {

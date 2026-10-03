@@ -37,6 +37,8 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true/>
+		<key>NSAppleMusicUsageDescription</key>
+		<string>記録したセットリストから Apple Music のプレイリストを作成します。</string>
 		<key>NSCameraUsageDescription</key>
 		<string>チケット画像を撮影するためにカメラにアクセスします。</string>
 		<key>NSPhotoLibraryUsageDescription</key>

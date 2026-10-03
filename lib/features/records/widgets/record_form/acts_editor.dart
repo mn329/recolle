@@ -309,7 +309,7 @@ class _ActCardState extends State<_ActCard> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final act = widget.act;
-    final songCount = act.songs.length;
+    final songCount = act.songTitles.length;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),

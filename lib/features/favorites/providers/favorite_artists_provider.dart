@@ -15,8 +15,11 @@ final favoriteArtistsRepositoryProvider = Provider<FavoriteArtistsRepository>(
   (ref) => FavoriteArtistsRepository(Supabase.instance.client),
 );
 
+/// お気に入りの端末内キャッシュ。ログアウト・アカウント削除のときにも消す。
+const favoriteArtistsCacheFile = JsonListFileCache('favorite_artists_cache');
+
 final favoriteArtistsCacheProvider = Provider<JsonListFileCache>(
-  (ref) => const JsonListFileCache('favorite_artists_cache'),
+  (ref) => favoriteArtistsCacheFile,
 );
 
 final favoriteArtistsProvider =
@@ -122,8 +125,13 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
   Future<void> _saveCache(List<FavoriteArtist> favorites) async {
     final userId = _userId;
     if (userId == null) return;
-    await ref.read(favoriteArtistsCacheProvider).save(userId, [
-      for (final f in favorites) f.toJson(),
-    ]);
+    // サーバーには反映済みなので、手元のキャッシュに書けなくても操作は成功として扱う
+    try {
+      await ref.read(favoriteArtistsCacheProvider).save(userId, [
+        for (final f in favorites) f.toJson(),
+      ]);
+    } catch (e) {
+      debugPrint('Favorites cache save failed: $e');
+    }
   }
 }

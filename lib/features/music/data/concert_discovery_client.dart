@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:recolle/core/network/edge_function.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -107,27 +108,27 @@ class ConcertDiscoveryClient {
     if (artist.isEmpty) {
       throw const UserFacingException('アーティスト名が空です。');
     }
-    try {
-      final res = await _functions.invoke(
-        'concert-discovery',
-        body: {'artistName': artist},
-      );
-      final data = res.data;
-      if (data is! Map) {
-        throw const UserFacingException('公演情報の形式が想定外でした。');
-      }
-      return ConcertDiscoveryResult.fromJson(Map<String, dynamic>.from(data));
-    } on FunctionException catch (e) {
-      final code = e.details is Map ? (e.details as Map)['error'] : null;
-      throw UserFacingException(messageForError(code, e.status));
+    final data = await invokeEdgeFunction(
+      _functions,
+      'concert-discovery',
+      body: {'artistName': artist},
+      messageForError: messageForError,
+      // Gemini が公式サイトを読みに行くので、ほかの関数より長く待つ
+      timeout: const Duration(seconds: 90),
+    );
+    if (data is! Map) {
+      throw const UserFacingException('公演情報の形式が想定外でした。');
     }
+    return ConcertDiscoveryResult.fromJson(Map<String, dynamic>.from(data));
   }
 
   @visibleForTesting
   static String messageForError(Object? code, int status) => switch (code) {
-    'discovery_not_configured' =>
-      '公演検索が未設定です（サーバーに Gemini の API キーが登録されていません）。',
+    'discovery_not_configured' => '公演検索は現在ご利用いただけません。',
     'discovery_daily_limit' => '今日の公演検索の上限に達しました。明日またお試しください。',
+    'discovery_daily_limit_anonymous' =>
+      '今日の公演検索の上限（5 回）に達しました。アカウント画面で Apple または Google と連携すると、1 日 20 回まで検索できます。',
+    'discovery_global_limit' => '今日は公演検索が混み合い、全体の上限に達しました。明日またお試しください。',
     'discovery_rate_limited' => '検索が混み合っています。少し待ってからお試しください。',
     'discovery_no_official_site' =>
       '公式サイトが見つからず、公演を探せませんでした。アーティスト名の表記を確かめてください。',

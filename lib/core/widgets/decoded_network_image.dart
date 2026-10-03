@@ -13,9 +13,13 @@ class DecodedNetworkImage extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.placeholderHeight = 200,
     this.errorBuilder,
+    this.headers,
   });
 
   final String url;
+
+  /// 取得時に付ける HTTP ヘッダー（非公開の画像に付ける認証など）。
+  final Map<String, String>? headers;
   final double logicalWidth;
   final double? logicalHeight;
   final BoxFit fit;
@@ -47,6 +51,7 @@ class DecodedNetworkImage extends StatelessWidget {
 
     return Image.network(
       url,
+      headers: headers,
       fit: fit,
       width: logicalWidth,
       height: boxHeight,

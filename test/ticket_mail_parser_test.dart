@@ -90,6 +90,22 @@ YOASOBI
     );
   });
 
+  test('チケットサイトのリンクだけを拾い、配信停止などほかのリンクは拾わない', () {
+    const mail = '''
+配信停止はこちら https://mail.example.com/unsubscribe?id=1
+■公演名：ARENA TOUR
+購入内容の確認：https://eplus.jp/sf/mypage/ticket/123（ログインが必要です）
+''';
+    expect(
+      parseTicketMail(mail, now: now).linkUrl,
+      'https://eplus.jp/sf/mypage/ticket/123',
+    );
+    expect(
+      parseTicketMail('https://mail.example.com/a', now: now).linkUrl,
+      isNull,
+    );
+  });
+
   test('公演日ラベルのない日付（支払期限など）は公演日として拾わない', () {
     final info = parseTicketMail(
       'チケットぴあ\nお支払期限：2026年10月1日\n受付番号：123',

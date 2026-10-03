@@ -1,4 +1,7 @@
 import 'package:recolle/core/utils/artist_name_match.dart';
+import 'package:recolle/features/records/models/setlist_entry.dart';
+
+export 'package:recolle/features/records/models/setlist_entry.dart';
 
 enum RecordType { live, movie, book, other }
 
@@ -38,7 +41,12 @@ class RecordAct {
   });
 
   final String artist;
+
+  /// セトリの行。曲のほか、アンコールなどの区切りと MC の行も含む（[SetlistEntry]）。
   final List<String> songs;
+
+  /// 区切り・MC を除いた曲名。
+  List<String> get songTitles => setlistSongTitles(songs);
 
   /// お目当ての出演者か。
   final bool isMain;
@@ -179,6 +187,13 @@ extension RecordTypeUi on RecordType {
   /// [Record.ticketSource] の呼び方。
   String get sourceLabel => this == RecordType.book ? '購入先' : 'チケット取得元';
 
+  /// 自由入力に切り替えたときの [Record.ticketSource] の入力例つきの呼び方。
+  String get sourcePlaceholder => switch (this) {
+    RecordType.live || RecordType.other => 'チケット取得元（e+、ローチケ など）',
+    RecordType.movie => 'チケット取得元（劇場窓口、ムビチケ など）',
+    RecordType.book => '購入先（書店、Amazon など）',
+  };
+
   /// 入力行の上に添える、チケット風の英字の項目名。
   String get creatorFieldEnLabel => switch (this) {
     RecordType.live => 'ARTIST',
@@ -189,13 +204,6 @@ extension RecordTypeUi on RecordType {
   String get venueEnLabel => this == RecordType.movie ? 'THEATER' : 'VENUE';
 
   String get sourceEnLabel => this == RecordType.book ? 'STORE' : 'TICKET';
-
-  String get sourcePlaceholder => switch (this) {
-    RecordType.live => 'チケット取得元（e+、ローチケ など）',
-    RecordType.movie => 'チケット取得元（劇場窓口、アプリ など）',
-    RecordType.book => '購入先（書店、電子書籍ストア など）',
-    RecordType.other => 'チケット取得元',
-  };
 }
 
 /// 開演時刻などの「時:分」。日付やタイムゾーンを持たない。
@@ -246,7 +254,9 @@ class Record {
   final String title;
   final String artistOrAuthor;
   final DateTime date;
-  final String ticketImageUrl;
+
+  /// チケット画像の公開 URL。先頭が一覧に出す表紙。
+  final List<String> ticketImageUrls;
   final String? ticketSource; // e+, LawTicket, etc.
   final String? setlist;
   final String? mcMemo;
@@ -274,13 +284,16 @@ class Record {
   /// 対バン・フェスの出演者。ワンマンや他の種別では空で、[artistOrAuthor] と [setlist] を使う。
   final List<RecordAct> acts;
 
+  /// 公演ページ・チケットのページなど、あとで開きたいリンク（http(s) の URL）。
+  final String? linkUrl;
+
   const Record({
     required this.id,
     required this.type,
     required this.title,
     required this.artistOrAuthor,
     required this.date,
-    required this.ticketImageUrl,
+    this.ticketImageUrls = const [],
     this.ticketSource,
     this.setlist,
     this.mcMemo,
@@ -294,6 +307,7 @@ class Record {
     this.eventFormat = EventFormat.oneman,
     this.endDate,
     this.acts = const [],
+    this.linkUrl,
   });
 
   /// 出演者の一覧の見出しに収める文字数。
@@ -341,8 +355,11 @@ class Record {
   /// [artist] が演奏した曲。
   List<String> songsBy(String artist) => [
     for (final a in performances)
-      if (artistMatches(a.artist, artist)) ...a.songs,
+      if (artistMatches(a.artist, artist)) ...a.songTitles,
   ];
+
+  /// 一覧に出す表紙の画像。画像がなければ null。
+  String? get coverImageUrl => ticketImageUrls.firstOrNull;
 
   /// 公演の最終日。1 日だけの公演なら [date]。
   DateTime get lastDate => endDate ?? date;
@@ -398,7 +415,7 @@ class Record {
       title: json['title'] as String,
       artistOrAuthor: json['artist_or_author'] as String,
       date: DateTime.parse(json['date'] as String),
-      ticketImageUrl: json['ticket_image_url'] as String? ?? '',
+      ticketImageUrls: _ticketImageUrlsFromJson(json),
       ticketSource: json['ticket_source'] as String?,
       setlist: json['setlist'] as String?,
       mcMemo: json['mc_memo'] as String?,
@@ -418,7 +435,19 @@ class Record {
         for (final act in json['acts'] as List<dynamic>? ?? const [])
           if (act is Map<String, dynamic>) RecordAct.fromJson(act),
       ],
+      linkUrl: json['link_url'] as String?,
     );
+  }
+
+  /// 複数枚の列が空なら、列を足す前の 1 枚だけの列を読む。
+  static List<String> _ticketImageUrlsFromJson(Map<String, dynamic> json) {
+    final urls = [
+      for (final url in json['ticket_image_urls'] as List<dynamic>? ?? const [])
+        if (url is String && url.isNotEmpty) url,
+    ];
+    if (urls.isNotEmpty) return urls;
+    final legacy = json['ticket_image_url'] as String? ?? '';
+    return legacy.isEmpty ? const [] : [legacy];
   }
 
   Map<String, dynamic> toJson() {
@@ -429,7 +458,9 @@ class Record {
       'title': title,
       'artist_or_author': artistOrAuthor,
       'date': date.toIso8601String(),
-      'ticket_image_url': ticketImageUrl,
+      'ticket_image_urls': ticketImageUrls,
+      // 旧版アプリは 1 枚目だけを読む
+      'ticket_image_url': coverImageUrl ?? '',
       'ticket_source': ticketSource,
       'setlist': setlist,
       'mc_memo': mcMemo,
@@ -443,6 +474,7 @@ class Record {
       'event_format': eventFormat.name,
       'end_date': endDate?.toIso8601String(),
       'acts': [for (final a in acts) a.toJson()],
+      'link_url': linkUrl,
     };
   }
 }

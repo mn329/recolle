@@ -44,6 +44,12 @@ List<Map<String, Object?>> upcomingEventsPayload(
         'hasStartTime': r.startTime != null,
         'opensAt': r.opensAt?.millisecondsSinceEpoch,
         'endsAt': r.endsAt?.millisecondsSinceEpoch,
+        // 終演が未入力でも、複数日の公演は最終日が終わるまで表示するための時刻（最終日の翌日 0 時）
+        'finishesAt': DateTime(
+          r.lastDate.year,
+          r.lastDate.month,
+          r.lastDate.day + 1,
+        ).millisecondsSinceEpoch,
         'venue': r.venue,
         'isLive': r.type == RecordType.live,
         'startLabel': r.type.startTimeLabel,

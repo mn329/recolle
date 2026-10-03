@@ -16,4 +16,7 @@ abstract final class RecordFieldLimits {
   static const int setlistSongLine = 200;
   static const int mcMemo = 2000;
   static const int impressions = 4000;
+
+  /// DB の制約 `records_link_url_format` と揃える。
+  static const int linkUrl = 2000;
 }

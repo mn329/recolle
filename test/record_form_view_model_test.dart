@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:recolle/core/constants/field_limits.dart';
+import 'package:recolle/core/constants/ticket_image_settings.dart';
 import 'package:recolle/features/account/providers/auth_providers.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
@@ -20,12 +21,17 @@ class _FakeRepository implements RecordsRepository {
   final inserted = <Map<String, dynamic>>[];
   final updated = <(String, Map<String, dynamic>)>[];
   final uploaded = <File>[];
+  final deletedImages = <String>[];
+
+  /// 指定すると、記録の保存でこの例外を投げる。
+  Object? saveError;
 
   Record _toRecord(String id, Map<String, dynamic> row) =>
       Record.fromJson({...row, 'id': id});
 
   @override
   Future<Record> insertRecord(Map<String, dynamic> row) async {
+    if (saveError case final error?) throw error;
     inserted.add(row);
     return _toRecord('new', row);
   }
@@ -42,8 +48,12 @@ class _FakeRepository implements RecordsRepository {
     required File file,
   }) async {
     uploaded.add(file);
-    return 'https://storage/ticket.jpg';
+    return 'https://storage/${file.path}';
   }
+
+  @override
+  Future<void> deleteTicketImages(List<String> urls) async =>
+      deletedImages.addAll(urls);
 
   @override
   Future<void> deleteRecord(String id) async {}
@@ -165,6 +175,37 @@ void main() {
       final result = await h.vm.save();
 
       expect((result! as RecordSaveInvalid).message, '開場は開演より前の時刻にしてください。');
+    });
+
+    test('日をまたぐ公演は、開場が開演より遅い時刻でも保存できる', () async {
+      final h = await _harness();
+      h.vm.updateText(RecordTextField.artist, 'YOASOBI');
+      h.vm.updateText(RecordTextField.title, 'COUNTDOWN');
+      h.vm.setOpenTime(const ClockTime(23, 30));
+      h.vm.setStartTime(const ClockTime(0, 30));
+
+      final result = await h.vm.save();
+
+      expect(result, isNot(isA<RecordSaveInvalid>()));
+      expect(h.repository.inserted, hasLength(1));
+    });
+
+    test('URL として読めないリンクは保存せず、https:// を省いたリンクは補って保存する', () async {
+      final h = await _harness();
+      h.vm.updateText(RecordTextField.artist, 'YOASOBI');
+      h.vm.updateText(RecordTextField.title, 'TOUR');
+      h.vm.updateText(RecordTextField.link, 'チケットのページ');
+
+      final invalid = await h.vm.save();
+      expect((invalid! as RecordSaveInvalid).message, contains('リンク'));
+      expect(h.repository.inserted, isEmpty);
+
+      h.vm.updateText(RecordTextField.link, 'eplus.jp/sf/detail/123');
+      await h.vm.save();
+      expect(
+        h.repository.inserted.single['link_url'],
+        'https://eplus.jp/sf/detail/123',
+      );
     });
   });
 
@@ -317,27 +358,116 @@ void main() {
       expect(saved.record.acts.map((a) => a.day), [2, 1]);
     });
 
-    test('編集では更新し、新しく選んだ画像をアップロードする', () async {
+    test('編集では更新し、新しく選んだ画像だけをアップロードして後ろに足す', () async {
       final record = Record(
         id: 'r1',
         type: RecordType.movie,
         title: 'ルックバック',
         artistOrAuthor: '押山清高',
         date: DateTime(2026, 11, 3),
-        ticketImageUrl: 'https://storage/old.jpg',
+        ticketImageUrls: const ['https://storage/old.jpg'],
         seat: 'G-12',
       );
       final h = await _harness(args: RecordFormArgs(recordToEdit: record));
-      h.vm.setImage(File('ticket.jpg'));
+      h.vm.addImages([File('a.jpg'), File('b.jpg')]);
 
       final saved = (await h.vm.save())! as RecordSaveSucceeded;
 
       expect(h.repository.inserted, isEmpty);
       expect(h.repository.updated.single.$1, 'r1');
-      expect(h.repository.uploaded.single.path, 'ticket.jpg');
-      expect(saved.record.ticketImageUrl, 'https://storage/ticket.jpg');
+      expect(h.repository.uploaded.map((f) => f.path), ['a.jpg', 'b.jpg']);
+      expect(saved.record.ticketImageUrls, [
+        'https://storage/old.jpg',
+        'https://storage/a.jpg',
+        'https://storage/b.jpg',
+      ]);
+      expect(
+        h.repository.updated.single.$2['ticket_image_url'],
+        'https://storage/old.jpg',
+      );
+      expect(h.repository.deletedImages, isEmpty);
       expect(saved.record.seat, 'G-12');
       expect(await saved.autoFavorited, isEmpty);
+    });
+
+    test('外した保存済みの画像は、保存できたらストレージから消す', () async {
+      final record = Record(
+        id: 'r1',
+        type: RecordType.movie,
+        title: 'ルックバック',
+        artistOrAuthor: '押山清高',
+        date: DateTime(2026, 11, 3),
+        ticketImageUrls: const [
+          'https://storage/1.jpg',
+          'https://storage/2.jpg',
+        ],
+      );
+      final h = await _harness(args: RecordFormArgs(recordToEdit: record));
+      h.vm.removeImageAt(0);
+
+      final saved = (await h.vm.save())! as RecordSaveSucceeded;
+
+      expect(saved.record.ticketImageUrls, ['https://storage/2.jpg']);
+      expect(h.repository.deletedImages, ['https://storage/1.jpg']);
+    });
+
+    test('記録の保存に失敗したら、アップロードした画像を消して元の画像は残す', () async {
+      final h = await _harness(
+        args: const RecordFormArgs(initialArtist: 'YOASOBI'),
+      );
+      h.vm.updateText(RecordTextField.title, 'TOUR');
+      h.vm.addImages([File('a.jpg')]);
+      h.repository.saveError = Exception('network');
+
+      final result = await h.vm.save();
+
+      expect(result, isA<RecordSaveFailed>());
+      expect(h.repository.deletedImages, ['https://storage/a.jpg']);
+      expect(h.vm.state.images, [PickedTicketImage(File('a.jpg'))]);
+    });
+
+    test('保存の応答がないときは画像を残し、保存し直すと同じ ID・同じ画像で保存する', () async {
+      final h = await _harness(
+        args: const RecordFormArgs(initialArtist: 'YOASOBI'),
+      );
+      h.vm.updateText(RecordTextField.title, 'TOUR');
+      h.vm.addImages([File('a.jpg')]);
+      h.repository.saveError = const RecordWriteUncertain();
+
+      final first = await h.vm.save();
+
+      expect(
+        (first! as RecordSaveFailed).message,
+        const RecordWriteUncertain().userMessage,
+      );
+      expect(h.repository.deletedImages, isEmpty);
+      expect(h.vm.state.images, [
+        const SavedTicketImage('https://storage/a.jpg'),
+      ]);
+
+      h.repository.saveError = null;
+      final second = await h.vm.save();
+
+      expect(second, isA<RecordSaveSucceeded>());
+      expect(h.repository.uploaded.map((f) => f.path), ['a.jpg']);
+      expect(h.repository.inserted.single['ticket_image_urls'], [
+        'https://storage/a.jpg',
+      ]);
+      expect(h.repository.inserted.single['id'], isA<String>());
+    });
+
+    test('新しい記録は、保存するたびに同じ ID を使う', () async {
+      final h = await _harness(
+        args: const RecordFormArgs(initialArtist: 'YOASOBI'),
+      );
+      h.vm.updateText(RecordTextField.title, 'TOUR');
+
+      await h.vm.save();
+      await h.vm.save();
+
+      final ids = h.repository.inserted.map((row) => row['id']).toSet();
+      expect(ids, hasLength(1));
+      expect(ids.single, matches(RegExp(r'^[0-9a-f-]{36}$')));
     });
 
     test('ログインしていなければ保存しない', () async {
@@ -352,6 +482,32 @@ void main() {
       expect((result! as RecordSaveInvalid).message, 'ログインしてください');
       expect(h.repository.inserted, isEmpty);
       expect(h.vm.state.isSaving, isFalse);
+    });
+  });
+
+  group('チケット画像', () {
+    test('上限を超えて選んだ分は足さない', () async {
+      final h = await _harness();
+      h.vm.addImages([for (var i = 0; i < 4; i++) File('$i.jpg')]);
+      h.vm.addImages([File('4.jpg'), File('5.jpg')]);
+
+      expect(h.vm.state.images, hasLength(TicketImageSettings.maxCount));
+      expect(h.vm.state.remainingImageSlots, 0);
+      expect(h.vm.state.images.last, PickedTicketImage(File('4.jpg')));
+    });
+
+    test('表紙にした画像を先頭へ移し、ほかの並びは保つ', () async {
+      final h = await _harness();
+      h.vm.addImages([File('a.jpg'), File('b.jpg'), File('c.jpg')]);
+
+      h.vm.makeCover(2);
+
+      expect(h.vm.state.images, [
+        PickedTicketImage(File('c.jpg')),
+        PickedTicketImage(File('a.jpg')),
+        PickedTicketImage(File('b.jpg')),
+      ]);
+      expect(h.vm.isDirty, isTrue);
     });
   });
 
@@ -376,7 +532,6 @@ void main() {
             title: 'TOUR',
             artistOrAuthor: 'YOASOBI',
             date: DateTime(2026, 9, 1),
-            ticketImageUrl: '',
             setlist: 'アイドル\n祝福',
           ),
         ),

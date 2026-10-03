@@ -63,6 +63,9 @@ class _MemoryCache implements JsonListFileCache {
       saved[userId] = items;
 
   @override
+  Future<void> delete(String userId) async => saved.remove(userId);
+
+  @override
   Future<List<Map<String, dynamic>>> load(String userId) async =>
       saved[userId] ?? const [];
 }

@@ -182,7 +182,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                     Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Apple Music のカタログから候補を表示します。\n選ぶと詳細を開き、☆でお気に入りに登録できます',
+                        'アーティスト名を入力すると候補が出ます。選ぶと詳細が開き、☆でお気に入りに登録できます。',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: context.colors.textSecondary,

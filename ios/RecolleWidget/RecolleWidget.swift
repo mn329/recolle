@@ -16,6 +16,8 @@ struct UpcomingEvent: Decodable {
   let hasStartTime: Bool
   let opensAt: Double?
   let endsAt: Double?
+  /// 最終日の翌日 0 時。古いデータでは nil。
+  let finishesAt: Double?
   let venue: String?
   let isLive: Bool
   let startLabel: String?
@@ -40,6 +42,7 @@ struct UpcomingEvent: Decodable {
   /// 終演時刻があれば終演で、なければ日付が変わった時点で終わったとみなす（アプリの splitByDate と同じ）。
   func isFinished(at now: Date) -> Bool {
     if let end = endDate { return end <= now }
+    if let finishesAt { return Date(timeIntervalSince1970: finishesAt / 1000) <= now }
     let calendar = Calendar.current
     return calendar.startOfDay(for: date) < calendar.startOfDay(for: now)
   }
@@ -71,9 +74,10 @@ struct UpcomingEvent: Decodable {
     return (totalHours / 24, totalHours % 24)
   }
 
-  /// 表示から外れる時刻。終演があれば終演、なければ翌日 0 時（isFinished と同じ基準）。
+  /// 表示から外れる時刻。終演があれば終演、なければ最終日の翌日 0 時（isFinished と同じ基準）。
   var finishDate: Date? {
     if let endDate { return endDate }
+    if let finishesAt { return Date(timeIntervalSince1970: finishesAt / 1000) }
     let calendar = Calendar.current
     return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: date))
   }
@@ -154,17 +158,17 @@ enum WidgetCategory {
     case .all, .live:
       return UpcomingEvent(
         title: "ARENA TOUR 2026", artist: "Artist", type: .live, startsAt: startsAt,
-        hasStartTime: true, opensAt: nil, endsAt: nil, venue: "さいたまスーパーアリーナ",
+        hasStartTime: true, opensAt: nil, endsAt: nil, finishesAt: nil, venue: "さいたまスーパーアリーナ",
         isLive: true, startLabel: "開演", endLabel: "終演", inProgressLabel: "公演中")
     case .movie:
       return UpcomingEvent(
         title: "作品名", artist: "監督・出演", type: .movie, startsAt: startsAt,
-        hasStartTime: true, opensAt: nil, endsAt: nil, venue: "映画館",
+        hasStartTime: true, opensAt: nil, endsAt: nil, finishesAt: nil, venue: "映画館",
         isLive: false, startLabel: "上映開始", endLabel: "上映終了", inProgressLabel: "上映中")
     case .other:
       return UpcomingEvent(
         title: "イベント", artist: "", type: .other, startsAt: startsAt,
-        hasStartTime: true, opensAt: nil, endsAt: nil, venue: "会場",
+        hasStartTime: true, opensAt: nil, endsAt: nil, finishesAt: nil, venue: "会場",
         isLive: false, startLabel: "開始", endLabel: "終了", inProgressLabel: "開催中")
     }
   }
