@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -212,6 +213,89 @@ void main() {
 
       expect(result, {'Shukufuku': '祝福'});
     });
+
+    test('カタログも個別検索も、前のリクエストを待たずに同時に投げる', () async {
+      final started = <String>[];
+      final release = Completer<void>();
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          started.add(
+            q['attribute'] == 'artistTerm' ? q['country']! : q['term']!,
+          );
+          await release.future;
+          return _json({'results': const []});
+        }),
+      );
+
+      final result = client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Shukufuku', 'Gekijyo'],
+      );
+      await pumpEventQueue();
+      expect(started, unorderedEquals(['JP', 'US']));
+
+      release.complete();
+      await result;
+      // 個別検索は同時に投げる。見つからなかった曲は、続けてひらがなの読みでも検索する
+      expect(
+        started.skip(2),
+        unorderedEquals([
+          'YOASOBI Shukufuku',
+          'YOASOBI Gekijyo',
+          'しゅくふく',
+          'げきじょ',
+        ]),
+      );
+    });
+
+    test('個別検索の一部がレート制限で失敗しても、見つかった曲は日本語にする', () async {
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          final q = req.url.queryParameters;
+          if (q['attribute'] == 'artistTerm') {
+            return _json({'results': const []});
+          }
+          if (q['term'] == 'YOASOBI Gekijyo') return http.Response('', 403);
+          return _json({
+            'results': [
+              {'trackId': 9, 'trackName': '祝福', 'artistName': 'YOASOBI'},
+            ],
+          });
+        }),
+      );
+
+      final result = await client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Gekijyo', 'Shukufuku'],
+      );
+
+      expect(result, {'Shukufuku': '祝福'});
+    });
+
+    test('先読み中のカタログには相乗りし、同じリクエストを二重に投げない', () async {
+      var catalogRequests = 0;
+      final release = Completer<void>();
+      final client = ItunesClient(
+        httpClient: MockClient((req) async {
+          if (req.url.queryParameters['attribute'] == 'artistTerm') {
+            catalogRequests++;
+            await release.future;
+          }
+          return _json({'results': const []});
+        }),
+      );
+
+      final prefetch = client.prefetchSongCatalog('YOASOBI');
+      final result = client.localizeSongTitles(
+        artistName: 'YOASOBI',
+        titles: ['Gekijyo'],
+      );
+      release.complete();
+      await Future.wait([prefetch, result]);
+
+      expect(catalogRequests, 2);
+    });
   });
 
   test('topSongs は先頭のアーティスト行を除き、別バージョンの同名曲をまとめる', () async {
@@ -257,6 +341,46 @@ void main() {
     expect(songs.last.previewUrl, isNull);
   });
 
+  test('ID が分かっていれば、アーティストと人気曲を 1 回の通信で引く', () async {
+    final requests = <Uri>[];
+    final client = ItunesClient(
+      httpClient: MockClient((req) async {
+        requests.add(req.url);
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return _json({
+          'results': [
+            {
+              'wrapperType': 'artist',
+              'artistId': 1,
+              'artistName': 'YOASOBI',
+              'artistLinkUrl': 'https://music.apple.com/jp/artist/1',
+            },
+            {
+              'wrapperType': 'track',
+              'trackId': 10,
+              'trackName': 'アイドル',
+              'artistName': 'YOASOBI',
+              'artistId': 1,
+            },
+          ],
+        });
+      }),
+    );
+
+    final (artist, songs) = await (
+      client.findArtist('YOASOBI', artistId: 1),
+      client.topSongs(1),
+    ).wait;
+
+    expect(requests, hasLength(1));
+    expect(requests.single.queryParameters['entity'], 'song');
+    expect(
+      artist?.appleMusicUrl.toString(),
+      'https://music.apple.com/jp/artist/1',
+    );
+    expect(songs.single.title, 'アイドル');
+  });
+
   test('findArtist は完全一致を優先する', () async {
     final client = ItunesClient(
       httpClient: MockClient((req) async {
@@ -289,5 +413,113 @@ void main() {
 
     expect(await client.searchArtists('  '), isEmpty);
     expect(await client.searchSongs(artistName: 'A', term: ''), isEmpty);
+  });
+
+  group('ローマ字の曲名をひらがなで探す', () {
+    ItunesClient clientWithReadingHit() => ItunesClient(
+      httpClient: MockClient((req) async {
+        final q = req.url.queryParameters;
+        // アーティストの曲一覧と、ローマ字そのままの検索では何も出ない
+        if (q['term'] == 'かぜとまち') {
+          return _json({
+            'results': [
+              {'trackId': 10, 'trackName': '風と町', 'artistName': '別の人'},
+              {
+                'trackId': 11,
+                'trackName': '風と町',
+                'artistName': 'Mrs. GREEN APPLE',
+              },
+            ],
+          });
+        }
+        return _json({'results': []});
+      }),
+    );
+
+    test('localizeSongTitles はローマ字の曲名を、ひらがなの検索で日本語にする', () async {
+      final result = await clientWithReadingHit().localizeSongTitles(
+        artistName: 'Mrs. GREEN APPLE',
+        titles: ['Kaze to Machi', 'Columbus'],
+      );
+
+      expect(result, {'Kaze to Machi': '風と町'});
+    });
+
+    test('findSongIds はローマ字の曲名を、ひらがなの検索で見つける', () async {
+      final result = await clientWithReadingHit().findSongIds(
+        artistName: 'Mrs. GREEN APPLE',
+        titles: ['Kaze to Machi', 'Columbus'],
+      );
+
+      expect(result, {'Kaze to Machi': 11});
+    });
+  });
+
+  group('日本語表記の候補（Gemini）を実在確認して使う', () {
+    ItunesClient clientWith(
+      Map<String, String> suggestions, {
+      required List<Map<String, Object>> hitsFor,
+      List<String>? asked,
+    }) => ItunesClient(
+      httpClient: MockClient((req) async {
+        final q = req.url.queryParameters;
+        if (q['term'] == 'Artist 神曲') return _json({'results': hitsFor});
+        return _json({'results': const []});
+      }),
+      japaneseTitleSuggester: (artist, titles) async {
+        asked?.addAll(titles);
+        return suggestions;
+      },
+    );
+
+    test('iTunes に曲名が一致する曲があれば、その ID を使う', () async {
+      final asked = <String>[];
+      final client = clientWith(
+        {'Shinkyoku': '神曲'},
+        hitsFor: [
+          {'trackId': 77, 'trackName': '神曲', 'artistName': 'Artist'},
+        ],
+        asked: asked,
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, {'Shinkyoku': 77});
+      expect(asked, ['Shinkyoku']);
+    });
+
+    test('候補が iTunes で実在しない・別の曲名なら使わない（作り話を入れない）', () async {
+      final client = clientWith(
+        {'Shinkyoku': '神曲'},
+        hitsFor: [
+          {'trackId': 78, 'trackName': '別の曲', 'artistName': 'Artist'},
+        ],
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, isEmpty);
+    });
+
+    test('候補の取得に失敗しても、例外にせず見つかった曲だけを返す', () async {
+      final client = ItunesClient(
+        httpClient: MockClient((req) async => _json({'results': const []})),
+        japaneseTitleSuggester: (artist, titles) async =>
+            throw const UserFacingException('上限'),
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, isEmpty);
+    });
   });
 }

@@ -11,7 +11,6 @@ Record _record(String id, DateTime date, {ClockTime? startTime}) => Record(
   title: 'LIVE $id',
   artistOrAuthor: 'Artist',
   date: date,
-  ticketImageUrl: '',
   startTime: startTime,
 );
 
@@ -33,6 +32,34 @@ void main() {
     ]);
     expect(map[DateTime(2026, 9, 1)]!.map((r) => r.id), ['early', 'late']);
     expect(map[DateTime(2026, 9, 2)]!.length, 1);
+  });
+
+  testWidgets('複数日の公演は、月の一覧と件数で 1 件として数える', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.darkTheme,
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: RecordCalendarView(
+              today: DateTime(2026, 9, 27),
+              records: [
+                Record(
+                  id: 'fes',
+                  type: RecordType.live,
+                  title: 'FES',
+                  artistOrAuthor: 'Artist',
+                  date: DateTime(2026, 9, 5),
+                  endDate: DateTime(2026, 9, 7),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('9月の記録・1件'), findsOneWidget);
+    expect(find.text('FES'), findsOneWidget);
   });
 
   testWidgets('月の記録を一覧し、日を選ぶとその日に絞り、月を送れる', (tester) async {

@@ -30,10 +30,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.tabIndicator,
     required this.tabIndicatorActive,
     required this.ticketBase,
-    required this.ticketScrim,
     required this.ticketText,
     required this.ticketDivider,
-    required this.ticketTextShadow,
   });
 
   final Brightness brightness;
@@ -76,12 +74,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color tabIndicator;
   final Color tabIndicatorActive;
 
-  // チケットの券面。画像の上に [ticketScrim] を重ねて文字を読めるようにする
+  // チケットの券面
   final Color ticketBase;
-  final List<Color> ticketScrim;
   final Color ticketText;
   final Color ticketDivider;
-  final Color ticketTextShadow;
 
   bool get isDark => brightness == Brightness.dark;
 
@@ -110,10 +106,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     tabIndicator: Color(0x24FFFFFF),
     tabIndicatorActive: Color(0x3DFFFFFF),
     ticketBase: Color(0xFF141210),
-    ticketScrim: [Color(0xE6000000), Color(0x99000000), Color(0x66000000)],
     ticketText: Color(0xFFFFFFFF),
     ticketDivider: Color(0x4DFFFFFF),
-    ticketTextShadow: Color(0xFF000000),
   );
 
   static const light = AppPalette(
@@ -141,10 +135,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     tabIndicator: Color(0x12000000),
     tabIndicatorActive: Color(0x1F000000),
     ticketBase: Color(0xFFFFFFFF),
-    ticketScrim: [Color(0xF2FFFFFF), Color(0xC7FFFFFF), Color(0x80FFFFFF)],
     ticketText: Color(0xFF1C1C1E),
     ticketDivider: Color(0x33000000),
-    ticketTextShadow: Color(0x00000000),
   );
 
   @override
@@ -179,13 +171,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       tabIndicator: c(tabIndicator, other.tabIndicator),
       tabIndicatorActive: c(tabIndicatorActive, other.tabIndicatorActive),
       ticketBase: c(ticketBase, other.ticketBase),
-      ticketScrim: [
-        for (var i = 0; i < ticketScrim.length; i++)
-          c(ticketScrim[i], other.ticketScrim[i]),
-      ],
       ticketText: c(ticketText, other.ticketText),
       ticketDivider: c(ticketDivider, other.ticketDivider),
-      ticketTextShadow: c(ticketTextShadow, other.ticketTextShadow),
     );
   }
 }

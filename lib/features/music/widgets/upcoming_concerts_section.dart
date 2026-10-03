@@ -256,6 +256,7 @@ class _Results extends ConsumerWidget {
                                   venue: concert.venue,
                                   openTime: concert.openTime,
                                   startTime: concert.startTime,
+                                  linkUrl: concert.sourceUrl?.toString(),
                                 ),
                               ),
                       ),

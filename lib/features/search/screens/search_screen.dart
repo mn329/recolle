@@ -22,6 +22,7 @@ import 'package:recolle/features/music/screens/song_detail_screen.dart';
 import 'package:recolle/features/music/widgets/preview_play_button.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/search/search_logic.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 enum _Scope { records, artists, songs }
 
@@ -35,48 +36,50 @@ class SearchScreen extends HookConsumerWidget {
     final query = useValueListenable(controller).text;
     final scope = useState(_Scope.records);
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      appBar: AppBar(
-        automaticallyImplyLeading: false,
-        titleSpacing: 16,
-        title: CupertinoSearchTextField(
-          controller: controller,
-          autofocus: true,
-          placeholder: 'ライブ・アーティスト・曲',
-          style: TextStyle(color: context.colors.textPrimary, fontSize: 16),
-          itemColor: context.colors.textSecondary,
-          backgroundColor: context.colors.fill,
-        ),
-        actions: [
-          NavBarTextButton(
-            label: 'キャンセル',
-            onPressed: () => Navigator.pop(context),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          titleSpacing: 16,
+          title: CupertinoSearchTextField(
+            controller: controller,
+            autofocus: true,
+            placeholder: 'ライブ・アーティスト・曲',
+            style: TextStyle(color: context.colors.textPrimary, fontSize: 16),
+            itemColor: context.colors.textSecondary,
+            backgroundColor: context.colors.fill,
           ),
-        ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-            child: IosSegmentedControl<_Scope>(
-              value: scope.value,
-              segments: const {
-                _Scope.records: '記録',
-                _Scope.artists: 'アーティスト',
-                _Scope.songs: '曲',
-              },
-              onChanged: (s) => scope.value = s,
+          actions: [
+            NavBarTextButton(
+              label: 'キャンセル',
+              onPressed: () => Navigator.pop(context),
+            ),
+          ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(48),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              child: IosSegmentedControl<_Scope>(
+                value: scope.value,
+                segments: const {
+                  _Scope.records: '記録',
+                  _Scope.artists: 'アーティスト',
+                  _Scope.songs: '曲',
+                },
+                onChanged: (s) => scope.value = s,
+              ),
             ),
           ),
         ),
-      ),
-      body: ContentSwitcher(
-        contentKey: scope.value,
-        child: switch (scope.value) {
-          _Scope.records => _RecordResults(query: query),
-          _Scope.artists => _ArtistResults(query: query),
-          _Scope.songs => _SongResults(query: query),
-        },
+        body: ContentSwitcher(
+          contentKey: scope.value,
+          child: switch (scope.value) {
+            _Scope.records => _RecordResults(query: query),
+            _Scope.artists => _ArtistResults(query: query),
+            _Scope.songs => _SongResults(query: query),
+          },
+        ),
       ),
     );
   }
@@ -96,10 +99,15 @@ class _RecordResults extends ConsumerWidget {
       return const IosEmptyState(
         icon: CupertinoIcons.tickets,
         message:
-            'タイトル・アーティスト・セトリの曲・MCメモ・感想から探せます。\nスペース区切りで絞り込み（例: YOASOBI アイドル）',
+            'タイトル・アーティスト・セトリの曲・MC メモ・感想から探せます。スペースで区切ると、すべての言葉を含む記録に絞り込めます（例: YOASOBI アイドル）。',
       );
     }
-    final records = ref.watch(recordsProvider).asData?.value ?? const [];
+    final recordsAsync = ref.watch(recordsProvider);
+    // 読み込み前に「結果なし」と出さない
+    if (recordsAsync.isLoading && !recordsAsync.hasValue) {
+      return const Center(child: CupertinoActivityIndicator(radius: 14));
+    }
+    final records = recordsAsync.asData?.value ?? const [];
     final hits = searchRecords(records, query);
     if (hits.isEmpty) {
       return IosEmptyState(
@@ -189,7 +197,7 @@ class _ArtistResults extends HookConsumerWidget {
     if (local.isEmpty && query.trim().length < 2) {
       return const IosEmptyState(
         icon: CupertinoIcons.person_2,
-        message: 'アーティスト名を入力すると Apple Music のカタログからも探します',
+        message: 'アーティスト名を入力すると、まだ記録していないアーティストも探せます。',
       );
     }
 
@@ -228,8 +236,8 @@ class _ArtistResults extends HookConsumerWidget {
         ],
         if (query.trim().length >= 2) ...[
           const SectionTitle(
-            'APPLE MUSIC',
-            'カタログから',
+            'MORE ARTISTS',
+            'ほかのアーティスト',
             padding: EdgeInsets.fromLTRB(20, 20, 20, 6),
           ),
           _RemoteState(snapshot: remote, isEmpty: remoteArtists.isEmpty),
@@ -284,7 +292,7 @@ class _SongResults extends HookConsumerWidget {
     if (local.isEmpty && query.trim().length < 2) {
       return const IosEmptyState(
         icon: CupertinoIcons.music_note_list,
-        message: 'ライブで聴いた曲（セトリ）と Apple Music のカタログから探せます',
+        message: 'ライブで聴いた曲（セトリ）と、配信されている曲から探せます。',
       );
     }
 
@@ -332,8 +340,8 @@ class _SongResults extends HookConsumerWidget {
         ],
         if (query.trim().length >= 2) ...[
           const SectionTitle(
-            'APPLE MUSIC',
-            'カタログから',
+            'MORE SONGS',
+            '配信されている曲',
             padding: EdgeInsets.fromLTRB(20, 20, 20, 6),
           ),
           _RemoteState(snapshot: remote, isEmpty: remoteSongs.isEmpty),

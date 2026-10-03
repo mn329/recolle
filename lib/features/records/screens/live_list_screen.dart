@@ -2,12 +2,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/components/record_ticket_list.dart';
-import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/core/widgets/section_title.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 /// 振り返りの集計から開く、行ったライブの一覧（新しい順）。
 ///
@@ -37,57 +37,61 @@ class LiveListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(recordsProvider);
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      appBar: AppBar(),
-      body: CustomScrollView(
-        slivers: recordsAsync.when(
-          data: (records) {
-            final lives =
-                computeStats(
-                      filterByArtist(records, artist),
-                      now: DateTime.now(),
-                      year: year,
-                      artist: artist,
-                    ).lives
-                    .where((r) => month == null || r.date.month == month)
-                    .toList();
-            return [
-              SliverToBoxAdapter(
-                child: SectionTitle(
-                  'LIVES',
-                  '$_title・${lives.length}回',
-                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(),
+        body: CustomScrollView(
+          // 読み込みに失敗しても、表示中（または手元のキャッシュ）の一覧は消さない
+          slivers: recordsAsync.when(
+            skipError: true,
+            data: (records) {
+              final lives =
+                  computeStats(
+                        filterByArtist(records, artist),
+                        now: DateTime.now(),
+                        year: year,
+                        artist: artist,
+                      ).lives
+                      .where((r) => month == null || r.date.month == month)
+                      .toList();
+              return [
+                SliverToBoxAdapter(
+                  child: SectionTitle(
+                    'LIVES',
+                    '$_title・${lives.length}回',
+                    padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+                  ),
+                ),
+                SliverRecordTicketList(
+                  records: lives,
+                  emptyMessage: 'この期間に行ったライブの記録はありません',
+                ),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 32 + MediaQuery.paddingOf(context).bottom,
+                  ),
+                ),
+              ];
+            },
+            loading: () => const [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CupertinoActivityIndicator(radius: 14)),
+              ),
+            ],
+            error: (error, _) => [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: IosEmptyState(
+                  icon: CupertinoIcons.exclamationmark_triangle,
+                  message: toUserFriendlyMessage(error),
+                  actionLabel: '再読み込み',
+                  onAction: () => ref.invalidate(recordsProvider),
                 ),
               ),
-              SliverRecordTicketList(
-                records: lives,
-                emptyMessage: 'この期間に行ったライブの記録はありません',
-              ),
-              SliverToBoxAdapter(
-                child: SizedBox(
-                  height: 32 + MediaQuery.paddingOf(context).bottom,
-                ),
-              ),
-            ];
-          },
-          loading: () => const [
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CupertinoActivityIndicator(radius: 14)),
-            ),
-          ],
-          error: (error, _) => [
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: IosEmptyState(
-                icon: CupertinoIcons.exclamationmark_triangle,
-                message: toUserFriendlyMessage(error),
-                actionLabel: '再読み込み',
-                onAction: () => ref.invalidate(recordsProvider),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

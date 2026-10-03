@@ -43,13 +43,15 @@ class RecordCalendarView extends HookWidget {
 
     final grid = monthGrid(month.value.year, month.value.month);
     final monthDays = grid.whereType<DateTime>().toList();
-    final listedDays = selected.value != null
-        ? [selected.value!]
-        : [
-            for (final d in monthDays)
-              if (byDay.containsKey(d)) d,
-          ];
-    final monthCount = [for (final d in monthDays) ...?byDay[d]].length;
+    // 複数日の公演は、日ごとではなく月の一覧に 1 件だけ載せる（その月で最初の日に置く）。
+    // 日を選んだときは、その日にあるものを出す
+    final seen = <String>{};
+    final listed = <(DateTime, Record)>[
+      for (final d in selected.value != null ? [selected.value!] : monthDays)
+        for (final r in byDay[d] ?? const <Record>[])
+          if (selected.value != null || seen.add(r.id)) (d, r),
+    ];
+    final monthCount = listed.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -170,9 +172,7 @@ class RecordCalendarView extends HookWidget {
         ),
         ContentSwitcher(
           contentKey: (month.value, selected.value),
-          child:
-              listedDays.isEmpty ||
-                  (selected.value != null && !byDay.containsKey(selected.value))
+          child: listed.isEmpty
               ? Padding(
                   padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
                   child: Text(
@@ -183,19 +183,18 @@ class RecordCalendarView extends HookWidget {
               : InsetGroupedSection(
                   hasLeading: false,
                   children: [
-                    for (final d in listedDays)
-                      for (final r in byDay[d]!)
-                        MediaListTile(
-                          leading: _DateBadge(day: d),
-                          title: r.title,
-                          subtitle: [
-                            r.artistOrAuthor,
-                            if (r.startTime != null)
-                              '${r.startTime!.format()} ${r.type.startTimeLabel}',
-                            ?r.venue,
-                          ].join('・'),
-                          onTap: () => openRecordDetail(context, r),
-                        ),
+                    for (final (d, r) in listed)
+                      MediaListTile(
+                        leading: _DateBadge(day: d),
+                        title: r.title,
+                        subtitle: [
+                          r.artistOrAuthor,
+                          if (r.startTime != null)
+                            '${r.startTime!.format()} ${r.type.startTimeLabel}',
+                          ?r.venue,
+                        ].join('・'),
+                        onTap: () => openRecordDetail(context, r),
+                      ),
                   ],
                 ),
         ),

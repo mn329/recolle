@@ -68,7 +68,7 @@ void main() {
       );
       expect(
         ConcertDiscoveryClient.messageForError('discovery_not_configured', 503),
-        contains('API キー'),
+        allOf(contains('ご利用いただけません'), isNot(contains('API'))),
       );
       expect(
         ConcertDiscoveryClient.messageForError(
@@ -154,7 +154,6 @@ void main() {
             title: 'FES 2026',
             artistOrAuthor: 'King Gnu',
             date: DateTime(2026, 12, 29),
-            ticketImageUrl: '',
           ),
         ],
       );

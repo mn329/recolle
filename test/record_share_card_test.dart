@@ -9,7 +9,6 @@ final _record = Record(
   title: 'Mrs. GREEN APPLE ARENA TOUR 2026 "BABEL no TOH" SUPER LONG TITLE',
   artistOrAuthor: 'Mrs. GREEN APPLE',
   date: DateTime(2026, 9, 1),
-  ticketImageUrl: '',
   venue: 'さいたまスーパーアリーナ',
   seat: 'アリーナ A5ブロック 12列 34番',
   ticketPrice: 12800,
@@ -46,7 +45,6 @@ void main() {
       title: 'FES',
       artistOrAuthor: 'A',
       date: DateTime(2026, 8, 1),
-      ticketImageUrl: '',
       eventFormat: EventFormat.festival,
       acts: const [
         RecordAct(artist: 'A', songs: ['a1', 'a2'], isMain: true),
@@ -89,7 +87,6 @@ void main() {
       title: '映画',
       artistOrAuthor: '監督',
       date: DateTime(2026, 1, 1),
-      ticketImageUrl: '',
     );
     for (final style in ShareCardStyle.values) {
       await tester.pumpWidget(

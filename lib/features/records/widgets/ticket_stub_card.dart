@@ -102,7 +102,6 @@ class TicketStubCard extends StatelessWidget {
                   child: CustomPaint(
                     painter: _PerforationPainter(
                       fill: colors.card,
-                      hole: colors.background,
                       dash: colors.separator,
                     ),
                   ),
@@ -334,14 +333,9 @@ class _Field extends StatelessWidget {
 
 /// 券面の切り取り線。両端を半円にくり抜き、間に破線を引く。
 class _PerforationPainter extends CustomPainter {
-  const _PerforationPainter({
-    required this.fill,
-    required this.hole,
-    required this.dash,
-  });
+  const _PerforationPainter({required this.fill, required this.dash});
 
   final Color fill;
-  final Color hole;
   final Color dash;
 
   static const _holeRadius = 11.0;
@@ -349,11 +343,25 @@ class _PerforationPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final centerY = size.height / 2;
-    canvas.drawRect(Offset.zero & size, Paint()..color = fill);
-    final holePaint = Paint()..color = hole;
-    canvas
-      ..drawCircle(Offset(0, centerY), _holeRadius, holePaint)
-      ..drawCircle(Offset(size.width, centerY), _holeRadius, holePaint);
+    // 穴は塗らずにくり抜き、画面の地（光や粒子）がそのまま透けて見えるようにする
+    final holes = Path()
+      ..addOval(
+        Rect.fromCircle(center: Offset(0, centerY), radius: _holeRadius),
+      )
+      ..addOval(
+        Rect.fromCircle(
+          center: Offset(size.width, centerY),
+          radius: _holeRadius,
+        ),
+      );
+    canvas.drawPath(
+      Path.combine(
+        PathOperation.difference,
+        Path()..addRect(Offset.zero & size),
+        holes,
+      ),
+      Paint()..color = fill,
+    );
 
     final dashPaint = Paint()
       ..color = dash
@@ -373,7 +381,5 @@ class _PerforationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_PerforationPainter oldDelegate) =>
-      oldDelegate.fill != fill ||
-      oldDelegate.hole != hole ||
-      oldDelegate.dash != dash;
+      oldDelegate.fill != fill || oldDelegate.dash != dash;
 }

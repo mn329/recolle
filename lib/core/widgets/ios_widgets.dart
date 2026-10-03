@@ -152,8 +152,9 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
   @override
   Widget build(BuildContext context) {
     // CupertinoPageScaffold の下に置くと、スクロール前はナビバーの背景と区切り線が消える
+    // 地は外側の AppBackground が描く
     return CupertinoPageScaffold(
-      backgroundColor: context.colors.background,
+      backgroundColor: const Color(0x00000000),
       child: Builder(
         builder: (scrollContext) {
           _scrollContext = scrollContext;
@@ -278,7 +279,8 @@ class InsetGroupedSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CupertinoListSection.insetGrouped(
-      backgroundColor: context.colors.background,
+      // カードの周りを塗ると、画面の地（AppBackground）の光が四角く途切れる
+      backgroundColor: const Color(0x00000000),
       decoration: BoxDecoration(
         color: context.colors.card,
         borderRadius: BorderRadius.circular(12),

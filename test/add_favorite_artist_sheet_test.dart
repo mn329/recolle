@@ -2,10 +2,13 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/add_favorite_artist_sheet.dart';
+import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
@@ -21,7 +24,6 @@ class _RecordingFavorites extends FavoriteArtistsNotifier {
   Future<FavoriteArtist> add({
     required String name,
     int? itunesArtistId,
-    String? artworkUrl,
   }) async {
     added.add((name: name, itunesArtistId: itunesArtistId));
     final artist = FavoriteArtist(
@@ -39,7 +41,10 @@ const _oneOkRock = ItunesArtist(id: 42, name: 'ONE OK ROCK', genre: 'Rock');
 
 class _FakeItunesClient extends ItunesClient {
   @override
-  Future<List<ItunesArtist>> searchArtists(String term, {int limit = 8}) async =>
+  Future<List<ItunesArtist>> searchArtists(
+    String term, {
+    int limit = 8,
+  }) async =>
       term.toLowerCase().contains('one') ? const [_oneOkRock] : const [];
 
   @override
@@ -54,6 +59,10 @@ class _FakeItunesClient extends ItunesClient {
   Future<String?> findArtistArtwork(String artistName) async => null;
 }
 
+DeezerClient _offlineDeezer() => DeezerClient(
+  httpClient: MockClient((_) async => http.Response('{"data":[]}', 200)),
+);
+
 Future<_RecordingFavorites> _openSheet(WidgetTester tester) async {
   final favorites = _RecordingFavorites();
   await tester.pumpWidget(
@@ -61,6 +70,7 @@ Future<_RecordingFavorites> _openSheet(WidgetTester tester) async {
       overrides: [
         favoriteArtistsProvider.overrideWith(() => favorites),
         itunesClientProvider.overrideWithValue(_FakeItunesClient()),
+        deezerClientProvider.overrideWithValue(_offlineDeezer()),
         artistArtworkProvider.overrideWith((ref, _) async => null),
         recordsProvider.overrideWith((ref) => Stream.value(const [])),
         isOfflineReadOnlyProvider.overrideWithValue(false),
