@@ -7,9 +7,20 @@ import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/preview_player.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
+import 'package:recolle/features/music/data/song_title_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
+final songTitleClientProvider = Provider<SongTitleClient>(
+  (ref) => SongTitleClient(Supabase.instance.client.functions),
+);
+
+final itunesClientProvider = Provider<ItunesClient>(
+  (ref) => ItunesClient(
+    // Supabase は使うときに初めて読む（テストでは差し替えられる）
+    japaneseTitleSuggester: (artist, titles) =>
+        ref.read(songTitleClientProvider).suggest(artist, titles),
+  ),
+);
 
 final appleMusicPlaylistServiceProvider = Provider<AppleMusicPlaylistService>(
   (ref) => AppleMusicPlaylistService(),

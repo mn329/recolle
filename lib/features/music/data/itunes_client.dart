@@ -8,6 +8,13 @@ import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
 import 'package:recolle/features/music/data/romaji_to_hiragana.dart';
 
+/// 「曲名 → 日本語表記の候補」を返す。見つからなかった曲は含めない。
+typedef JapaneseTitleSuggester =
+    Future<Map<String, String>> Function(
+      String artistName,
+      List<String> titles,
+    );
+
 class ItunesArtist {
   const ItunesArtist({
     required this.id,
@@ -103,13 +110,21 @@ Uri? _httpsUri(Object? raw) {
 /// Apple は目安として 1 分あたり約 20 リクエストに制限しているため、
 /// 同じ URL の結果はメモリにキャッシュし、呼び出し側でも入力をデバウンスする。
 class ItunesClient {
-  ItunesClient({http.Client? httpClient}) : _http = httpClient ?? http.Client();
+  ItunesClient({
+    http.Client? httpClient,
+    JapaneseTitleSuggester? japaneseTitleSuggester,
+  }) : _http = httpClient ?? http.Client(),
+       _japaneseTitleSuggester = japaneseTitleSuggester;
 
   static const _timeout = Duration(seconds: 8);
   static const _maxCacheEntries = 100;
   static const _artworkSize = 400;
 
   final http.Client _http;
+
+  /// ローマ字・英字の曲名の日本語表記の候補を返す（Gemini）。null なら使わない。
+  /// 候補は iTunes で実在を確かめてから使う。
+  final JapaneseTitleSuggester? _japaneseTitleSuggester;
 
   /// Dart の Map リテラルは挿入順を保つので、先頭が最も古いエントリになる。
   final _cache = <Uri, List<Map<String, dynamic>>>{};
@@ -312,6 +327,34 @@ class ItunesClient {
       final id = hit?['trackId'];
       if (id is int) result[stillUnresolved[i]] = id;
     }
+
+    // それでも見つからない英字の曲名は、日本語表記の候補を聞き、実在を確かめてから使う
+    final suggester = _japaneseTitleSuggester;
+    final remaining = stillUnresolved
+        .where((t) => !result.containsKey(t))
+        .toList();
+    if (suggester != null && remaining.isNotEmpty) {
+      Map<String, String> suggestions;
+      try {
+        suggestions = await suggester(artist, remaining);
+      } catch (e) {
+        // 候補は補助なので、失敗しても見つかった曲だけでプレイリストを作る
+        debugPrint('Japanese title suggestion failed: $e');
+        suggestions = const {};
+      }
+      final verified = await Future.wait([
+        for (final entry in suggestions.entries)
+          _verifySuggestedTitle(
+            artist,
+            entry.value,
+            matchIn,
+            catalog,
+          ).then((id) => (entry.key, id)),
+      ]);
+      for (final (title, id) in verified) {
+        if (id != null) result[title] = id;
+      }
+    }
     return result;
   }
 
@@ -501,6 +544,31 @@ class ItunesClient {
       if (strict) break;
     }
     return (await _searchByReading(artist, title)).firstOrNull;
+  }
+
+  /// 候補の曲名が、そのアーティストの曲として実在するかを確かめ、trackId を返す。
+  /// 曲名が一致するものだけを採用する（別の曲が入らないように）。
+  Future<int?> _verifySuggestedTitle(
+    String artist,
+    String candidate,
+    int? Function(Iterable<Map<String, dynamic>>, String) matchIn,
+    List<Map<String, dynamic>> catalog,
+  ) async {
+    final inCatalog = matchIn(catalog, candidate);
+    if (inCatalog != null) return inCatalog;
+    try {
+      final hits = await _search({
+        'term': '$artist $candidate',
+        'entity': 'song',
+        'limit': '10',
+      });
+      return matchIn(hits, candidate);
+    } on UserFacingException catch (e) {
+      debugPrint(
+        'Suggested title lookup failed for "$candidate": ${e.userMessage}',
+      );
+      return null;
+    }
   }
 
   /// 曲名のローマ字をひらがなにして、日本ストアで検索する（"Kaze to Machi" → "かぜとまち" → 「風と町」）。

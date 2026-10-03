@@ -454,4 +454,72 @@ void main() {
       expect(result, {'Kaze to Machi': 11});
     });
   });
+
+  group('日本語表記の候補（Gemini）を実在確認して使う', () {
+    ItunesClient clientWith(
+      Map<String, String> suggestions, {
+      required List<Map<String, Object>> hitsFor,
+      List<String>? asked,
+    }) => ItunesClient(
+      httpClient: MockClient((req) async {
+        final q = req.url.queryParameters;
+        if (q['term'] == 'Artist 神曲') return _json({'results': hitsFor});
+        return _json({'results': const []});
+      }),
+      japaneseTitleSuggester: (artist, titles) async {
+        asked?.addAll(titles);
+        return suggestions;
+      },
+    );
+
+    test('iTunes に曲名が一致する曲があれば、その ID を使う', () async {
+      final asked = <String>[];
+      final client = clientWith(
+        {'Shinkyoku': '神曲'},
+        hitsFor: [
+          {'trackId': 77, 'trackName': '神曲', 'artistName': 'Artist'},
+        ],
+        asked: asked,
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, {'Shinkyoku': 77});
+      expect(asked, ['Shinkyoku']);
+    });
+
+    test('候補が iTunes で実在しない・別の曲名なら使わない（作り話を入れない）', () async {
+      final client = clientWith(
+        {'Shinkyoku': '神曲'},
+        hitsFor: [
+          {'trackId': 78, 'trackName': '別の曲', 'artistName': 'Artist'},
+        ],
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, isEmpty);
+    });
+
+    test('候補の取得に失敗しても、例外にせず見つかった曲だけを返す', () async {
+      final client = ItunesClient(
+        httpClient: MockClient((req) async => _json({'results': const []})),
+        japaneseTitleSuggester: (artist, titles) async =>
+            throw const UserFacingException('上限'),
+      );
+
+      final ids = await client.findSongIds(
+        artistName: 'Artist',
+        titles: ['Shinkyoku'],
+      );
+
+      expect(ids, isEmpty);
+    });
+  });
 }
