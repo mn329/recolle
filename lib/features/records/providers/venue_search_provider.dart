@@ -8,6 +8,6 @@ final venueSearchClientProvider = Provider<VenueSearchClient>(
 
 /// 地図（Google Places）からの会場検索を使うか。
 ///
-/// 本番に `venue-search` 関数と `GOOGLE_PLACES_API_KEY` を用意し、呼び出し回数の上限を設けるまでは
-/// `false` にしておく。`false` の間は過去の記録からの候補だけが出て、サーバーには問い合わせない。
-const bool kVenueMapSearchEnabled = false;
+/// `false` の間は過去の記録からの候補だけが出て、サーバーには問い合わせない。
+/// 使うには、本番に `venue-search` 関数と `GOOGLE_PLACES_API_KEY`、呼び出し回数の上限（マイグレーション）が要る。
+const bool kVenueMapSearchEnabled = true;
