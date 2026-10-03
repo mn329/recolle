@@ -237,9 +237,15 @@ void main() {
 
       release.complete();
       await result;
+      // 個別検索は同時に投げる。見つからなかった曲は、続けてひらがなの読みでも検索する
       expect(
         started.skip(2),
-        unorderedEquals(['YOASOBI Shukufuku', 'YOASOBI Gekijyo']),
+        unorderedEquals([
+          'YOASOBI Shukufuku',
+          'YOASOBI Gekijyo',
+          'しゅくふく',
+          'げきじょ',
+        ]),
       );
     });
 
@@ -407,5 +413,45 @@ void main() {
 
     expect(await client.searchArtists('  '), isEmpty);
     expect(await client.searchSongs(artistName: 'A', term: ''), isEmpty);
+  });
+
+  group('ローマ字の曲名をひらがなで探す', () {
+    ItunesClient clientWithReadingHit() => ItunesClient(
+      httpClient: MockClient((req) async {
+        final q = req.url.queryParameters;
+        // アーティストの曲一覧と、ローマ字そのままの検索では何も出ない
+        if (q['term'] == 'かぜとまち') {
+          return _json({
+            'results': [
+              {'trackId': 10, 'trackName': '風と町', 'artistName': '別の人'},
+              {
+                'trackId': 11,
+                'trackName': '風と町',
+                'artistName': 'Mrs. GREEN APPLE',
+              },
+            ],
+          });
+        }
+        return _json({'results': []});
+      }),
+    );
+
+    test('localizeSongTitles はローマ字の曲名を、ひらがなの検索で日本語にする', () async {
+      final result = await clientWithReadingHit().localizeSongTitles(
+        artistName: 'Mrs. GREEN APPLE',
+        titles: ['Kaze to Machi', 'Columbus'],
+      );
+
+      expect(result, {'Kaze to Machi': '風と町'});
+    });
+
+    test('findSongIds はローマ字の曲名を、ひらがなの検索で見つける', () async {
+      final result = await clientWithReadingHit().findSongIds(
+        artistName: 'Mrs. GREEN APPLE',
+        titles: ['Kaze to Machi', 'Columbus'],
+      );
+
+      expect(result, {'Kaze to Machi': 11});
+    });
   });
 }

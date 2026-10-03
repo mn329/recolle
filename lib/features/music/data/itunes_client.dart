@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
+import 'package:recolle/features/music/data/romaji_to_hiragana.dart';
 
 class ItunesArtist {
   const ItunesArtist({
@@ -297,6 +298,20 @@ class ItunesClient {
     for (final (i, id) in found.indexed) {
       if (id != null) result[unresolved[i]] = id;
     }
+
+    // まだ見つからない曲は、日本語表記で探す（Kaze to Machi → 風と町、Columbus → コロンブス）
+    // すでに日本語の曲名は対象外（別の曲を入れないため）。英字の曲名だけを日本語表記で探す
+    final stillUnresolved = unresolved
+        .where((t) => !result.containsKey(t) && !_containsJapanese(t))
+        .toList();
+    final japaneseHits = await Future.wait([
+      for (final title in stillUnresolved)
+        _findJapaneseHit(artist, title, strict: true),
+    ]);
+    for (final (i, hit) in japaneseHits.indexed) {
+      final id = hit?['trackId'];
+      if (id is int) result[stillUnresolved[i]] = id;
+    }
     return result;
   }
 
@@ -354,7 +369,7 @@ class ItunesClient {
   Future<Map<String, String>> localizeSongTitles({
     required String artistName,
     required List<String> titles,
-    int maxIndividualLookups = 6,
+    int maxIndividualLookups = 10,
   }) async {
     final artist = artistName.trim();
     final pending = {
@@ -447,6 +462,22 @@ class ItunesClient {
   /// 日本ストアで [title] を検索し、日本語の曲名を返す。
   /// 日本語化は補助なので、レート制限などで失敗したら null にして元の表記を使ってもらう。
   Future<String?> _findJapaneseTitle(String artist, String title) async {
+    final hit = await _findJapaneseHit(artist, title);
+    return hit == null ? null : _baseTitle(hit['trackName'] as String);
+  }
+
+  /// 日本ストアで [title] を探し、日本語の曲名の検索結果（曲名・trackId を含む）を返す。
+  ///
+  /// 1. 「アーティスト 曲名」で検索する（英語の曲名の日本語表記はこれで見つかる。Columbus → コロンブス）
+  /// 2. 見つからなければ、ローマ字をひらがなにして探す（Kaze to Machi → かぜとまち → 風と町）
+  ///
+  /// [strict] のときは、1 でそのアーティストの先頭の結果が日本語の曲名のときだけ採用する。
+  /// プレイリストに別の曲が入らないようにするため。
+  Future<Map<String, dynamic>?> _findJapaneseHit(
+    String artist,
+    String title, {
+    bool strict = false,
+  }) async {
     final List<Map<String, dynamic>> hits;
     try {
       hits = await _search({
@@ -461,14 +492,43 @@ class ItunesClient {
     for (final r in hits) {
       final name = r['trackName'];
       final songArtist = r['artistName'];
-      if (name is String &&
-          songArtist is String &&
-          artistMatches(songArtist, artist) &&
-          _containsJapanese(name)) {
-        return _baseTitle(name);
+      if (name is! String ||
+          songArtist is! String ||
+          !artistMatches(songArtist, artist)) {
+        continue;
       }
+      if (_containsJapanese(name)) return r;
+      if (strict) break;
     }
-    return null;
+    return (await _searchByReading(artist, title)).firstOrNull;
+  }
+
+  /// 曲名のローマ字をひらがなにして、日本ストアで検索する（"Kaze to Machi" → "かぜとまち" → 「風と町」）。
+  ///
+  /// iTunes の検索は、ひらがなの読みで漢字の曲名を引ける。ローマ字から漢字は引けないので、
+  /// 日本語の曲のローマ字表記は、これで探す。ひらがなにできない曲名（英語の曲名）は何もしない。
+  /// 同じ曲名の別のアーティストの曲も出るので、アーティストが合うものだけを返す。
+  Future<List<Map<String, dynamic>>> _searchByReading(
+    String artist,
+    String title,
+  ) async {
+    final reading = romajiToHiragana(title);
+    if (reading == null) return const [];
+    final List<Map<String, dynamic>> hits;
+    try {
+      hits = await _search({'term': reading, 'entity': 'song', 'limit': '25'});
+    } on UserFacingException catch (e) {
+      debugPrint('Reading lookup failed for "$title": ${e.userMessage}');
+      return const [];
+    }
+    return [
+      for (final r in hits)
+        if (r['trackName'] is String &&
+            r['artistName'] is String &&
+            artistMatches(r['artistName'] as String, artist) &&
+            _containsJapanese(r['trackName'] as String))
+          r,
+    ];
   }
 
   static final _japaneseChars = RegExp(r'[\u3040-\u30ff\u3400-\u9fff]');
