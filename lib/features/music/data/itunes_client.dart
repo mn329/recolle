@@ -512,23 +512,30 @@ class ItunesClient {
     String artist,
     String title,
   ) async {
-    final reading = romajiToHiragana(title);
-    if (reading == null) return const [];
-    final List<Map<String, dynamic>> hits;
-    try {
-      hits = await _search({'term': reading, 'entity': 'song', 'limit': '25'});
-    } on UserFacingException catch (e) {
-      debugPrint('Reading lookup failed for "$title": ${e.userMessage}');
-      return const [];
+    // 助詞（wa・e・o）があるときは「は・へ・を」の読みを先に、次にそのままの読みを試す
+    for (final reading in romajiReadings(title)) {
+      final List<Map<String, dynamic>> hits;
+      try {
+        hits = await _search({
+          'term': reading,
+          'entity': 'song',
+          'limit': '25',
+        });
+      } on UserFacingException catch (e) {
+        debugPrint('Reading lookup failed for "$title": ${e.userMessage}');
+        return const [];
+      }
+      final matched = [
+        for (final r in hits)
+          if (r['trackName'] is String &&
+              r['artistName'] is String &&
+              artistMatches(r['artistName'] as String, artist) &&
+              _containsJapanese(r['trackName'] as String))
+            r,
+      ];
+      if (matched.isNotEmpty) return matched;
     }
-    return [
-      for (final r in hits)
-        if (r['trackName'] is String &&
-            r['artistName'] is String &&
-            artistMatches(r['artistName'] as String, artist) &&
-            _containsJapanese(r['trackName'] as String))
-          r,
-    ];
+    return const [];
   }
 
   static final _japaneseChars = RegExp(r'[\u3040-\u30ff\u3400-\u9fff]');

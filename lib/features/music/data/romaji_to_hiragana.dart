@@ -80,6 +80,29 @@ String? romajiToHiragana(String input) {
   return result.isEmpty ? null : result;
 }
 
+/// 検索に使う読みの候補。助詞の「は」「へ」「を」はローマ字で wa・e・o と書かれるので、
+/// 単独の語として現れたときは、助詞にした読みを先に、そのままの読みを後に返す。
+///
+/// 例: "Boku wa Mada" → ["ぼくはまだ", "ぼくわまだ"]。ひらがなにできなければ空。
+List<String> romajiReadings(String input) {
+  final literal = romajiToHiragana(input);
+  if (literal == null) return const [];
+  const particles = {'wa': 'は', 'e': 'へ', 'o': 'を'};
+  final tokens = input.trim().split(RegExp(r'\s+'));
+  if (tokens.length < 2 ||
+      !tokens.any((t) => particles.containsKey(t.toLowerCase()))) {
+    return [literal];
+  }
+  final parts = <String>[];
+  for (final token in tokens) {
+    final kana = particles[token.toLowerCase()] ?? romajiToHiragana(token);
+    if (kana == null) return [literal];
+    parts.add(kana);
+  }
+  final withParticles = parts.join();
+  return withParticles == literal ? [literal] : [withParticles, literal];
+}
+
 const _table = <String, String>{
   'a': 'あ',
   'i': 'い',

@@ -25,4 +25,15 @@ void main() {
     expect(romajiToHiragana(''), isNull);
     expect(romajiToHiragana('夜に駆ける'), isNull);
   });
+
+  test('助詞（wa・e・o）は「は・へ・を」の読みを先に、そのままの読みを後に返す', () {
+    expect(romajiReadings('Boku wa Mada'), ['ぼくはまだ', 'ぼくわまだ']);
+    expect(romajiReadings('Haru e'), ['はるへ', 'はるえ']);
+    expect(romajiReadings('Kimi o Sagashite'), ['きみをさがして', 'きみおさがして']);
+  });
+
+  test('助詞がなければ、そのままの読みだけを返し、変換できなければ空', () {
+    expect(romajiReadings('Kaze to Machi'), ['かぜとまち']);
+    expect(romajiReadings('Columbus'), isEmpty);
+  });
 }
