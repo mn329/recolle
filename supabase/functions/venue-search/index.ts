@@ -30,6 +30,19 @@ const MAX_CACHE_ENTRIES = 500
 // 会場は建物や施設なので、住所や地名そのものは候補から外す
 const INCLUDED_PRIMARY_TYPES = ["establishment"]
 
+// Google を呼ぶ検索（キャッシュに当たらなかった分）の 1 日あたりの上限。課金を抑えるため。
+// 匿名アカウントは作り直せるので、ユーザー別とは別に全ユーザー合計も数える（環境変数で変えられる）
+function limitFromEnv(name: string, fallback: number): number {
+  const value = Number(Deno.env.get(name))
+  return Number.isInteger(value) && value > 0 ? value : fallback
+}
+const DAILY_LIMIT_PER_ANONYMOUS_USER = limitFromEnv(
+  "VENUE_SEARCH_DAILY_LIMIT_ANONYMOUS",
+  60,
+)
+const DAILY_LIMIT_PER_USER = limitFromEnv("VENUE_SEARCH_DAILY_LIMIT_USER", 150)
+const DAILY_LIMIT_TOTAL = limitFromEnv("VENUE_SEARCH_DAILY_LIMIT_TOTAL", 300)
+
 const searchCache = new Map<string, { venues: unknown[]; at: number }>()
 
 function json(body: unknown, status = 200) {
@@ -130,6 +143,32 @@ Deno.serve(async (req) => {
   const cacheKey = normalizeKey(query)
   const hit = cached(cacheKey)
   if (hit) return json({ venues: hit })
+
+  // キャッシュに当たらず Google を呼ぶ前に、上限を数える
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  )
+  const { data: quota, error: quotaError } = await admin.rpc(
+    "consume_venue_search_quota",
+    {
+      p_user_id: userData.user.id,
+      p_user_limit: userData.user.is_anonymous
+        ? DAILY_LIMIT_PER_ANONYMOUS_USER
+        : DAILY_LIMIT_PER_USER,
+      p_global_limit: DAILY_LIMIT_TOTAL,
+    },
+  )
+  if (quotaError) {
+    console.error("quota check failed", quotaError)
+    return json({ error: "venue_search_upstream_error" }, 500)
+  }
+  if (quota === "user_limit") {
+    return json({ error: "venue_search_daily_limit" }, 429)
+  }
+  if (quota !== "ok") {
+    return json({ error: "venue_search_global_limit" }, 429)
+  }
 
   try {
     const res = await fetch(PLACES_AUTOCOMPLETE_ENDPOINT, {

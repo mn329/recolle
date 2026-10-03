@@ -114,6 +114,8 @@ class VenueSearchClient {
   static String messageForError(Object? code, int status) => switch (code) {
     'venue_search_not_configured' => '会場の検索は現在ご利用いただけません。',
     'venue_search_rate_limited' => '会場の検索が混み合っています。少し待ってからお試しください。',
+    'venue_search_daily_limit' => '今日の会場検索の回数の上限に達しました。会場は入力して記録できます。',
+    'venue_search_global_limit' => '会場検索が混み合っています。会場は入力して記録できます。',
     'venue_search_timeout' => '会場の情報の取得に時間がかかっています。少し待ってからお試しください。',
     _ => '会場の情報を取得できませんでした ($status)。',
   };
