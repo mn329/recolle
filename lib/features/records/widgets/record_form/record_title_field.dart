@@ -45,6 +45,7 @@ class RecordTitleField extends StatelessWidget {
         FormTextRow(
           controller: controller,
           focusNode: focusNode,
+          required: true,
           placeholder: label,
           icon: switch (type) {
             RecordType.live => CupertinoIcons.music_note_2,

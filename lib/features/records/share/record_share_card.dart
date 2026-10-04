@@ -207,15 +207,17 @@ class _TicketCard extends StatelessWidget {
             ).copyWith(height: 1.05),
           ),
           const SizedBox(height: 6),
-          Text(
-            record.artistOrAuthor,
-            style: TextStyle(
-              fontFamily: AppFonts.body,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: c.textPrimary,
-            ),
-          ),
+          if (record.artistOrAuthor.isNotEmpty)
+            if (record.artistOrAuthor.isNotEmpty)
+              Text(
+                record.artistOrAuthor,
+                style: TextStyle(
+                  fontFamily: AppFonts.body,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                ),
+              ),
           const SizedBox(height: 18),
           _Dashes(color: c.ticketDivider),
           const SizedBox(height: 14),

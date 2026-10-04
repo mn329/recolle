@@ -165,6 +165,29 @@ void main() {
       expect(h.repository.inserted, isEmpty);
     });
 
+    test('映画・本・その他は、作者・出演がなくても保存できる（ライブはアーティストが必須）', () async {
+      final live = await _harness();
+      live.vm.updateText(RecordTextField.title, 'TOUR');
+      // 必須の項目が足りないので、保存は何もしない
+      expect(await live.vm.save(), isNull);
+      expect(live.repository.inserted, isEmpty);
+
+      for (final type in [
+        RecordType.movie,
+        RecordType.book,
+        RecordType.other,
+      ]) {
+        final h = await _harness();
+        h.vm.setType(type);
+        h.vm.updateText(RecordTextField.title, '題名');
+
+        final result = await h.vm.save();
+
+        expect(result, isNot(isA<RecordSaveInvalid>()), reason: '$type');
+        expect(h.repository.inserted, hasLength(1), reason: '$type');
+      }
+    });
+
     test('開場が開演より遅いときは保存しない', () async {
       final h = await _harness();
       h.vm.updateText(RecordTextField.artist, 'YOASOBI');

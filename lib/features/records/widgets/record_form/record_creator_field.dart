@@ -37,6 +37,8 @@ class RecordCreatorField extends StatelessWidget {
         FormTextRow(
           controller: controller,
           focusNode: focusNode,
+          // ライブはアーティストが必須。映画・本・その他の作者・出演は任意
+          required: type == RecordType.live,
           placeholder: type.creatorFieldLabel,
           icon: switch (type) {
             RecordType.live => CupertinoIcons.music_mic,

@@ -471,49 +471,50 @@ class _Header extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: CupertinoButton(
-                  padding: EdgeInsets.zero,
-                  minimumSize: Size.zero,
-                  onPressed: onArtistTap,
-                  child: Row(
-                    children: [
-                      ArtistAvatar(
-                        name: record.artistOrAuthor,
-                        artworkUrl: artworkUrl,
-                        size: 32,
-                      ),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: Text(
-                          record.artistOrAuthor,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: isLive
-                                ? colors.accent
-                                : colors.textSecondary,
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
+          if (record.artistOrAuthor.trim().isNotEmpty)
+            Row(
+              children: [
+                Expanded(
+                  child: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    onPressed: onArtistTap,
+                    child: Row(
+                      children: [
+                        ArtistAvatar(
+                          name: record.artistOrAuthor,
+                          artworkUrl: artworkUrl,
+                          size: 32,
+                        ),
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: Text(
+                            record.artistOrAuthor,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: isLive
+                                  ? colors.accent
+                                  : colors.textSecondary,
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      if (onArtistTap != null)
-                        Icon(
-                          CupertinoIcons.chevron_forward,
-                          size: 15,
-                          color: colors.accent,
-                        ),
-                    ],
+                        if (onArtistTap != null)
+                          Icon(
+                            CupertinoIcons.chevron_forward,
+                            size: 15,
+                            color: colors.accent,
+                          ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              if (record.acts.isEmpty)
-                FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
-            ],
-          ),
+                if (record.acts.isEmpty)
+                  FavoriteArtistToggleButton(artistName: record.artistOrAuthor),
+              ],
+            ),
         ],
       ),
     );

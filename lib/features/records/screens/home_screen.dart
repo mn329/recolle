@@ -1,5 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:recolle/components/record_ticket_list.dart';
@@ -19,6 +20,9 @@ import 'package:recolle/features/records/record_timeline.dart';
 import 'package:recolle/features/records/widgets/next_event_card.dart';
 import 'package:recolle/features/search/screens/search_screen.dart';
 import 'package:recolle/core/widgets/app_background.dart';
+
+/// ジャンルを切り替えるスワイプとみなす、横方向の速さの下限（論理ピクセル/秒）。
+const double _swipeMinVelocity = 300;
 
 class HomeScreen extends HookConsumerWidget {
   const HomeScreen({super.key});
@@ -51,119 +55,135 @@ class HomeScreen extends HookConsumerWidget {
     return AppBackground(
       child: Scaffold(
         backgroundColor: Colors.transparent,
-        body: LargeTitleScrollView(
-          title: 'RECOLLE',
-          enTitle: 'RECOLLE',
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NavBarIconButton(
-                icon: CupertinoIcons.search,
-                semanticLabel: '検索',
-                onPressed: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute<void>(
-                    builder: (_) => const SearchScreen(),
+        // 左右にスワイプして、ジャンルのタブを切り替える（縦のスクロールや、お気に入りの横スクロールとは競合しない）
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onHorizontalDragEnd: (details) {
+            final velocity = details.primaryVelocity ?? 0;
+            if (velocity.abs() < _swipeMinVelocity) return;
+            final types = RecordType.values;
+            final next =
+                types.indexOf(selectedType.value) + (velocity < 0 ? 1 : -1);
+            if (next < 0 || next >= types.length) return;
+            HapticFeedback.selectionClick();
+            selectedType.value = types[next];
+          },
+          child: LargeTitleScrollView(
+            title: 'RECOLLE',
+            enTitle: 'RECOLLE',
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                NavBarIconButton(
+                  icon: CupertinoIcons.search,
+                  semanticLabel: '検索',
+                  onPressed: () => Navigator.push(
+                    context,
+                    CupertinoPageRoute<void>(
+                      builder: (_) => const SearchScreen(),
+                    ),
                   ),
                 ),
-              ),
-              NavBarIconButton(
-                icon: CupertinoIcons.plus_circle_fill,
-                semanticLabel: readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
-                onPressed: readOnlyOffline ? null : openEditor,
-              ),
-            ],
-          ),
-          bottom: _HomeFilterBar(
-            selectedType: selectedType.value,
-            onTypeChanged: (t) => selectedType.value = t,
-            favorites: isLive ? favorites : const [],
-            selectedArtistName: selectedFavorite?.name,
-            onArtistSelected: (name) => selectedArtistName.value = name,
-          ),
-          onRefresh: () => ref.refresh(recordsProvider.future),
-          contentKey: (selectedType.value, selectedFavorite?.name),
-          slivers: [
-            if (readOnlyOffline)
-              const SliverToBoxAdapter(child: _NoticeBanner.offline())
-            else if (recordsAsync.hasError && recordsAsync.hasValue)
-              SliverToBoxAdapter(
-                child: _NoticeBanner(
-                  icon: CupertinoIcons.exclamationmark_triangle,
-                  message:
-                      '最新の記録を読み込めませんでした。${toUserFriendlyMessage(recordsAsync.error)}',
-                  actionLabel: '再読み込み',
-                  onAction: () => ref.invalidate(recordsProvider),
+                NavBarIconButton(
+                  icon: CupertinoIcons.plus_circle_fill,
+                  semanticLabel: readOnlyOffline ? 'オフラインでは新規作成できません' : '記録を追加',
+                  onPressed: readOnlyOffline ? null : openEditor,
                 ),
-              ),
-            SliverContentSwitcher(
-              contentKey: (selectedType.value, selectedFavorite?.name),
-              // 読み込みに失敗しても、表示中（または手元のキャッシュ）の一覧は消さない
-              sliver: recordsAsync.when(
-                skipError: true,
-                data: (records) {
-                  final visible = records.where(
-                    (r) =>
-                        r.type == selectedType.value &&
-                        (selectedFavorite == null ||
-                            r.features(selectedFavorite.name)),
-                  );
-                  final (:upcoming, :past) = splitByDate(
-                    visible,
-                    DateTime.now(),
-                  );
-                  if (upcoming.isEmpty && past.isEmpty) {
-                    return SliverRecordTicketList(
-                      records: const [],
-                      emptyTitle: selectedFavorite == null
-                          ? '${selectedType.value.japaneseLabel}の記録はまだありません'
-                          : '${selectedFavorite.name} の記録はまだありません',
-                      emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
-                      emptyActionLabel: readOnlyOffline ? null : '記録を追加',
-                      onEmptyAction: readOnlyOffline ? null : openEditor,
-                    );
-                  }
-                  return SliverMainAxisGroup(
-                    slivers: [
-                      if (upcoming.isNotEmpty) ...[
-                        SliverToBoxAdapter(
-                          child: NextEventCard(record: upcoming.first),
-                        ),
-                        ..._timelineSection(
-                          title: 'これから',
-                          records: upcoming,
-                          upcoming: true,
-                          type: selectedType.value,
-                          sort: upcomingSort,
-                        ),
-                      ],
-                      if (past.isNotEmpty)
-                        ..._timelineSection(
-                          title: 'これまで',
-                          records: past,
-                          upcoming: false,
-                          type: selectedType.value,
-                          sort: pastSort,
-                        ),
-                    ],
-                  );
-                },
-                loading: () => const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(child: CupertinoActivityIndicator(radius: 14)),
-                ),
-                error: (error, stack) => SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: IosEmptyState(
+              ],
+            ),
+            bottom: _HomeFilterBar(
+              selectedType: selectedType.value,
+              onTypeChanged: (t) => selectedType.value = t,
+              favorites: isLive ? favorites : const [],
+              selectedArtistName: selectedFavorite?.name,
+              onArtistSelected: (name) => selectedArtistName.value = name,
+            ),
+            onRefresh: () => ref.refresh(recordsProvider.future),
+            contentKey: (selectedType.value, selectedFavorite?.name),
+            slivers: [
+              if (readOnlyOffline)
+                const SliverToBoxAdapter(child: _NoticeBanner.offline())
+              else if (recordsAsync.hasError && recordsAsync.hasValue)
+                SliverToBoxAdapter(
+                  child: _NoticeBanner(
                     icon: CupertinoIcons.exclamationmark_triangle,
-                    message: toUserFriendlyMessage(error),
+                    message:
+                        '最新の記録を読み込めませんでした。${toUserFriendlyMessage(recordsAsync.error)}',
                     actionLabel: '再読み込み',
                     onAction: () => ref.invalidate(recordsProvider),
                   ),
                 ),
+              SliverContentSwitcher(
+                contentKey: (selectedType.value, selectedFavorite?.name),
+                // 読み込みに失敗しても、表示中（または手元のキャッシュ）の一覧は消さない
+                sliver: recordsAsync.when(
+                  skipError: true,
+                  data: (records) {
+                    final visible = records.where(
+                      (r) =>
+                          r.type == selectedType.value &&
+                          (selectedFavorite == null ||
+                              r.features(selectedFavorite.name)),
+                    );
+                    final (:upcoming, :past) = splitByDate(
+                      visible,
+                      DateTime.now(),
+                    );
+                    if (upcoming.isEmpty && past.isEmpty) {
+                      return SliverRecordTicketList(
+                        records: const [],
+                        emptyTitle: selectedFavorite == null
+                            ? '${selectedType.value.japaneseLabel}の記録はまだありません'
+                            : '${selectedFavorite.name} の記録はまだありません',
+                        emptyMessage: '行ったライブや観た作品を、チケットと一緒に残しましょう。',
+                        emptyActionLabel: readOnlyOffline ? null : '記録を追加',
+                        onEmptyAction: readOnlyOffline ? null : openEditor,
+                      );
+                    }
+                    return SliverMainAxisGroup(
+                      slivers: [
+                        if (upcoming.isNotEmpty) ...[
+                          SliverToBoxAdapter(
+                            child: NextEventCard(record: upcoming.first),
+                          ),
+                          ..._timelineSection(
+                            title: 'これから',
+                            records: upcoming,
+                            upcoming: true,
+                            type: selectedType.value,
+                            sort: upcomingSort,
+                          ),
+                        ],
+                        if (past.isNotEmpty)
+                          ..._timelineSection(
+                            title: 'これまで',
+                            records: past,
+                            upcoming: false,
+                            type: selectedType.value,
+                            sort: pastSort,
+                          ),
+                      ],
+                    );
+                  },
+                  loading: () => const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: CupertinoActivityIndicator(radius: 14),
+                    ),
+                  ),
+                  error: (error, stack) => SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: IosEmptyState(
+                      icon: CupertinoIcons.exclamationmark_triangle,
+                      message: toUserFriendlyMessage(error),
+                      actionLabel: '再読み込み',
+                      onAction: () => ref.invalidate(recordsProvider),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

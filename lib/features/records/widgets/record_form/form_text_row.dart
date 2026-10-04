@@ -13,6 +13,7 @@ class FormTextRow extends StatefulWidget {
     required this.placeholder,
     this.icon,
     this.enLabel,
+    this.required = false,
     this.focusNode,
     this.onChanged,
     this.maxLines = 1,
@@ -31,6 +32,9 @@ class FormTextRow extends StatefulWidget {
 
   /// 「VENUE」のような英字の項目名。
   final String? enLabel;
+
+  /// 必須の項目。見出し（[enLabel]）の隣に「＊」を付ける。
+  final bool required;
   final FocusNode? focusNode;
   final ValueChanged<String>? onChanged;
   final int maxLines;
@@ -171,7 +175,7 @@ class _FormTextRowState extends State<FormTextRow> {
                       _horizontalPadding,
                       0,
                     ),
-                    child: FormFieldLabel(enLabel),
+                    child: FormFieldLabel(enLabel, required: widget.required),
                   ),
                 ),
               field,

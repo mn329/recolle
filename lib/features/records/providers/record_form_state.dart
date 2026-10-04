@@ -230,7 +230,8 @@ class RecordFormState {
   List<String> get missingLabels => [
     if (isMultiAct && namedActs.isEmpty)
       '出演者'
-    else if (!isMultiAct && artist.isEmpty)
+    // 映画・本・その他の作者・出演は任意。ライブはアーティストが必須
+    else if (!isMultiAct && isLive && artist.isEmpty)
       type.creatorFieldLabel,
     if (title.isEmpty) titleLabel,
   ];

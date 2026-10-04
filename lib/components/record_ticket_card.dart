@@ -81,6 +81,7 @@ class _RecordTicketCardState extends State<RecordTicketCard>
                   return DecodedNetworkImage(
                     url: request.url,
                     headers: request.headers,
+                    fallbackUrl: request.url == url ? null : url,
                     logicalWidth: constraints.maxWidth,
                     logicalHeight: constraints.maxHeight,
                     fit: BoxFit.cover,
@@ -193,17 +194,19 @@ class TicketFace extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        artistOrAuthor,
-                        style: TextStyle(
-                          color: colors.ticketText,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                      if (artistOrAuthor.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          artistOrAuthor,
+                          style: TextStyle(
+                            color: colors.ticketText,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                      ],
                       const SizedBox(height: 12),
                       Text(
                         dateText,

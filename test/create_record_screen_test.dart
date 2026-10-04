@@ -677,7 +677,7 @@ void main() {
 
       expect(_field('アーティスト'), findsNothing);
       expect(_field('イベント名・対バン名'), findsOneWidget);
-      final firstAct = tester.widget<CupertinoTextField>(_field('1組目の出演者'));
+      final firstAct = tester.widget<CupertinoTextField>(_field('1組目の出演者 ＊'));
       expect(firstAct.controller!.text, 'sumika');
       expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
       expect(find.text('1曲'), findsOneWidget);
@@ -696,11 +696,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('対バン'));
       await tester.pumpAndSettle();
-      await tester.enterText(_field('1組目の出演者'), 'sumika');
+      await tester.enterText(_field('1組目の出演者 ＊'), 'sumika');
       await tester.enterText(_field('2組目の出演者'), 'Mrs. GREEN APPLE');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(_field('1組目の出演者'));
+      await tester.ensureVisible(_field('1組目の出演者 ＊'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(CupertinoIcons.star).first);
@@ -750,7 +750,7 @@ void main() {
       expect(find.text('出演者とイベント名・フェス名は必須です。'), findsOneWidget);
       expect(find.text('最終日'), findsOneWidget);
 
-      await tester.enterText(_field('1組目の出演者'), 'サカナクション');
+      await tester.enterText(_field('1組目の出演者 ＊'), 'サカナクション');
       await tester.enterText(_field('イベント名・フェス名'), 'ROCK IN JAPAN');
       await tester.pump();
       expect(find.textContaining('必須です'), findsNothing);

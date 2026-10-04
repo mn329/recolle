@@ -188,7 +188,7 @@ class RecordCalendarView extends HookWidget {
                         leading: _DateBadge(day: d),
                         title: r.title,
                         subtitle: [
-                          r.artistOrAuthor,
+                          if (r.artistOrAuthor.isNotEmpty) r.artistOrAuthor,
                           if (r.startTime != null)
                             '${r.startTime!.format()} ${r.type.startTimeLabel}',
                           ?r.venue,

@@ -149,6 +149,7 @@ class TicketImageView extends StatelessWidget {
     return DecodedNetworkImage(
       url: request.url,
       headers: request.headers,
+      fallbackUrl: request.url == url ? null : url,
       logicalWidth: constraints.maxWidth,
       logicalHeight: constraints.maxHeight,
       fit: BoxFit.cover,
