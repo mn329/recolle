@@ -87,7 +87,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     card: Color(0xFF1D1B18),
     cardPressed: Color(0xFF2B2824),
     separator: Color(0x99545458),
-    bar: Color(0xCC0B0A09),
+    // 画面の地と同じ不透明な色。半透明だと、その下の色と混ざって地より暗く見える（スクロールで縮んだ見出しの背景）
+    bar: Color(0xFF0B0A09),
     accent: Color(0xFFE6C88F),
     accentLight: Color(0xFFF5E2BC),
     onAccent: Color(0xFF1A1409),
@@ -116,7 +117,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     card: Color(0xFFFFFFFF),
     cardPressed: Color(0xFFE9E6E0),
     separator: Color(0x4A3C3C43),
-    bar: Color(0xCCF8F7F4),
+    // 画面の地と同じ不透明な色。半透明だと、その下の色と混ざって地より暗く見える（スクロールで縮んだ見出しの背景）
+    bar: Color(0xFFF4F2EE),
     accent: Color(0xFF9A7433),
     accentLight: Color(0xFFC9A86A),
     onAccent: Color(0xFFFFFFFF),

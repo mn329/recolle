@@ -16,6 +16,9 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 /// 指定しなければ `false` の定数なので、リリースビルドではこのファイルの処理は取り除かれる。
 const bool kDemoMode = bool.fromEnvironment('DEMO_MODE');
 
+/// `--dart-define=DEMO_NO_FAVORITES=true` のときは、お気に入りが空の状態から始める（初回利用の動作確認用）。
+const bool _demoNoFavorites = bool.fromEnvironment('DEMO_NO_FAVORITES');
+
 /// デモモードで差し替える Provider。サーバーには何も書き込まない。
 List<Override> demoOverrides() => [
   recordsProvider.overrideWith((ref) async* {
@@ -76,7 +79,8 @@ class _DemoRecordsRepository implements RecordsRepository {
 
 class _DemoFavorites extends FavoriteArtistsNotifier {
   @override
-  Future<List<FavoriteArtist>> build() async => demoFavorites(DateTime.now());
+  Future<List<FavoriteArtist>> build() async =>
+      _demoNoFavorites ? const [] : demoFavorites(DateTime.now());
 
   // 画像の置き換えなどでサーバーに問い合わせず、メモリ上だけで追加・削除する
   @override
@@ -84,6 +88,10 @@ class _DemoFavorites extends FavoriteArtistsNotifier {
     required String name,
     int? itunesArtistId,
   }) async {
+    // 実機では、アーティスト画像の検索で数秒かかる。初回利用の動作確認では、その遅れも再現する
+    if (_demoNoFavorites) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
     final added = FavoriteArtist(
       id: 'demo-fav-${DateTime.now().microsecondsSinceEpoch}',
       name: name,

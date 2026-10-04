@@ -10,7 +10,7 @@ cd "$(dirname "$0")/.."
 NAME="Recolle Screenshots 6.9"
 UDID="${1:-$(xcrun simctl list devices | grep "$NAME" | grep -oE '[0-9A-F]{8}(-[0-9A-F]{4}){3}-[0-9A-F]{12}' | head -1)}"
 [ -n "$UDID" ] || { echo "シミュレータ '$NAME' が見つかりません"; exit 1; }
-OUT="build/screenshots/raw-${APPEARANCE:-dark}"
+OUT="${OUT_DIR:-build/screenshots/raw-${APPEARANCE:-dark}}"
 mkdir -p "$OUT"
 
 xcrun simctl boot "$UDID" 2>/dev/null || true
@@ -22,8 +22,8 @@ xcrun simctl ui "$UDID" appearance "${APPEARANCE:-dark}"
 xcrun simctl status_bar "$UDID" override --time "9:41" --dataNetwork wifi --wifiMode active \
   --wifiBars 3 --cellularMode active --cellularBars 4 --batteryState charged --batteryLevel 100
 
-flutter test integration_test/app_store_screenshots_test.dart -d "$UDID" \
-  --dart-define=DEMO_MODE=true 2>&1 | while IFS= read -r line; do
+flutter test ${TEST_FILE:-integration_test/app_store_screenshots_test.dart} -d "$UDID" \
+  --dart-define=DEMO_MODE=true ${EXTRA_DEFINE:-} 2>&1 | while IFS= read -r line; do
   echo "$line"
   case "$line" in
     *SHOT:DONE*) ;;
