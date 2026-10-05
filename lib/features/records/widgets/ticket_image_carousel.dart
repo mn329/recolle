@@ -110,8 +110,13 @@ class _TicketImageCarouselState extends State<TicketImageCarousel> {
 
   static ImageProvider _networkImage(String storedUrl) {
     // 端末に保存して使い回す（開き直すたびにダウンロードしない）
-    final request = RecordsRepository.ticketImageRequest(storedUrl);
-    return ManagedNetworkImage(request.url, headers: request.headers);
+    // 認証つきの窓口で取れないとき（ログインし直して持ち主が変わった場合など）は、公開 URL でも試す
+    final sources = RecordsRepository.ticketImageSources(storedUrl);
+    return ManagedNetworkImage(
+      sources.primary.url,
+      headers: sources.primary.headers,
+      fallbacks: sources.alternatives,
+    );
   }
 
   double _heightOf(int index, double width, double maxHeight) =>

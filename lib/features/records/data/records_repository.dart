@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:recolle/core/utils/ticket_image_compress.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
-import 'package:recolle/core/widgets/decoded_network_image.dart';
+import 'package:recolle/core/widgets/managed_network_image.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

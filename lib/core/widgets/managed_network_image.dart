@@ -16,17 +16,34 @@ final CacheManager ticketImageCacheManager = CacheManager(
   ),
 );
 
+/// 画像の取得先（URL と、非公開の画像に付ける認証などのヘッダー）。
+@immutable
+class NetworkImageSource {
+  const NetworkImageSource(this.url, {this.headers});
+
+  final String url;
+  final Map<String, String>? headers;
+}
+
 /// [ticketImageCacheManager] 経由で画像を読む [ImageProvider]。
 ///
 /// 保存の鍵は URL だけ（認証のヘッダーは含めない）。取得に失敗した画像は保存されない。
 @immutable
 class ManagedNetworkImage extends ImageProvider<ManagedNetworkImage> {
-  const ManagedNetworkImage(this.url, {this.headers, this.scale = 1.0});
+  const ManagedNetworkImage(
+    this.url, {
+    this.headers,
+    this.fallbacks = const [],
+    this.scale = 1.0,
+  });
 
   final String url;
 
   /// 取得時に付ける HTTP ヘッダー（非公開の画像に付ける認証など）。
   final Map<String, String>? headers;
+
+  /// [url] で取れなかったときに、順に試す取得先。
+  final List<NetworkImageSource> fallbacks;
   final double scale;
 
   @override
@@ -50,20 +67,41 @@ class ManagedNetworkImage extends ImageProvider<ManagedNetworkImage> {
     ManagedNetworkImage key,
     ImageDecoderCallback decode,
   ) async {
+    final sources = [
+      NetworkImageSource(key.url, headers: key.headers),
+      ...key.fallbacks,
+    ];
+    Object? lastError;
+    StackTrace? lastStack;
+    for (final source in sources) {
+      try {
+        return await _loadFrom(source, decode);
+      } catch (e, st) {
+        lastError = e;
+        lastStack = st;
+      }
+    }
+    Error.throwWithStackTrace(lastError!, lastStack!);
+  }
+
+  Future<ui.Codec> _loadFrom(
+    NetworkImageSource source,
+    ImageDecoderCallback decode,
+  ) async {
     final file = await ticketImageCacheManager.getSingleFile(
-      key.url,
-      headers: key.headers ?? const {},
+      source.url,
+      headers: source.headers ?? const {},
     );
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) {
-      await ticketImageCacheManager.removeFile(key.url);
-      throw StateError('Empty image file: ${key.url}');
+      await ticketImageCacheManager.removeFile(source.url);
+      throw StateError('Empty image file: ${source.url}');
     }
     try {
       return await decode(await ui.ImmutableBuffer.fromUint8List(bytes));
     } catch (_) {
       // 壊れた保存ファイルは捨てて、次回は取り直す
-      await ticketImageCacheManager.removeFile(key.url);
+      await ticketImageCacheManager.removeFile(source.url);
       rethrow;
     }
   }
@@ -73,7 +111,11 @@ class ManagedNetworkImage extends ImageProvider<ManagedNetworkImage> {
       other is ManagedNetworkImage && other.url == url && other.scale == scale;
 
   @override
-  int get hashCode => Object.hash(url, scale);
+  int get hashCode => Object.hash(
+    url,
+    Object.hashAll([for (final f in fallbacks) f.url]),
+    scale,
+  );
 
   @override
   String toString() => 'ManagedNetworkImage("$url", scale: $scale)';

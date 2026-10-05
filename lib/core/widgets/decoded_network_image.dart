@@ -4,15 +4,6 @@ import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/widgets/managed_network_image.dart';
 
-/// 画像の取得先（URL と、非公開の画像に付ける認証などのヘッダー）。
-@immutable
-class NetworkImageSource {
-  const NetworkImageSource(this.url, {this.headers});
-
-  final String url;
-  final Map<String, String>? headers;
-}
-
 /// 表示に必要な解像度だけデコードし、取得中はくるくるを出すネットワーク画像。端末にも保存して使い回す。
 ///
 /// [logicalHeight] を省略すると横幅いっぱいに元画像の縦横比で表示する。
