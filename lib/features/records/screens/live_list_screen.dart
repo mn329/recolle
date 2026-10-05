@@ -44,6 +44,8 @@ class LiveListScreen extends ConsumerWidget {
         body: CustomScrollView(
           // 読み込みに失敗しても、表示中（または手元のキャッシュ）の一覧は消さない
           slivers: recordsAsync.when(
+            // 再読み込み中も、直前の一覧を残す（読み込み中の表示に切り替えない）
+            skipLoadingOnReload: true,
             skipError: true,
             data: (records) {
               final lives =
