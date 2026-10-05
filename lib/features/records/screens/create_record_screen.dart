@@ -152,12 +152,20 @@ class CreateRecordScreen extends HookConsumerWidget {
               limit: room,
             );
       if (picked.isEmpty) return;
-      final compressed = await Future.wait([
-        for (final file in picked.take(room))
-          compressTicketImageForUpload(File(file.path)),
-      ]);
-      if (!context.mounted) return;
-      vm.addImages(compressed);
+      // 圧縮が終わるまでは画像がフォームに入らない。その間に保存されると画像なしで保存されるので、
+      // 準備中は保存できないようにする
+      final files = picked.take(room).toList();
+      vm.startPreparingImages(files.length);
+      try {
+        final compressed = await Future.wait([
+          for (final file in files)
+            compressTicketImageForUpload(File(file.path)),
+        ]);
+        if (!context.mounted) return;
+        vm.addImages(compressed);
+      } finally {
+        if (context.mounted) vm.finishPreparingImages(files.length);
+      }
     }
 
     Future<void> importFromMail() async {
@@ -262,7 +270,7 @@ class CreateRecordScreen extends HookConsumerWidget {
             ),
             title: Text(isEditMode ? '記録を編集' : '新規記録'),
             actions: [
-              if (form.isSaving)
+              if (form.isSaving || form.isPreparingImages)
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 24),
                   child: CupertinoActivityIndicator(),

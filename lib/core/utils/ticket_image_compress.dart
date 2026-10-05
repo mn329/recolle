@@ -34,3 +34,26 @@ Future<File> compressTicketImageForUpload(File source) async {
     return source;
   }
 }
+
+/// 一覧に出す小さな画像（長辺 [TicketImageSettings.thumbnailMaxEdge] px の JPEG）を作る。失敗したら null。
+Future<File?> compressTicketThumbnailForUpload(File source) async {
+  try {
+    final tmp = await getTemporaryDirectory();
+    final outPath = p.join(
+      tmp.path,
+      'ticket_thumb_${DateTime.now().microsecondsSinceEpoch}_${_outputSequence++}.jpg',
+    );
+    final result = await FlutterImageCompress.compressAndGetFile(
+      source.absolute.path,
+      outPath,
+      quality: TicketImageSettings.thumbnailQuality,
+      minWidth: TicketImageSettings.thumbnailMaxEdge,
+      minHeight: TicketImageSettings.thumbnailMaxEdge,
+      format: CompressFormat.jpeg,
+    );
+    return result == null ? null : File(result.path);
+  } catch (e, st) {
+    debugPrint('compressTicketThumbnailForUpload: $e\n$st');
+    return null;
+  }
+}

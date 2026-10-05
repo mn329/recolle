@@ -3,6 +3,7 @@ import 'dart:ui' show ImageFilter, lerpDouble;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/widgets/managed_network_image.dart';
 import 'package:recolle/features/records/data/records_repository.dart';
 
 /// 詳細画面のチケット画像。切り抜かずに全体を見せ、複数枚なら横スワイプで切り替える。
@@ -107,9 +108,10 @@ class _TicketImageCarouselState extends State<TicketImageCarousel> {
     width: (width * MediaQuery.devicePixelRatioOf(context)).round(),
   );
 
-  static NetworkImage _networkImage(String storedUrl) {
+  static ImageProvider _networkImage(String storedUrl) {
+    // 端末に保存して使い回す（開き直すたびにダウンロードしない）
     final request = RecordsRepository.ticketImageRequest(storedUrl);
-    return NetworkImage(request.url, headers: request.headers);
+    return ManagedNetworkImage(request.url, headers: request.headers);
   }
 
   double _heightOf(int index, double width, double maxHeight) =>

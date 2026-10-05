@@ -200,6 +200,22 @@ void main() {
       expect((result! as RecordSaveInvalid).message, '開場は開演より前の時刻にしてください。');
     });
 
+    test('選んだ画像の準備（圧縮）が終わるまでは、保存しない', () async {
+      final h = await _harness();
+      h.vm.updateText(RecordTextField.artist, 'YOASOBI');
+      h.vm.updateText(RecordTextField.title, 'TOUR');
+      h.vm.startPreparingImages(2);
+
+      expect(h.vm.state.canSave, isFalse);
+      expect(await h.vm.save(), isNull);
+      expect(h.repository.inserted, isEmpty);
+
+      h.vm.finishPreparingImages(2);
+      expect(h.vm.state.canSave, isTrue);
+      await h.vm.save();
+      expect(h.repository.inserted, hasLength(1));
+    });
+
     test('日をまたぐ公演は、開場が開演より遅い時刻でも保存できる', () async {
       final h = await _harness();
       h.vm.updateText(RecordTextField.artist, 'YOASOBI');

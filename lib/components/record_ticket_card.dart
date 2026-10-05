@@ -77,11 +77,15 @@ class _RecordTicketCardState extends State<RecordTicketCard>
             photo: switch (widget.record.coverImageUrl) {
               final url? => LayoutBuilder(
                 builder: (context, constraints) {
-                  final request = RecordsRepository.ticketImageRequest(url);
+                  // 一覧は小さな画像で十分（無い古い記録は、大きな画像に切り替わる）
+                  final sources = RecordsRepository.ticketImageSources(
+                    url,
+                    thumbnail: true,
+                  );
                   return DecodedNetworkImage(
-                    url: request.url,
-                    headers: request.headers,
-                    fallbackUrl: request.url == url ? null : url,
+                    url: sources.primary.url,
+                    headers: sources.primary.headers,
+                    alternatives: sources.alternatives,
                     logicalWidth: constraints.maxWidth,
                     logicalHeight: constraints.maxHeight,
                     fit: BoxFit.cover,

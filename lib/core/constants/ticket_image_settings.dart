@@ -16,4 +16,8 @@ abstract final class TicketImageSettings {
 
   /// 再圧縮時の長辺・短辺の上限（px）。縦横どちらが長くてもこのボックスに収まるよう縮小。
   static const int compressMaxEdge = 1920;
+
+  /// 一覧のチケットに出す小さな画像の長辺（px）と JPEG 品質。大きな画像と一緒にアップロードする。
+  static const int thumbnailMaxEdge = 640;
+  static const int thumbnailQuality = 70;
 }

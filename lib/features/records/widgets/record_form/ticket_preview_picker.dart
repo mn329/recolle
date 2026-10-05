@@ -145,11 +145,11 @@ class TicketImageView extends StatelessWidget {
     BoxConstraints constraints,
     ImageErrorWidgetBuilder errorBuilder,
   ) {
-    final request = RecordsRepository.ticketImageRequest(url);
+    final sources = RecordsRepository.ticketImageSources(url, thumbnail: true);
     return DecodedNetworkImage(
-      url: request.url,
-      headers: request.headers,
-      fallbackUrl: request.url == url ? null : url,
+      url: sources.primary.url,
+      headers: sources.primary.headers,
+      alternatives: sources.alternatives,
       logicalWidth: constraints.maxWidth,
       logicalHeight: constraints.maxHeight,
       fit: BoxFit.cover,

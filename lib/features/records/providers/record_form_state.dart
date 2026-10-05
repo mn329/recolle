@@ -105,6 +105,7 @@ class RecordFormState {
     this.songs = const [],
     this.images = const [],
     this.isSaving = false,
+    this.preparingImages = 0,
     this.actsRevision = 0,
     this.setlistRevision = 0,
   });
@@ -165,6 +166,9 @@ class RecordFormState {
   /// チケット画像。先頭が一覧に出す表紙。
   final List<TicketImage> images;
   final bool isSaving;
+
+  /// 選んだあと、圧縮などの準備中の画像の枚数。フォームにはまだ入っていないので、準備中は保存させない。
+  final int preparingImages;
 
   /// 出演者・セトリを入力欄の外から差し替えたときに増やす。
   /// 入力欄は自分の内容を持つので、これが変わったら作り直してもらう。
@@ -236,7 +240,9 @@ class RecordFormState {
     if (title.isEmpty) titleLabel,
   ];
 
-  bool get canSave => missingLabels.isEmpty && !isSaving;
+  bool get isPreparingImages => preparingImages > 0;
+
+  bool get canSave => missingLabels.isEmpty && !isSaving && !isPreparingImages;
 
   String? get _setlist =>
       isLive && !isMultiAct && songs.isNotEmpty ? songs.join('\n') : null;
@@ -338,6 +344,7 @@ class RecordFormState {
     Map<RecordTextField, String>? texts,
     List<TicketImage>? images,
     bool? isSaving,
+    int? preparingImages,
     int? actsRevision,
     int? setlistRevision,
   }) => RecordFormState(
@@ -357,6 +364,7 @@ class RecordFormState {
     texts: texts ?? this.texts,
     images: images ?? this.images,
     isSaving: isSaving ?? this.isSaving,
+    preparingImages: preparingImages ?? this.preparingImages,
     actsRevision: actsRevision ?? this.actsRevision,
     setlistRevision: setlistRevision ?? this.setlistRevision,
   );

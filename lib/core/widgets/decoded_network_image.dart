@@ -2,13 +2,23 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:recolle/core/theme/app_colors.dart';
+import 'package:recolle/core/widgets/managed_network_image.dart';
 
-/// 表示に必要な解像度だけデコードし、取得中はプレースホルダーを出すネットワーク画像。
+/// 画像の取得先（URL と、非公開の画像に付ける認証などのヘッダー）。
+@immutable
+class NetworkImageSource {
+  const NetworkImageSource(this.url, {this.headers});
+
+  final String url;
+  final Map<String, String>? headers;
+}
+
+/// 表示に必要な解像度だけデコードし、取得中はくるくるを出すネットワーク画像。端末にも保存して使い回す。
 ///
 /// [logicalHeight] を省略すると横幅いっぱいに元画像の縦横比で表示する。
 ///
-/// 取得に失敗したら、少し待って 2 回まで取り直す。それでも失敗し、[fallbackUrl] があれば、
-/// ヘッダーなしでその URL を取る（認証つきの窓口で取れないときの保険）。
+/// 取得に失敗したら、[alternatives] を順に試す（小さな画像がない古い記録は、大きな画像に切り替わる）。
+/// すべて失敗したら、少し待って 2 回まで取り直す。
 class DecodedNetworkImage extends StatefulWidget {
   const DecodedNetworkImage({
     super.key,
@@ -19,7 +29,7 @@ class DecodedNetworkImage extends StatefulWidget {
     this.placeholderHeight = 200,
     this.errorBuilder,
     this.headers,
-    this.fallbackUrl,
+    this.alternatives = const [],
   });
 
   final String url;
@@ -27,8 +37,8 @@ class DecodedNetworkImage extends StatefulWidget {
   /// 取得時に付ける HTTP ヘッダー（非公開の画像に付ける認証など）。
   final Map<String, String>? headers;
 
-  /// [url] で取れなかったときに、ヘッダーなしで取り直す URL。
-  final String? fallbackUrl;
+  /// [url] で取れなかったときに、順に試す取得先。
+  final List<NetworkImageSource> alternatives;
   final double logicalWidth;
   final double? logicalHeight;
   final BoxFit fit;
@@ -45,39 +55,58 @@ class _DecodedNetworkImageState extends State<DecodedNetworkImage> {
   static const _maxRetries = 2;
   static const _retryDelay = Duration(milliseconds: 1500);
 
-  int _attempt = 0;
-  bool _useFallback = false;
+  int _sourceIndex = 0;
+  int _retries = 0;
   bool _recoveryScheduled = false;
+
+  List<NetworkImageSource> get _sources => [
+    NetworkImageSource(widget.url, headers: widget.headers),
+    ...widget.alternatives,
+  ];
 
   @override
   void didUpdateWidget(DecodedNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _attempt = 0;
-      _useFallback = false;
+      _sourceIndex = 0;
+      _retries = 0;
     }
   }
 
-  /// 取得に失敗したときに、取り直すか、保険の URL に切り替える。build 中には setState できないので遅らせる。
+  /// 取得に失敗したときに、次の取得先に進むか、取り直す。build 中には setState できないので遅らせる。
   void _scheduleRecovery() {
     if (_recoveryScheduled) return;
-    final canRetry = !_useFallback && _attempt < _maxRetries;
-    final canFallback =
-        !_useFallback && widget.fallbackUrl != null && !canRetry;
-    if (!canRetry && !canFallback) return;
+    final sources = _sources;
+    final hasNext = _sourceIndex + 1 < sources.length;
+    final canRetry = !hasNext && _retries < _maxRetries;
+    if (!hasNext && !canRetry) return;
     _recoveryScheduled = true;
-    Future<void>.delayed(canRetry ? _retryDelay : Duration.zero, () {
+    Future<void>.delayed(hasNext ? Duration.zero : _retryDelay, () {
       _recoveryScheduled = false;
       if (!mounted) return;
       setState(() {
-        if (canRetry) {
-          _attempt++;
+        if (hasNext) {
+          _sourceIndex++;
         } else {
-          _useFallback = true;
-          _attempt = 0;
+          _retries++;
+          // 小さな画像がない（古い記録）ことが多いので、取り直しは大きな画像から
+          _sourceIndex = sources.length > 1 ? 1 : 0;
         }
       });
     });
+  }
+
+  Widget _placeholder(BuildContext context, {required bool loading}) {
+    return SizedBox(
+      width: widget.logicalWidth,
+      height: widget.logicalHeight ?? widget.placeholderHeight,
+      child: ColoredBox(
+        color: context.colors.card,
+        child: loading
+            ? const Center(child: CupertinoActivityIndicator())
+            : null,
+      ),
+    );
   }
 
   @override
@@ -102,47 +131,33 @@ class _DecodedNetworkImageState extends State<DecodedNetworkImage> {
       _ => false,
     };
 
-    final url = _useFallback ? widget.fallbackUrl! : widget.url;
-    return Image.network(
-      url,
-      key: ValueKey((url, _attempt)),
-      headers: _useFallback ? null : widget.headers,
+    final sources = _sources;
+    final source = sources[_sourceIndex.clamp(0, sources.length - 1)];
+    final provider = ResizeImage.resizeIfNeeded(
+      decodeByHeight ? null : toPx(logicalWidth),
+      decodeByHeight ? toPx(boxHeight!) : null,
+      ManagedNetworkImage(source.url, headers: source.headers),
+    );
+    return Image(
+      key: ValueKey((source.url, _retries)),
+      image: provider,
       fit: widget.fit,
       width: logicalWidth,
       height: boxHeight,
-      cacheWidth: decodeByHeight ? null : toPx(logicalWidth),
-      cacheHeight: decodeByHeight ? toPx(boxHeight!) : null,
       gaplessPlayback: true,
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return SizedBox(
-          width: logicalWidth,
-          height: boxHeight ?? widget.placeholderHeight,
-          child: ColoredBox(
-            color: context.colors.card,
-            child: Center(
-              child: loadingProgress.expectedTotalBytes != null
-                  ? CupertinoActivityIndicator.partiallyRevealed(
-                      progress:
-                          loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!,
-                    )
-                  : const CupertinoActivityIndicator(),
-            ),
-          ),
-        );
+      // 最初の 1 コマが出るまで（ダウンロード・デコード中）は、くるくるを出す
+      frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+        if (wasSynchronouslyLoaded || frame != null) return child;
+        return _placeholder(context, loading: true);
       },
       errorBuilder: (context, error, stackTrace) {
-        debugPrint('Image load failed ($url, attempt $_attempt): $error');
+        debugPrint(
+          'Image load failed (${source.url}, source $_sourceIndex, retry $_retries): $error',
+        );
         _scheduleRecovery();
         final builder = widget.errorBuilder;
-        return builder == null
-            ? SizedBox(
-                width: logicalWidth,
-                height: boxHeight ?? widget.placeholderHeight,
-                child: ColoredBox(color: context.colors.card),
-              )
-            : builder(context, error, stackTrace);
+        if (builder != null) return builder(context, error, stackTrace);
+        return _placeholder(context, loading: false);
       },
     );
   }

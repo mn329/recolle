@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 
+import 'package:recolle/core/utils/ticket_image_compress.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
+import 'package:recolle/core/widgets/decoded_network_image.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -68,12 +71,36 @@ class RecordsRepository {
             '画像のアップロードがタイムアウトしました。電波の良い場所でもう一度お試しください。',
           ),
         );
+    // 一覧に出す小さな画像も一緒に上げる。失敗しても、大きな画像だけで表示できる
+    unawaited(_uploadThumbnail(storagePath, file));
     return _client.storage.from(bucket).getPublicUrl(storagePath);
+  }
+
+  /// 一覧用の小さな画像のパス。大きな画像のパスに `.thumb.jpg` を付ける。
+  static String thumbnailPath(String path) => '$path.thumb.jpg';
+
+  Future<void> _uploadThumbnail(String storagePath, File file) async {
+    try {
+      final thumb = await compressTicketThumbnailForUpload(file);
+      if (thumb == null) return;
+      await _client.storage
+          .from(bucket)
+          .upload(thumbnailPath(storagePath), thumb)
+          .timeout(_uploadTimeout);
+    } catch (e) {
+      debugPrint('Thumbnail upload failed for $storagePath: $e');
+    }
   }
 
   /// [uploadTicketImage] で上げた画像を消す。このバケットの URL でないものは無視する。
   Future<void> deleteTicketImages(List<String> urls) async {
-    final paths = [for (final url in urls) ?ticketImageStoragePath(url)];
+    final paths = [
+      for (final url in urls)
+        if (ticketImageStoragePath(url) case final path?) ...[
+          path,
+          thumbnailPath(path),
+        ],
+    ];
     if (paths.isEmpty) return;
     await _client.storage.from(bucket).remove(paths);
   }
@@ -103,5 +130,33 @@ class RecordsRepository {
       url: '${client.url}/object/authenticated/$bucket/$encodedPath',
       headers: Map.unmodifiable(client.headers),
     );
+  }
+
+  /// 画像の取得先を、先に試す順に返す。
+  ///
+  /// [thumbnail] が true なら、一覧用の小さな画像を先に試す（古い記録には無いので、
+  /// 取れなければ大きな画像に切り替わる）。最後に、認証なしの公開 URL も試す。
+  static ({NetworkImageSource primary, List<NetworkImageSource> alternatives})
+  ticketImageSources(
+    String storedUrl, {
+    bool thumbnail = false,
+    SupabaseStorageClient? storage,
+  }) {
+    NetworkImageSource sourceOf(String url) {
+      final request = ticketImageRequest(url, storage: storage);
+      return NetworkImageSource(request.url, headers: request.headers);
+    }
+
+    final full = sourceOf(storedUrl);
+    final isBucketImage = ticketImageStoragePath(storedUrl) != null;
+    final publicFull = isBucketImage ? NetworkImageSource(storedUrl) : null;
+    if (!isBucketImage) return (primary: full, alternatives: const []);
+    if (thumbnail) {
+      return (
+        primary: sourceOf('$storedUrl.thumb.jpg'),
+        alternatives: [full, ?publicFull],
+      );
+    }
+    return (primary: full, alternatives: [?publicFull]);
   }
 }

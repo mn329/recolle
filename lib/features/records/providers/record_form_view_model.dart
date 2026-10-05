@@ -315,6 +315,14 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
     ];
   }
 
+  /// 選んだ画像の準備（圧縮など）を始める。終わるまで保存できない。必ず [finishPreparingImages] と組にする。
+  void startPreparingImages(int count) =>
+      state = state.copyWith(preparingImages: state.preparingImages + count);
+
+  void finishPreparingImages(int count) => state = state.copyWith(
+    preparingImages: (state.preparingImages - count).clamp(0, 1 << 20),
+  );
+
   /// 選んだ画像を後ろに足す。上限を超える分は捨てる。
   void addImages(List<File> files) {
     final room = state.remainingImageSlots;
