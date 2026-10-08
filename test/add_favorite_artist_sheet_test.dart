@@ -39,7 +39,10 @@ const _oneOkRock = ItunesArtist(id: 42, name: 'ONE OK ROCK', genre: 'Rock');
 
 class _FakeItunesClient extends ItunesClient {
   @override
-  Future<List<ItunesArtist>> searchArtists(String term, {int limit = 8}) async =>
+  Future<List<ItunesArtist>> searchArtists(
+    String term, {
+    int limit = 8,
+  }) async =>
       term.toLowerCase().contains('one') ? const [_oneOkRock] : const [];
 
   @override

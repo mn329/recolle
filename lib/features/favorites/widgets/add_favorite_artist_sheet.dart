@@ -30,8 +30,10 @@ Future<void> showAddFavoriteArtistSheet(
   await Navigator.push(
     context,
     CupertinoPageRoute<void>(
-      builder: (_) =>
-          ArtistDetailScreen(artistName: picked.name, itunesArtistId: picked.id),
+      builder: (_) => ArtistDetailScreen(
+        artistName: picked.name,
+        itunesArtistId: picked.id,
+      ),
     ),
   );
 }

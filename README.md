@@ -118,6 +118,18 @@ supabase functions deploy setlistfm-search --project-ref <project-ref>
 
 キー未登録の間、公演名の候補には setlist.fm の公演が出ず、「連携が未設定です」と表示します。
 
+`supabase/functions/place-search` は Google Places API (New) のテキスト検索のプロキシです（会場・映画館の候補用。API キーをアプリに埋め込まないため）。関数内でセッションのユーザーを検証します。
+
+1. Google Cloud で Places API (New) を有効にして API キーを発行（請求先アカウントが必要）。
+2. シークレットを登録してデプロイ:
+
+```bash
+supabase secrets set GOOGLE_PLACES_API_KEY=<発行したキー> --project-ref <project-ref>
+supabase functions deploy place-search --project-ref <project-ref>
+```
+
+キー未登録の間、会場欄の候補には「場所の検索が未設定です」と表示します。
+
 `supabase/functions/concert-discovery` は Gemini API のプロキシです。既定のモデルは `gemini-3.5-flash-lite` です（`GEMINI_MODEL` で変更可）。Gemini 3.x の無料枠では Google 検索グラウンディングの上限が 0 で必ず 429 になるため、既定では試さずに [MusicBrainz](https://musicbrainz.org/doc/MusicBrainz_API) に登録された公式サイト（official homepage）とサイト内のライブ・ツアー告知らしいページを、無料枠で使える URL context で読み取って公演を集めます。このときの出典は公式サイトで、公演の告知 URL は実際に読んだページのものだけを載せます。MusicBrainz に公式サイトが登録されていないアーティストは探せません（`discovery_no_official_site`）。課金を有効にしたうえでシークレット `GEMINI_SEARCH_GROUNDING=true` を設定すると、先に検索グラウンディング（月 5,000 回まで無料）を使うようになり、公式サイト以外の告知も拾えます（`supabase secrets set GEMINI_SEARCH_GROUNDING=true`）。無料枠では入力内容（アーティスト名）が Google のサービス改善に使われることがあります。
 
 1. [Google AI Studio](https://aistudio.google.com/apikey) で API キーを発行（無料、請求先の登録は不要）。

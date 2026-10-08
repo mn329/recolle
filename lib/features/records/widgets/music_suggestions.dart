@@ -15,8 +15,10 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/place_search_client.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
+import 'package:recolle/features/records/providers/place_search_provider.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/providers/work_search_provider.dart';
 
@@ -250,6 +252,47 @@ class WorkSuggestions extends HookConsumerWidget {
   }
 }
 
+/// 会場・映画館の候補（Google Places）。
+class PlaceSuggestions extends HookConsumerWidget {
+  const PlaceSuggestions({
+    super.key,
+    required this.query,
+    required this.onPick,
+  });
+
+  final String query;
+  final ValueChanged<PlaceSuggestion> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(placeSearchClientProvider);
+    final snapshot = useDebouncedSearch<PlaceSuggestion>(
+      query,
+      client.search,
+      delay: const Duration(milliseconds: 600),
+      minLength: 2,
+    );
+    final typed = query.trim();
+    final places = (snapshot.data ?? const <PlaceSuggestion>[])
+        .where((p) => p.name != typed)
+        .toList();
+
+    return _SuggestionPanel(
+      snapshot: snapshot,
+      isEmpty: places.isEmpty,
+      children: [
+        for (final place in places)
+          _SuggestionRow(
+            icon: CupertinoIcons.location,
+            title: place.name,
+            subtitle: place.address,
+            onTap: () => onPick(place),
+          ),
+      ],
+    );
+  }
+}
+
 class _SuggestionPanel extends StatelessWidget {
   const _SuggestionPanel({
     required this.snapshot,
@@ -273,14 +316,25 @@ class _SuggestionPanel extends StatelessWidget {
         ),
       );
     } else if (!isEmpty) {
-      content = Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final (i, child) in children.indexed) ...[
-            if (i > 0) const FormDivider(indent: 56),
-            child,
-          ],
-        ],
+      // 作成画面はドラッグでキーボードを閉じるため、候補のスクロールを伝えると
+      // 入力欄のフォーカスが外れて候補ごと消えてしまう
+      content = ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 260),
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (_) => true,
+          child: SingleChildScrollView(
+            padding: EdgeInsets.zero,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (i, child) in children.indexed) ...[
+                  if (i > 0) const FormDivider(indent: 56),
+                  child,
+                ],
+              ],
+            ),
+          ),
+        ),
       );
     } else if (snapshot.connectionState == ConnectionState.waiting) {
       content = const Padding(

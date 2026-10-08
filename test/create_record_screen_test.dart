@@ -9,9 +9,11 @@ import 'package:recolle/features/music/data/concert_discovery_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
+import 'package:recolle/features/records/data/place_search_client.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/features/records/providers/place_search_provider.dart';
 import 'package:recolle/features/records/providers/work_search_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
@@ -93,6 +95,13 @@ class _FakeItunesClient extends ItunesClient {
   ];
 }
 
+class _FakePlaceSearchClient implements PlaceSearchClient {
+  @override
+  Future<List<PlaceSuggestion>> search(String query) async => const [
+    PlaceSuggestion(id: '1', name: 'Zepp Haneda', address: '東京都大田区'),
+  ];
+}
+
 class _FakeWorkSearchClient extends WorkSearchClient {
   @override
   Future<List<WorkSuggestion>> searchBooks(
@@ -139,6 +148,7 @@ Future<void> _pumpScreen(
           discoveryClient ?? _FakeDiscoveryClient(const []),
         ),
         workSearchClientProvider.overrideWithValue(_FakeWorkSearchClient()),
+        placeSearchClientProvider.overrideWithValue(_FakePlaceSearchClient()),
       ],
       child: MaterialApp(
         home: Builder(
@@ -398,6 +408,24 @@ void main() {
               .evaluate()
               .isNotEmpty,
       isTrue,
+    );
+  });
+
+  testWidgets('会場欄に入力すると場所の候補が出て、選ぶと会場に入る', (tester) async {
+    await _pumpScreen(tester);
+    await tester.ensureVisible(_field('会場'));
+    await tester.pumpAndSettle();
+    await tester.showKeyboard(_field('会場'));
+    await tester.enterText(_field('会場'), 'Zepp');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('東京都大田区'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: _field('会場'), matching: find.text('Zepp Haneda')),
+      findsOneWidget,
     );
   });
 

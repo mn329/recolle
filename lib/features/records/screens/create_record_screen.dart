@@ -24,6 +24,7 @@ import 'package:recolle/features/records/concert_candidates.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/features/records/data/place_search_client.dart';
 import 'package:recolle/features/records/widgets/music_suggestions.dart';
 import 'package:recolle/features/records/widgets/ticket_mail_import_sheet.dart';
 import 'package:recolle/features/records/widgets/record_form/acts_editor.dart';
@@ -146,6 +147,9 @@ class CreateRecordScreen extends HookConsumerWidget {
     final titleFocusNode = useFocusNode();
     useListenable(titleFocusNode);
     final titlePicked = useState(false);
+    final venueFocusNode = useFocusNode();
+    useListenable(venueFocusNode);
+    final venuePicked = useState(false);
     // 候補から取り込んだセトリを反映するため、セトリ欄を作り直す
     final setlistEditorGeneration = useState(0);
 
@@ -231,6 +235,18 @@ class CreateRecordScreen extends HookConsumerWidget {
       }
       titlePicked.value = true;
       titleFocusNode.unfocus();
+    }
+
+    void pickPlace(PlaceSuggestion place) {
+      final picked = place.name.length > RecordFieldLimits.venue
+          ? place.name.substring(0, RecordFieldLimits.venue)
+          : place.name;
+      venueController.value = TextEditingValue(
+        text: picked,
+        selection: TextSelection.collapsed(offset: picked.length),
+      );
+      venuePicked.value = true;
+      venueFocusNode.unfocus();
     }
 
     void changeFormat(EventFormat next) {
@@ -839,13 +855,28 @@ class CreateRecordScreen extends HookConsumerWidget {
                     ),
                   ],
                   if (hasVenue)
-                    FormTextRow(
-                      controller: venueController,
-                      placeholder: kind.venueLabel!,
-                      icon: CupertinoIcons.location,
-                      enLabel: kind.venueEnLabel,
-                      maxLength: RecordFieldLimits.venue,
-                      scrollPadding: _fieldScrollPadding,
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        FormTextRow(
+                          controller: venueController,
+                          focusNode: venueFocusNode,
+                          placeholder: kind.venueLabel!,
+                          icon: CupertinoIcons.location,
+                          enLabel: kind.venueEnLabel,
+                          maxLength: RecordFieldLimits.venue,
+                          scrollPadding: _fieldScrollPadding,
+                          onChanged: (_) => venuePicked.value = false,
+                        ),
+                        if (venueFocusNode.hasFocus && !venuePicked.value)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                            child: PlaceSuggestions(
+                              query: venueController.text,
+                              onPick: pickPlace,
+                            ),
+                          ),
+                      ],
                     ),
                   if (hasSeat)
                     FormTextRow(
