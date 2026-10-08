@@ -153,8 +153,10 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
   Widget build(BuildContext context) {
     // CupertinoPageScaffold の下に置くと、スクロール前はナビバーの背景と区切り線が消える
     // 地は外側の AppBackground が描く
+    // ヘッダーの背景は、この色からヘッダーの色へスクロール量に応じて補間される。
+    // 透明な黒（0x00000000）から補間すると途中で暗い色を通るので、ヘッダーと同じ色の透明にする
     return CupertinoPageScaffold(
-      backgroundColor: const Color(0x00000000),
+      backgroundColor: _headerColor(context).withAlpha(0),
       child: Builder(
         builder: (scrollContext) {
           _scrollContext = scrollContext;
@@ -200,6 +202,16 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
     );
   }
 
+  /// 縮んだ見出しの背景。画面の地は上端に金色の光があるので、単色の地の色だと黒い帯に見える。
+  /// 不透明のまま、上端の光の濃さに合わせて色を足す（半透明にすると下の内容が透ける）。
+  Color _headerColor(BuildContext context) {
+    final c = context.colors;
+    return Color.alphaBlend(
+      c.accent.withValues(alpha: c.isDark ? 0.12 : 0.08),
+      c.bar,
+    );
+  }
+
   Widget _buildScrollView(BuildContext context) {
     final refresh = widget.onRefresh;
     final bottom = widget.bottom;
@@ -214,7 +226,7 @@ class _LargeTitleScrollViewState extends State<LargeTitleScrollView> {
           middle: _middleTitle(context),
           alwaysShowMiddle: false,
           trailing: widget.trailing,
-          backgroundColor: context.colors.bar,
+          backgroundColor: _headerColor(context),
           border: Border(
             bottom: BorderSide(color: context.colors.separator, width: 0.33),
           ),
