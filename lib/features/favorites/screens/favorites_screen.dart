@@ -15,6 +15,7 @@ import 'package:recolle/features/favorites/widgets/add_favorite_artist_sheet.dar
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
@@ -141,18 +142,20 @@ class FavoritesScreen extends ConsumerWidget {
       ],
     );
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      body: LargeTitleScrollView(
-        title: 'お気に入り',
-        enTitle: 'FAVORITES',
-        trailing: NavBarIconButton(
-          icon: CupertinoIcons.person_badge_plus,
-          semanticLabel: readOnlyOffline ? 'オフラインでは追加できません' : 'アーティストを追加',
-          onPressed: readOnlyOffline ? null : openAddSheet,
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: LargeTitleScrollView(
+          title: 'お気に入り',
+          enTitle: 'FAVORITES',
+          trailing: NavBarIconButton(
+            icon: CupertinoIcons.person_badge_plus,
+            semanticLabel: readOnlyOffline ? 'オフラインでは追加できません' : 'アーティストを追加',
+            onPressed: readOnlyOffline ? null : openAddSheet,
+          ),
+          onRefresh: () => ref.refresh(favoriteArtistsProvider.future),
+          slivers: content,
         ),
-        onRefresh: () => ref.refresh(favoriteArtistsProvider.future),
-        slivers: content,
       ),
     );
   }

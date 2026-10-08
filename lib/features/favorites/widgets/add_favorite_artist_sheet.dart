@@ -69,16 +69,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
       isSaving.value = true;
       final navigator = Navigator.of(context);
       try {
-        String? artworkUrl;
-        try {
-          artworkUrl = await itunes.findArtistArtwork(name);
-        } catch (e) {
-          // アートワークは任意項目なので、取得失敗でも登録は続ける
-          debugPrint('Artwork lookup failed for $name: $e');
-        }
-        await ref
-            .read(favoriteArtistsProvider.notifier)
-            .add(name: name, artworkUrl: artworkUrl);
+        await ref.read(favoriteArtistsProvider.notifier).add(name: name);
         HapticFeedback.lightImpact();
         navigator.pop();
         AppToast.show(
@@ -191,7 +182,7 @@ class _AddFavoriteArtistSheet extends HookConsumerWidget {
                     Padding(
                       padding: EdgeInsets.all(24),
                       child: Text(
-                        'Apple Music のカタログから候補を表示します。\n選ぶと詳細を開き、☆でお気に入りに登録できます',
+                        'アーティスト名を入力すると候補が出ます。選ぶと詳細が開き、☆でお気に入りに登録できます。',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: context.colors.textSecondary,

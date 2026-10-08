@@ -1,19 +1,28 @@
+import 'dart:io';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
+import 'package:recolle/features/account/providers/auth_providers.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
-import 'package:recolle/features/records/data/place_search_client.dart';
+import 'package:recolle/features/records/data/records_repository.dart';
+import 'package:recolle/features/records/data/venue_search_client.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
+import 'package:recolle/features/records/field_suggestions.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
-import 'package:recolle/features/records/providers/place_search_provider.dart';
+import 'package:recolle/features/records/providers/venue_search_provider.dart';
 import 'package:recolle/features/records/providers/work_search_provider.dart';
 import 'package:recolle/features/records/screens/create_record_screen.dart';
 import 'package:recolle/features/records/ticket_mail_parser.dart';
@@ -69,6 +78,11 @@ class _FakeItunesClient extends ItunesClient {
   final Map<String, String> japaneseTitles;
   final bool fails;
   final requests = <({String artist, List<String> titles})>[];
+  final prefetched = <String>[];
+
+  @override
+  Future<void> prefetchSongCatalog(String artistName) async =>
+      prefetched.add(artistName);
 
   @override
   Future<Map<String, String>> localizeSongTitles({
@@ -95,28 +109,57 @@ class _FakeItunesClient extends ItunesClient {
   ];
 }
 
-class _FakePlaceSearchClient implements PlaceSearchClient {
-  @override
-  Future<List<PlaceSuggestion>> search(String query) async => const [
-    PlaceSuggestion(id: '1', name: 'Zepp Haneda', address: '東京都大田区'),
-  ];
-}
-
 class _FakeWorkSearchClient extends WorkSearchClient {
+  _FakeWorkSearchClient() : super(FunctionsClient('http://localhost', {}));
+
   @override
-  Future<List<WorkSuggestion>> searchBooks(
-    String term, {
-    int limit = 5,
-  }) async => const [
+  Future<List<WorkSuggestion>> searchBooks(String term) async => const [
     WorkSuggestion(title: 'ノルウェイの森', creator: '村上春樹', year: 2018),
   ];
 
   @override
-  Future<List<WorkSuggestion>> searchMovies(
+  Future<List<WorkSuggestion>> searchMovies(String term) async => const [];
+}
+
+/// 会場の地図検索は使わない（Supabase に問い合わせない）。
+class _FakeVenueSearchClient extends VenueSearchClient {
+  _FakeVenueSearchClient() : super(FunctionsClient('http://localhost', {}));
+
+  @override
+  Future<List<VenueSuggestion>> search(
     String term, {
-    int limit = 5,
+    String? sessionToken,
   }) async => const [];
 }
+
+class _FakeRecordsRepository implements RecordsRepository {
+  final inserted = <Map<String, dynamic>>[];
+
+  @override
+  Future<Record> insertRecord(Map<String, dynamic> row) async {
+    inserted.add(row);
+    return Record.fromJson({...row, 'id': 'new'});
+  }
+
+  @override
+  Future<Record> updateRecord(String id, Map<String, dynamic> row) async =>
+      Record.fromJson({...row, 'id': id});
+
+  @override
+  Future<String> uploadTicketImage({
+    required String userId,
+    required File file,
+  }) async => '';
+
+  @override
+  Future<void> deleteTicketImages(List<String> urls) async {}
+
+  @override
+  Future<void> deleteRecord(String id) async {}
+}
+
+/// 作成画面が閉じるときに返した記録。
+Record? _savedResult;
 
 Future<void> _pumpScreen(
   WidgetTester tester, {
@@ -127,7 +170,9 @@ Future<void> _pumpScreen(
   ConcertDiscoveryClient? discoveryClient,
   SetlistFmClient? setlistFmClient,
   ItunesClient? itunesClient,
+  _FakeRecordsRepository? repository,
 }) async {
+  _savedResult = null;
   tester.view.physicalSize = const Size(1170, 2532);
   tester.view.devicePixelRatio = 3;
   addTearDown(tester.view.reset);
@@ -143,27 +188,50 @@ Future<void> _pumpScreen(
         itunesClientProvider.overrideWithValue(
           itunesClient ?? _FakeItunesClient(const {}),
         ),
+        deezerClientProvider.overrideWithValue(
+          DeezerClient(
+            httpClient: MockClient(
+              (_) async => http.Response('{"data":[]}', 200),
+            ),
+          ),
+        ),
         recordsProvider.overrideWith((ref) => Stream.value(records)),
         concertDiscoveryClientProvider.overrideWithValue(
           discoveryClient ?? _FakeDiscoveryClient(const []),
         ),
         workSearchClientProvider.overrideWithValue(_FakeWorkSearchClient()),
-        placeSearchClientProvider.overrideWithValue(_FakePlaceSearchClient()),
+        venueSearchClientProvider.overrideWithValue(_FakeVenueSearchClient()),
+        authUserProvider.overrideWith(
+          (ref) => Stream.value(
+            User(
+              id: 'u1',
+              appMetadata: const {},
+              userMetadata: const {},
+              aud: 'authenticated',
+              createdAt: '2026-01-01T00:00:00Z',
+            ),
+          ),
+        ),
+        recordsRepositoryProvider.overrideWithValue(
+          repository ?? _FakeRecordsRepository(),
+        ),
       ],
       child: MaterialApp(
         home: Builder(
           builder: (context) => Scaffold(
             body: Center(
               child: CupertinoButton(
-                onPressed: () => Navigator.push(
-                  context,
-                  CupertinoPageRoute<void>(
-                    builder: (_) => CreateRecordScreen(
-                      recordToEdit: recordToEdit,
-                      prefill: prefill,
+                onPressed: () async {
+                  _savedResult = await Navigator.push<Record>(
+                    context,
+                    CupertinoPageRoute<Record>(
+                      builder: (_) => CreateRecordScreen(
+                        recordToEdit: recordToEdit,
+                        prefill: prefill,
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
                 child: const Text('open'),
               ),
             ),
@@ -196,6 +264,68 @@ void main() {
 
     expect(find.textContaining('必須です'), findsNothing);
     expect(_navButton(tester, '追加').onPressed, isNotNull);
+  });
+
+  testWidgets('会場・取得元の欄に触れると候補を出し、押すとその値を入れる', (tester) async {
+    await _pumpScreen(
+      tester,
+      records: [
+        Record(
+          id: 'old',
+          type: RecordType.live,
+          title: '前のツアー',
+          artistOrAuthor: 'YOASOBI',
+          date: DateTime(2025, 5, 1),
+          venue: 'Zepp Shinjuku',
+        ),
+      ],
+    );
+
+    final venue = _field('会場');
+    await tester.enterText(venue, 'zepp');
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CapsuleChip, 'Zepp Shinjuku'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<CupertinoTextField>(venue).controller!.text,
+      'Zepp Shinjuku',
+    );
+
+    // 取得元は一覧（ホイール）から選ぶ。開いて回し、「完了」で閉じると選んだ値が行に出る
+    await tester.ensureVisible(find.text('チケット取得元'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('チケット取得元'));
+    await tester.pumpAndSettle();
+    final index = commonSources(RecordType.live).indexOf('ローチケ');
+    expect(index, isNonNegative);
+    // ホイールの先頭は「未設定」なので、定番の n 番目は n + 1 行目
+    await tester.drag(
+      find.byType(CupertinoPicker),
+      Offset(0, -36.0 * (index + 1)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('完了'));
+    await tester.pumpAndSettle();
+    expect(find.text('ローチケ'), findsOneWidget);
+  });
+
+  testWidgets('追加を押すと記録を登録し、登録した記録を返して閉じる', (tester) async {
+    final repository = _FakeRecordsRepository();
+    await _pumpScreen(tester, repository: repository);
+    await tester.enterText(_field('アーティスト'), 'YOASOBI');
+    await tester.enterText(_field('公演名・ツアー名'), 'ZEPP TOUR');
+    await tester.enterText(_field('あとで読み返したいことを自由に'), 'よかった');
+    await tester.pump();
+
+    await tester.tap(find.text('追加'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('open'), findsOneWidget);
+    expect(repository.inserted.single['user_id'], 'u1');
+    expect(repository.inserted.single['impressions'], 'よかった');
+    expect(_savedResult?.id, 'new');
+    expect(_savedResult?.artistOrAuthor, 'YOASOBI');
+    expect(_savedResult?.title, 'ZEPP TOUR');
   });
 
   testWidgets('種別に応じて入力欄の呼び方とライブ専用欄が切り替わる', (tester) async {
@@ -250,7 +380,6 @@ void main() {
         title: 'ルックバック',
         artistOrAuthor: '押山清高',
         date: DateTime(2026, 11, 3),
-        ticketImageUrl: '',
         venue: 'TOHOシネマズ 新宿',
         seat: 'G-12',
         ticketPrice: 2000,
@@ -312,7 +441,6 @@ void main() {
         title: 'TOUR',
         artistOrAuthor: 'YOASOBI',
         date: DateTime(2026, 9, 1),
-        ticketImageUrl: '',
         setlist: 'アイドル\n祝福',
       ),
     );
@@ -383,6 +511,8 @@ void main() {
 
   testWidgets('時刻のホイールを開いたまま会場をタップすると、ホイールを閉じて会場を入力できる', (tester) async {
     await _pumpScreen(tester);
+    await tester.ensureVisible(find.text('終演'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('終演'));
     await tester.pumpAndSettle();
     expect(find.byType(CupertinoDatePicker), findsOneWidget);
@@ -411,24 +541,6 @@ void main() {
     );
   });
 
-  testWidgets('会場欄に入力すると場所の候補が出て、選ぶと会場に入る', (tester) async {
-    await _pumpScreen(tester);
-    await tester.ensureVisible(_field('会場'));
-    await tester.pumpAndSettle();
-    await tester.showKeyboard(_field('会場'));
-    await tester.enterText(_field('会場'), 'Zepp');
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('東京都大田区'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.descendant(of: _field('会場'), matching: find.text('Zepp Haneda')),
-      findsOneWidget,
-    );
-  });
-
   testWidgets('セトリの 1 曲目の欄に触れると、入力前でもアーティストの人気曲を候補に出す', (tester) async {
     await _pumpScreen(tester);
     await tester.enterText(_field('アーティスト'), 'YOASOBI');
@@ -441,6 +553,110 @@ void main() {
 
     expect(find.widgetWithText(CupertinoButton, 'アイドル'), findsOneWidget);
     expect(find.widgetWithText(CupertinoButton, '夜に駆ける'), findsOneWidget);
+  });
+
+  group('セトリの区切りと貼り付け', () {
+    testWidgets('複数行を貼り付けると 1 行ずつ追加し、アンコールは番号なしの区切りにする', (tester) async {
+      final repository = _FakeRecordsRepository();
+      await _pumpScreen(tester, repository: repository);
+      await tester.enterText(_field('アーティスト'), 'YOASOBI');
+      await tester.enterText(_field('公演名・ツアー名'), 'ZEPP TOUR');
+      await tester.enterText(_field('1曲目の曲名を入力'), '1. 夜に駆ける\n2. 群青\nEN1. アイドル');
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      expect(find.text('3曲'), findsOneWidget);
+      // 区切りには番号を振らないので、追加欄の次の番号は 04
+      expect(find.text('04'), findsOneWidget);
+      expect(find.text('05'), findsNothing);
+      expect(_field('次の曲を追加'), findsOneWidget);
+
+      await tester.tap(find.text('追加'));
+      await tester.pumpAndSettle();
+      expect(
+        repository.inserted.single['setlist'],
+        '夜に駆ける\n群青\n--- アンコール ---\nアイドル',
+      );
+    });
+
+    testWidgets('ボタンでリハ・本番・MC・アンコールを入れ、曲数には数えない', (tester) async {
+      final repository = _FakeRecordsRepository();
+      await _pumpScreen(tester, repository: repository);
+      await tester.enterText(_field('アーティスト'), 'YOASOBI');
+      await tester.enterText(_field('公演名・ツアー名'), 'ZEPP TOUR');
+      await tester.enterText(_field('1曲目の曲名を入力'), '群青');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      FocusManager.instance.primaryFocus?.unfocus();
+      await tester.pumpAndSettle();
+
+      Finder button(String label) =>
+          find.widgetWithText(CupertinoButton, label);
+      await tester.ensureVisible(button('リハ'));
+      await tester.tap(button('リハ'));
+      await tester.pump();
+      // リハを入れたら、次は本番を入れるボタンになる
+      expect(button('リハ'), findsNothing);
+      await tester.tap(button('本番'));
+      await tester.pump();
+      expect(button('本番'), findsNothing);
+      await tester.tap(button('MC'));
+      await tester.tap(button('アンコール'));
+      await tester.tap(button('アンコール'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1曲'), findsOneWidget);
+      await tester.tap(find.text('追加'));
+      await tester.pumpAndSettle();
+      expect(
+        repository.inserted.single['setlist'],
+        '--- リハ ---\n群青\n--- 本番 ---\nMC\n--- アンコール ---\n--- アンコール2 ---',
+      );
+    });
+  });
+
+  testWidgets('曲をつまむと強め、ほかの曲をまたぐたびに軽く、離すと軽く振動する', (tester) async {
+    final haptics = <String>[];
+    tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      (call) async {
+        if (call.method == 'HapticFeedback.vibrate') {
+          haptics.add(call.arguments as String);
+        }
+        return null;
+      },
+    );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        null,
+      ),
+    );
+    await _pumpScreen(tester);
+    await tester.enterText(_field('1曲目の曲名を入力'), '群青\n怪物\nアイドル');
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    haptics.clear();
+
+    final handle = find.byIcon(CupertinoIcons.line_horizontal_3).first;
+    await tester.ensureVisible(handle);
+    await tester.pumpAndSettle();
+    final rowHeight = tester.getSize(find.byType(Dismissible).first).height;
+    final gesture = await tester.startGesture(tester.getCenter(handle));
+    await tester.pump();
+    for (var i = 0; i < 10; i++) {
+      await gesture.moveBy(Offset(0, rowHeight * 0.25));
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    // 1 曲目を 3 曲目の位置まで動かしたので、2 曲をまたぐ
+    expect(haptics, [
+      'HapticFeedbackType.mediumImpact',
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.selectionClick',
+      'HapticFeedbackType.lightImpact',
+    ]);
   });
 
   group('対バン・フェス', () {
@@ -461,7 +677,7 @@ void main() {
 
       expect(_field('アーティスト'), findsNothing);
       expect(_field('イベント名・対バン名'), findsOneWidget);
-      final firstAct = tester.widget<CupertinoTextField>(_field('1組目の出演者'));
+      final firstAct = tester.widget<CupertinoTextField>(_field('1組目の出演者 ＊'));
       expect(firstAct.controller!.text, 'sumika');
       expect(find.byIcon(CupertinoIcons.star_fill), findsOneWidget);
       expect(find.text('1曲'), findsOneWidget);
@@ -480,11 +696,11 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('対バン'));
       await tester.pumpAndSettle();
-      await tester.enterText(_field('1組目の出演者'), 'sumika');
+      await tester.enterText(_field('1組目の出演者 ＊'), 'sumika');
       await tester.enterText(_field('2組目の出演者'), 'Mrs. GREEN APPLE');
       FocusManager.instance.primaryFocus?.unfocus();
       await tester.pumpAndSettle();
-      await tester.ensureVisible(_field('1組目の出演者'));
+      await tester.ensureVisible(_field('1組目の出演者 ＊'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.byIcon(CupertinoIcons.star).first);
@@ -534,7 +750,7 @@ void main() {
       expect(find.text('出演者とイベント名・フェス名は必須です。'), findsOneWidget);
       expect(find.text('最終日'), findsOneWidget);
 
-      await tester.enterText(_field('1組目の出演者'), 'サカナクション');
+      await tester.enterText(_field('1組目の出演者 ＊'), 'サカナクション');
       await tester.enterText(_field('イベント名・フェス名'), 'ROCK IN JAPAN');
       await tester.pump();
       expect(find.textContaining('必須です'), findsNothing);
@@ -551,7 +767,6 @@ void main() {
           artistOrAuthor: 'サカナクション',
           date: DateTime(2026, 8, 1),
           endDate: DateTime(2026, 8, 2),
-          ticketImageUrl: '',
           eventFormat: EventFormat.festival,
           acts: const [
             RecordAct(artist: 'サカナクション', songs: ['新宝島'], isMain: true, day: 1),
@@ -604,6 +819,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('ARENA TOUR 2025'), findsOneWidget);
+      // 選ぶ前から、曲名の日本語化に使うカタログを読み始めている
+      expect(itunes.prefetched, ['King Gnu']);
       await tester.tap(find.text('ARENA TOUR 2025'));
       await tester.pumpAndSettle();
 
@@ -780,7 +997,6 @@ void main() {
             title: 'HALL TOUR',
             artistOrAuthor: 'King Gnu',
             date: DateTime(2025, 1, 10),
-            ticketImageUrl: '',
             venue: '日本武道館',
           ),
         ],

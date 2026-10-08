@@ -29,8 +29,11 @@ const MAX_PAGES = 5
 const LIVE_LINK_PATTERN =
   /live|tour|schedule|concert|event|ライブ|ツアー|スケジュール|公演/i
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000
-// 無料枠は 1 日 500 回（プロジェクト全体）。1 人で使い切らないよう、キャッシュ外の検索を制限する
+// 無料枠は 1 日 500 回（プロジェクト全体）。1 人で使い切らないよう、キャッシュ外の検索を制限する。
+// 匿名アカウントは作り直せるので上限を低くし、全体の上限で無料枠に余裕を残す
 const DAILY_LIMIT_PER_USER = 20
+const DAILY_LIMIT_PER_ANONYMOUS_USER = 5
+const DAILY_LIMIT_TOTAL = 300
 const MAX_ARTIST_NAME_LENGTH = 100
 const MAX_EVENTS = 20
 const MAX_SOURCES = 8
@@ -354,16 +357,29 @@ Deno.serve(async (req) => {
     return json(toResponse(cachedRow, true))
   }
 
-  const { data: allowed, error: quotaError } = await admin.rpc(
+  const { data: quota, error: quotaError } = await admin.rpc(
     "consume_concert_discovery_quota",
-    { p_user_id: userData.user.id, p_limit: DAILY_LIMIT_PER_USER },
+    {
+      p_user_id: userData.user.id,
+      p_user_limit: userData.user.is_anonymous
+        ? DAILY_LIMIT_PER_ANONYMOUS_USER
+        : DAILY_LIMIT_PER_USER,
+      p_global_limit: DAILY_LIMIT_TOTAL,
+    },
   )
   if (quotaError) {
     console.error("quota check failed", quotaError)
     return json({ error: "discovery_upstream_error" }, 500)
   }
-  if (!allowed) {
-    return json({ error: "discovery_daily_limit" }, 429)
+  if (quota === "user_limit") {
+    return json({
+      error: userData.user.is_anonymous
+        ? "discovery_daily_limit_anonymous"
+        : "discovery_daily_limit",
+    }, 429)
+  }
+  if (quota !== "ok") {
+    return json({ error: "discovery_global_limit" }, 429)
   }
 
   const today = todayInTokyo()

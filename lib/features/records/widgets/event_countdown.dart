@@ -67,6 +67,26 @@ class _EventCountdownState extends State<EventCountdown> {
       (widget.clock ?? DateTime.now)(),
     );
     final bigWord = AppFonts.displayStyle(fontSize: 40, color: colors.accent);
+    Widget dayCount(int days) => Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.baseline,
+      textBaseline: TextBaseline.alphabetic,
+      children: [
+        Text(
+          '$days',
+          style: AppFonts.displayStyle(fontSize: 44, color: colors.accent),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          '日',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: colors.textPrimary,
+          ),
+        ),
+      ],
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +102,7 @@ class _EventCountdownState extends State<EventCountdown> {
         ),
         const SizedBox(height: 6),
         switch (countdown) {
-          CountdownToday() => Text('今日', style: bigWord),
+          CountdownToday() => dayCount(0),
           CountdownEnded() => Text(
             widget.record.type.endTimeLabel,
             style: bigWord,
@@ -91,25 +111,7 @@ class _EventCountdownState extends State<EventCountdown> {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              if (days > 0) ...[
-                Text(
-                  '$days',
-                  style: AppFonts.displayStyle(
-                    fontSize: 44,
-                    color: colors.accent,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '日',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: colors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-              ],
+              if (days > 0) ...[dayCount(days), const SizedBox(width: 12)],
               Text(
                 clock,
                 style: AppFonts.monoStyle(

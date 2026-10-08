@@ -44,6 +44,54 @@ void main() {
     expect(out['start_time'], '18:00');
   });
 
+  group('チケット画像', () {
+    Map<String, dynamic> row(Map<String, dynamic> images) => {
+      'id': 'r1',
+      'type': 'live',
+      'title': 'TOUR',
+      'artist_or_author': 'YOASOBI',
+      'date': '2026-05-03',
+      ...images,
+    };
+
+    test('複数枚の列を読み、先頭を表紙にする', () {
+      final record = Record.fromJson(
+        row({
+          'ticket_image_urls': ['https://a.jpg', 'https://b.jpg'],
+          'ticket_image_url': 'https://a.jpg',
+        }),
+      );
+      expect(record.ticketImageUrls, ['https://a.jpg', 'https://b.jpg']);
+      expect(record.coverImageUrl, 'https://a.jpg');
+    });
+
+    test('複数枚の列が空なら、旧来の 1 枚だけの列を読む', () {
+      final record = Record.fromJson(
+        row({
+          'ticket_image_urls': <String>[],
+          'ticket_image_url': 'https://old.jpg',
+        }),
+      );
+      expect(record.ticketImageUrls, ['https://old.jpg']);
+    });
+
+    test('画像がなければ空で、表紙は null', () {
+      final record = Record.fromJson(row({'ticket_image_url': ''}));
+      expect(record.ticketImageUrls, isEmpty);
+      expect(record.coverImageUrl, isNull);
+    });
+
+    test('書き出しでは旧版アプリ向けに先頭を 1 枚だけの列にも入れる', () {
+      final json = Record.fromJson(
+        row({
+          'ticket_image_urls': ['https://a.jpg', 'https://b.jpg'],
+        }),
+      ).toJson();
+      expect(json['ticket_image_urls'], ['https://a.jpg', 'https://b.jpg']);
+      expect(json['ticket_image_url'], 'https://a.jpg');
+    });
+  });
+
   test('開場・終演を JSON で往復でき、開演より前の終演は翌日とみなす', () {
     final record = Record.fromJson({
       'id': 'r1',
@@ -75,6 +123,20 @@ void main() {
     expect(record.opensAt, isNull);
     expect(record.endsAt, isNull);
     expect(record.startsAt, DateTime(2026));
+    expect(record.linkUrl, isNull);
+  });
+
+  test('リンクを JSON で往復できる', () {
+    final record = Record.fromJson({
+      'id': 'r1',
+      'type': 'live',
+      'title': 'x',
+      'artist_or_author': 'y',
+      'date': '2026-01-01',
+      'link_url': 'https://eplus.jp/a',
+    });
+    expect(record.linkUrl, 'https://eplus.jp/a');
+    expect(record.toJson()['link_url'], 'https://eplus.jp/a');
   });
 
   test('formatYen は 3 桁ごとに区切る', () {

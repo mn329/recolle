@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -437,6 +439,15 @@ class ConcertSuggestions extends HookConsumerWidget {
     final upcoming = discoveryRequested.value ? ref.watch(discovery) : null;
     final setlists = ref.watch(recentSetlistsProvider(artist));
     final setlistFm = ref.watch(setlistFmClientProvider);
+    // セトリ付きの公演を選ぶと曲名を日本語に直すので、候補を眺めている間にカタログを読んでおく
+    final hasSetlistSongs =
+        setlists.asData?.value.any((s) => s.songs.isNotEmpty) ?? false;
+    useEffect(() {
+      if (hasSetlistSongs) {
+        unawaited(ref.read(itunesClientProvider).prefetchSongCatalog(artist));
+      }
+      return null;
+    }, [artist, hasSetlistSongs]);
     final records =
         ref.watch(recordsProvider).asData?.value ?? const <Record>[];
 
@@ -504,7 +515,7 @@ class ConcertSuggestions extends HookConsumerWidget {
           child: Text(
             needsSearch && !willSearch
                 ? '「$trimmedQuery」に一致する公演はありません。'
-                      '$_minTourSearchLength 文字以上入力すると setlist.fm からも探します。'
+                      '$_minTourSearchLength 文字以上入力すると、ほかの人が登録したセトリからも探します。'
                 : '「$trimmedQuery」に一致する公演は見つかりませんでした。',
             style: TextStyle(color: context.colors.textSecondary, fontSize: 12),
           ),

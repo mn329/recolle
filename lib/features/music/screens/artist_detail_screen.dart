@@ -21,6 +21,7 @@ import 'package:recolle/features/music/widgets/upcoming_concerts_section.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_actions.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 /// アーティスト詳細: ストリーミングへのリンク、人気曲、自分の記録。
 class ArtistDetailScreen extends HookConsumerWidget {
@@ -74,116 +75,120 @@ class ArtistDetailScreen extends HookConsumerWidget {
             borderRadius: avatarRadius,
           );
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      appBar: AppBar(
-        actions: [
-          FavoriteArtistToggleButton(
-            artistName: artistName,
-            itunesArtistId: itunesArtistId ?? artist?.id,
-          ),
-          NavBarIconButton(
-            icon: CupertinoIcons.plus_circle_fill,
-            semanticLabel: 'このアーティストの記録を追加',
-            onPressed: readOnlyOffline
-                ? null
-                : () => openRecordEditor(context, initialArtist: artistName),
-          ),
-          const SizedBox(width: 4),
-        ],
-      ),
-      body: CustomScrollView(
-        slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Row(
-                children: [
-                  avatar,
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          artistName,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppFonts.titleStyle(
-                            fontSize: 24,
-                            color: context.colors.textPrimary,
-                          ),
-                        ),
-                        if (artist?.genre != null)
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          actions: [
+            FavoriteArtistToggleButton(
+              artistName: artistName,
+              itunesArtistId: itunesArtistId ?? artist?.id,
+            ),
+            NavBarIconButton(
+              icon: CupertinoIcons.plus_circle_fill,
+              semanticLabel: 'このアーティストの記録を追加',
+              onPressed: readOnlyOffline
+                  ? null
+                  : () => openRecordEditor(context, initialArtist: artistName),
+            ),
+            const SizedBox(width: 4),
+          ],
+        ),
+        body: CustomScrollView(
+          slivers: [
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Row(
+                  children: [
+                    avatar,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            artist!.genre!,
-                            style: TextStyle(
-                              color: context.colors.textSecondary,
-                              fontSize: 12,
+                            artistName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppFonts.titleStyle(
+                              fontSize: 24,
+                              color: context.colors.textPrimary,
                             ),
                           ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${records.length} RECORDS',
-                          style: AppFonts.monoStyle(
-                            fontSize: 13,
-                            color: context.colors.accent,
+                          if (artist?.genre != null)
+                            Text(
+                              artist!.genre!,
+                              style: TextStyle(
+                                color: context.colors.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${records.length} RECORDS',
+                            style: AppFonts.monoStyle(
+                              fontSize: 13,
+                              color: context.colors.accent,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
-              child: StreamingLinks(
-                query: artistName,
-                appleMusicUrl: artist?.appleMusicUrl,
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                child: StreamingLinks(
+                  query: artistName,
+                  appleMusicUrl: artist?.appleMusicUrl,
+                ),
               ),
             ),
-          ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 28),
-              child: UpcomingConcertsSection(
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 28),
+                child: UpcomingConcertsSection(
+                  artistName: artistName,
+                  records: records,
+                ),
+              ),
+            ),
+            // iTunes にいないアーティスト（インディーズ等）は人気曲の欄ごと出さない
+            if (artistAsync.isLoading ||
+                artistAsync.hasError ||
+                artist != null) ...[
+              const SliverToBoxAdapter(child: SectionTitle('POPULAR', '人気曲')),
+              _PopularSongsSliver(
+                artistAsync: artistAsync,
                 artistName: artistName,
                 records: records,
+                showAll: showAllSongs.value,
+                collapsedCount: _collapsedSongCount,
+                onToggleShowAll: () => showAllSongs.value = !showAllSongs.value,
+              ),
+            ],
+            const SliverToBoxAdapter(
+              child: SectionTitle(
+                'RECORDS',
+                'あなたの記録',
+                padding: EdgeInsets.fromLTRB(20, 24, 20, 4),
               ),
             ),
-          ),
-          // iTunes にいないアーティスト（インディーズ等）は人気曲の欄ごと出さない
-          if (artistAsync.isLoading ||
-              artistAsync.hasError ||
-              artist != null) ...[
-            const SliverToBoxAdapter(child: SectionTitle('POPULAR', '人気曲')),
-            _PopularSongsSliver(
-              artistAsync: artistAsync,
-              artistName: artistName,
+            SliverRecordTicketList(
               records: records,
-              showAll: showAllSongs.value,
-              collapsedCount: _collapsedSongCount,
-              onToggleShowAll: () => showAllSongs.value = !showAllSongs.value,
+              emptyMessage: 'まだ記録がありません。\n右上の＋から追加できます。',
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 32 + MediaQuery.paddingOf(context).bottom,
+              ),
             ),
           ],
-          const SliverToBoxAdapter(
-            child: SectionTitle(
-              'RECORDS',
-              'あなたの記録',
-              padding: EdgeInsets.fromLTRB(20, 24, 20, 4),
-            ),
-          ),
-          SliverRecordTicketList(
-            records: records,
-            emptyMessage: 'まだ記録がありません。\n右上の＋から追加できます。',
-          ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 32 + MediaQuery.paddingOf(context).bottom),
-          ),
-        ],
+        ),
       ),
     );
   }

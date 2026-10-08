@@ -14,7 +14,6 @@ Record _record(
   title: 'LIVE $id',
   artistOrAuthor: 'Artist',
   date: date,
-  ticketImageUrl: '',
   startTime: startTime,
   venue: venue,
 );
@@ -22,7 +21,7 @@ Record _record(
 void main() {
   final now = DateTime(2026, 9, 27, 12);
 
-  test('これからの記録だけを近い順に、最大 5 件渡す', () {
+  test('これからの記録だけを近い順に、種類ごとに最大 5 件渡す', () {
     final records = [
       _record('past', DateTime(2026, 9, 1)),
       for (var i = 7; i >= 1; i--) _record('$i', DateTime(2026, 10, i)),
@@ -39,6 +38,45 @@ void main() {
     ]);
   });
 
+  test('ライブが多くても、映画・本の記録も渡す', () {
+    final records = [
+      for (var i = 1; i <= 7; i++) _record('$i', DateTime(2026, 10, i)),
+      _record('movie', DateTime(2026, 11, 1), type: RecordType.movie),
+      _record('book', DateTime(2026, 12, 1), type: RecordType.book),
+    ];
+
+    final payload = upcomingEventsPayload(records, now);
+
+    expect(payload.map((e) => e['title']), [
+      'LIVE 1',
+      'LIVE 2',
+      'LIVE 3',
+      'LIVE 4',
+      'LIVE 5',
+      'LIVE movie',
+      'LIVE book',
+    ]);
+    expect(payload.map((e) => e['type']).skip(5), ['movie', 'book']);
+  });
+
+  test('複数日の公演は、最終日の翌日 0 時まで表示する時刻を渡す', () {
+    final payload = upcomingEventsPayload([
+      Record(
+        id: 'fes',
+        type: RecordType.live,
+        title: 'FES',
+        artistOrAuthor: 'Artist',
+        date: DateTime(2026, 10, 3),
+        endDate: DateTime(2026, 10, 5),
+      ),
+    ], now);
+
+    expect(
+      payload.single['finishesAt'],
+      DateTime(2026, 10, 6).millisecondsSinceEpoch,
+    );
+  });
+
   test('開演時刻・会場・種別をウィジェット用の値にする', () {
     final payload = upcomingEventsPayload([
       _record(
@@ -53,10 +91,12 @@ void main() {
     expect(payload[0], {
       'title': 'LIVE a',
       'artist': 'Artist',
+      'type': 'live',
       'startsAt': DateTime(2026, 10, 3, 18, 30).millisecondsSinceEpoch,
       'hasStartTime': true,
       'opensAt': null,
       'endsAt': null,
+      'finishesAt': DateTime(2026, 10, 4).millisecondsSinceEpoch,
       'venue': '日本武道館',
       'isLive': true,
       'startLabel': '開演',
@@ -66,6 +106,26 @@ void main() {
     expect(payload[1]['hasStartTime'], false);
     expect(payload[1]['venue'], isNull);
     expect(payload[1]['isLive'], false);
+  });
+
+  test('その他の予定は開始時刻の有無をそのまま渡す', () {
+    final payload = upcomingEventsPayload([
+      _record(
+        'timed',
+        DateTime(2026, 10, 3),
+        type: RecordType.other,
+        startTime: const ClockTime(13, 0),
+      ),
+      _record('untimed', DateTime(2026, 10, 4), type: RecordType.other),
+    ], now);
+
+    expect(payload.map((e) => e['type']), ['other', 'other']);
+    expect(payload.map((e) => e['hasStartTime']), [true, false]);
+    expect(
+      payload[1]['startsAt'],
+      DateTime(2026, 10, 4).millisecondsSinceEpoch,
+    );
+    expect(payload[0]['startLabel'], '開始');
   });
 
   test('当日の公演は開演後も「これから」に含める', () {

@@ -78,6 +78,15 @@ List<Record> filterByArtist(Iterable<Record> records, String? artist) => [
     if (artist == null || r.features(artist)) r,
 ];
 
+/// 会場が [venue] の記録だけに絞る（大文字小文字・空白の違いはまとめる。集計の会場ランキングと同じ）。
+List<Record> filterByVenue(Iterable<Record> records, String venue) {
+  final key = normalizeArtistName(venue);
+  return [
+    for (final r in records)
+      if (r.venue case final v? when normalizeArtistName(v) == key) r,
+  ];
+}
+
 /// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
 /// [artist] を渡すと、曲のランキングは対バン・フェスでもその出演者の曲だけを数える。
 RecordStats computeStats(
@@ -123,7 +132,7 @@ RecordStats computeStats(
     final played = <String>{};
     for (final a in r.performances) {
       if (artist != null && !artistMatches(a.artist, artist)) continue;
-      for (final song in a.songs) {
+      for (final song in a.songTitles) {
         if (played.add(_Counter.keyFor(song, scope: a.artist))) {
           songs.add(song, scope: a.artist);
         }

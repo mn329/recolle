@@ -1,12 +1,39 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:recolle/features/music/data/apple_music_playlist.dart';
+import 'package:recolle/features/music/data/artist_artwork_finder.dart';
 import 'package:recolle/features/music/data/concert_discovery_client.dart';
+import 'package:recolle/features/music/data/deezer_client.dart';
 import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/preview_player.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
+import 'package:recolle/features/music/data/song_title_client.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-final itunesClientProvider = Provider<ItunesClient>((ref) => ItunesClient());
+final songTitleClientProvider = Provider<SongTitleClient>(
+  (ref) => SongTitleClient(Supabase.instance.client.functions),
+);
+
+final itunesClientProvider = Provider<ItunesClient>(
+  (ref) => ItunesClient(
+    // Supabase は使うときに初めて読む（テストでは差し替えられる）
+    japaneseTitleSuggester: (artist, titles) =>
+        ref.read(songTitleClientProvider).suggest(artist, titles),
+  ),
+);
+
+final appleMusicPlaylistServiceProvider = Provider<AppleMusicPlaylistService>(
+  (ref) => AppleMusicPlaylistService(),
+);
+
+final deezerClientProvider = Provider<DeezerClient>((ref) => DeezerClient());
+
+final artistArtworkFinderProvider = Provider<ArtistArtworkFinder>(
+  (ref) => ArtistArtworkFinder(
+    deezer: ref.watch(deezerClientProvider),
+    itunes: ref.watch(itunesClientProvider),
+  ),
+);
 
 final setlistFmClientProvider = Provider<SetlistFmClient>(
   (ref) => SetlistFmClient(Supabase.instance.client.functions),
@@ -55,14 +82,14 @@ final itunesArtistProvider = FutureProvider.family<ItunesArtist?, ArtistQuery>((
   return ref
       .read(itunesClientProvider)
       .findArtist(query.name, artistId: query.itunesArtistId);
-});
+}, retry: (_, _) => null);
 
 final topSongsProvider = FutureProvider.family<List<ItunesSong>, int>((
   ref,
   artistId,
 ) {
   return ref.read(itunesClientProvider).topSongs(artistId);
-});
+}, retry: (_, _) => null);
 
 /// 記録の曲名に対応する iTunes の曲。見つからなければ null。
 final itunesSongProvider = FutureProvider.family<ItunesSong?, SongQuery>((
@@ -72,7 +99,7 @@ final itunesSongProvider = FutureProvider.family<ItunesSong?, SongQuery>((
   return ref
       .read(itunesClientProvider)
       .findSong(artistName: query.artistName, title: query.title);
-});
+}, retry: (_, _) => null);
 
 /// アーティスト名ごとのアートワーク。見つからない・失敗時は null（画像なし表示）。
 final artistArtworkProvider = FutureProvider.family<String?, String>((
@@ -80,5 +107,5 @@ final artistArtworkProvider = FutureProvider.family<String?, String>((
   artistName,
 ) async {
   ref.keepAlive();
-  return ref.read(itunesClientProvider).findArtistArtwork(artistName);
+  return ref.read(artistArtworkFinderProvider).find(artistName);
 });

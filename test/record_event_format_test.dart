@@ -22,7 +22,6 @@ Record _record({
   title: 'SHOW',
   artistOrAuthor: acts.isEmpty ? artist : Record.headlineFor(acts),
   date: date ?? DateTime(2026, 8, 1),
-  ticketImageUrl: '',
   setlist: setlist,
   eventFormat: format,
   endDate: endDate,

@@ -42,7 +42,7 @@ String toUserFriendlyMessage(dynamic error) {
   // raw にストレージ関連のエラーを示す文字列が含まれるか判定する
   if (raw.contains('storageexception') || raw.contains('bucket not found')) {
     // 含まれるときは、ストレージ用のメッセージを返す
-    return '画像の保存に失敗しました。ストレージの設定（バケット名: ticket-images）を確認してください。';
+    return '画像を保存できませんでした。しばらくして再度お試しください。';
   }
 
   // データベース・権限
@@ -77,16 +77,17 @@ String? _authMessageFromCode(String? code) {
   switch (code) {
     case 'over_request_rate_limit':
       return 'アクセスが集中しています。しばらく待ってから再度お試しください。';
+    // 以下はサーバー側の設定の問題で、使う人には直せない。原因は Supabase の Auth ログで確かめる
     case 'signup_disabled':
-      return '新規登録が無効になっています。Supabase の Authentication → Providers を確認してください。';
+      return '現在、新規登録を受け付けていません。';
     case 'hook_timeout':
     case 'hook_timeout_after_retry':
     case 'hook_payload_over_size_limit':
-      return '登録処理でサーバー側のフックが失敗しました。Supabase の Auth Hooks / ログを確認してください。';
+      return '登録を完了できませんでした。しばらくして再度お試しください。';
     case 'provider_disabled':
-      return 'このログイン方法は現在利用できません。Supabase の Authentication → Providers を確認してください。';
+      return 'このログイン方法は現在ご利用いただけません。';
     case 'manual_linking_disabled':
-      return 'アカウント連携が無効です。Supabase の Authentication → Sign In / Providers で「Allow manual linking」を有効にしてください。';
+      return 'アカウントの連携は現在ご利用いただけません。';
     case 'identity_already_exists':
       return 'このアカウントは既に別のユーザーに連携されています。';
     case 'bad_jwt':
@@ -124,7 +125,7 @@ String _authMessage(String message) {
   if (m.contains('database error') ||
       m.contains('saving new user') ||
       m.contains('error saving user')) {
-    return 'ユーザー情報の保存に失敗しました。Supabase の Authentication ログと auth.users まわりのトリガーを確認してください。';
+    return 'ユーザー情報を保存できませんでした。しばらくして再度お試しください。';
   }
   // 既に日本語のメッセージならそのまま返す
   // ひらがな・カタカナ・漢字などが含まれるか正規表現で判定する（日本語が含まれていれば元の message を返す）

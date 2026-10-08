@@ -150,7 +150,7 @@ List<LocalSong> searchLocalSongs(List<Record> records, String query) {
 
   for (final r in records.where((r) => r.type == RecordType.live)) {
     for (final act in r.performances) {
-      for (final title in act.songs.toSet()) {
+      for (final title in act.songTitles.toSet()) {
         final key = (
           normalizeArtistName(act.artist),
           normalizeArtistName(title),

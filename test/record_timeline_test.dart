@@ -17,7 +17,6 @@ Record _record(
   title: 'LIVE $id',
   artistOrAuthor: 'Artist',
   date: date,
-  ticketImageUrl: '',
   openTime: openTime,
   startTime: startTime,
   endTime: endTime,
@@ -41,6 +40,83 @@ void main() {
       'future-far',
     ]);
     expect(result.past.map((r) => r.id), ['past-new', 'past-old']);
+  });
+
+  group('sortTimeline', () {
+    Record live(String id, DateTime date, EventFormat format) => Record(
+      id: id,
+      type: RecordType.live,
+      title: 'LIVE $id',
+      artistOrAuthor: 'Artist',
+      date: date,
+      eventFormat: format,
+    );
+    final records = [
+      live('fes-early', DateTime(2026, 10, 1), EventFormat.festival),
+      live('one-late', DateTime(2026, 12, 1), EventFormat.oneman),
+      live('taiban', DateTime(2026, 11, 1), EventFormat.taiban),
+      live('one-early', DateTime(2026, 10, 15), EventFormat.oneman),
+    ];
+
+    test('日付の近い順・遠い順に並べ替える', () {
+      expect(
+        sortTimeline(
+          records,
+          TimelineSort.dateAscending,
+          upcoming: true,
+        ).map((r) => r.id),
+        ['fes-early', 'one-early', 'taiban', 'one-late'],
+      );
+      expect(
+        sortTimeline(
+          records,
+          TimelineSort.dateDescending,
+          upcoming: true,
+        ).map((r) => r.id),
+        ['one-late', 'taiban', 'one-early', 'fes-early'],
+      );
+    });
+
+    test('ライブ形態順は形態ごとにまとめ、中は区分の既定の日付順にする', () {
+      final upcoming = sortTimeline(
+        records,
+        TimelineSort.eventFormat,
+        upcoming: true,
+      );
+      expect(upcoming.map((r) => r.id), [
+        'one-early',
+        'one-late',
+        'taiban',
+        'fes-early',
+      ]);
+      expect(
+        sortTimeline(
+          records,
+          TimelineSort.eventFormat,
+          upcoming: false,
+        ).map((r) => r.id),
+        ['one-late', 'one-early', 'taiban', 'fes-early'],
+      );
+      expect(
+        groupByEventFormat(upcoming).map((g) => (g.format, g.records.length)),
+        [
+          (EventFormat.oneman, 2),
+          (EventFormat.taiban, 1),
+          (EventFormat.festival, 1),
+        ],
+      );
+    });
+
+    test('ライブ形態順を選べるのはライブだけ', () {
+      expect(
+        TimelineSort.optionsFor(RecordType.live),
+        contains(TimelineSort.eventFormat),
+      );
+      expect(
+        TimelineSort.optionsFor(RecordType.movie),
+        isNot(contains(TimelineSort.eventFormat)),
+      );
+    });
   });
 
   test('終演時刻があれば、終演した時点で「これまで」へ移す', () {
@@ -173,6 +249,55 @@ void main() {
       expect(c.days, 0);
       expect(c.clock, '03:00:00');
     });
+
+    test('前日の夜で残りが 24 時間を切っていても、当日扱いにはしない', () {
+      final c =
+          Countdown.between(
+                _record(
+                  'a',
+                  DateTime(2026, 9, 28),
+                  startTime: const ClockTime(12, 0),
+                ),
+                now,
+              )
+              as CountdownRemaining;
+      expect(c.days, 0);
+      expect(c.clock, '21:00:00');
+    });
+  });
+
+  Future<void> pumpCard(WidgetTester tester, Record record) =>
+      tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: Scaffold(
+            body: NextEventCard(record: record, clock: () => now),
+          ),
+        ),
+      );
+
+  testWidgets('当日で開演時刻があれば、日数を出さず残り時間だけを出す', (tester) async {
+    await pumpCard(
+      tester,
+      _record('a', DateTime(2026, 9, 27), startTime: const ClockTime(18, 0)),
+    );
+    expect(find.text('日'), findsNothing);
+    expect(find.text('03:00:00'), findsOneWidget);
+  });
+
+  testWidgets('当日で開演時刻が未入力でも「0日」と出す', (tester) async {
+    await pumpCard(tester, _record('a', DateTime(2026, 9, 27)));
+    expect(find.text('0'), findsOneWidget);
+    expect(find.text('日'), findsOneWidget);
+  });
+
+  testWidgets('前日の夜は日数を出さず、残り時間だけを出す', (tester) async {
+    await pumpCard(
+      tester,
+      _record('a', DateTime(2026, 9, 28), startTime: const ClockTime(12, 0)),
+    );
+    expect(find.text('日'), findsNothing);
+    expect(find.text('21:00:00'), findsOneWidget);
   });
 
   testWidgets('カウントダウンは 1 秒ごとに進む', (tester) async {
