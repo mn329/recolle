@@ -19,7 +19,10 @@ import 'package:recolle/features/records/record_actions.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/features/records/record_timeline.dart';
 import 'package:recolle/features/records/screens/live_list_screen.dart';
+import 'package:recolle/features/records/screens/venue_detail_screen.dart';
+import 'package:recolle/features/records/widgets/ranking_section.dart';
 import 'package:recolle/features/records/widgets/record_calendar_view.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 enum InsightsView {
   stats('集計'),
@@ -47,66 +50,72 @@ class InsightsScreen extends HookConsumerWidget {
         ref.watch(favoriteArtistsProvider).asData?.value ??
         const <FavoriteArtist>[];
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      body: LargeTitleScrollView(
-        title: '振り返り',
-        enTitle: 'LOOK BACK',
-        bottom: _InsightsFilterBar(
-          view: view.value,
-          onViewChanged: (v) => view.value = v,
-          favorites: favorites,
-          selectedArtist: selectedArtist.value,
-          onArtistSelected: (a) => selectedArtist.value = a,
-        ),
-        onRefresh: () => ref.refresh(recordsProvider.future),
-        contentKey: (view.value, selectedArtist.value),
-        slivers: [
-          recordsAsync.when(
-            data: (records) {
-              final artist = selectedArtist.value;
-              final filtered = filterByArtist(records, artist);
-              final isCalendar = view.value == InsightsView.calendar;
-              return SliverToBoxAdapter(
-                child: ContentSwitcher(
-                  // カレンダーは選んだ月を保つため、アーティストを変えても作り直さない
-                  contentKey: isCalendar ? view.value : (view.value, artist),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (isCalendar)
-                        RecordCalendarView(records: filtered)
-                      else
-                        ..._statsChildren(
-                          context,
-                          filtered,
-                          selectedYear,
-                          artist: artist,
-                          onArtistSelected: (a) => selectedArtist.value = a,
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: LargeTitleScrollView(
+          title: '振り返り',
+          enTitle: 'LOOK BACK',
+          bottom: _InsightsFilterBar(
+            view: view.value,
+            onViewChanged: (v) => view.value = v,
+            favorites: favorites,
+            selectedArtist: selectedArtist.value,
+            onArtistSelected: (a) => selectedArtist.value = a,
+          ),
+          onRefresh: () => ref.refresh(recordsProvider.future),
+          contentKey: (view.value, selectedArtist.value),
+          slivers: [
+            // 読み込みに失敗しても、表示中（または手元のキャッシュ）の内容は消さない
+            recordsAsync.when(
+              // 再読み込み中も、直前の一覧を残す（読み込み中の表示に切り替えない）
+              skipLoadingOnReload: true,
+              skipError: true,
+              data: (records) {
+                final artist = selectedArtist.value;
+                final filtered = filterByArtist(records, artist);
+                final isCalendar = view.value == InsightsView.calendar;
+                return SliverToBoxAdapter(
+                  child: ContentSwitcher(
+                    // カレンダーは選んだ月を保つため、アーティストを変えても作り直さない
+                    contentKey: isCalendar ? view.value : (view.value, artist),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        if (isCalendar)
+                          RecordCalendarView(records: filtered)
+                        else
+                          ..._statsChildren(
+                            context,
+                            filtered,
+                            selectedYear,
+                            artist: artist,
+                            onArtistSelected: (a) => selectedArtist.value = a,
+                          ),
+                        SizedBox(
+                          height: 24 + MediaQuery.paddingOf(context).bottom,
                         ),
-                      SizedBox(
-                        height: 24 + MediaQuery.paddingOf(context).bottom,
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
+                );
+              },
+              loading: () => const SliverFillRemaining(
+                hasScrollBody: false,
+                child: Center(child: CupertinoActivityIndicator(radius: 14)),
+              ),
+              error: (error, _) => SliverFillRemaining(
+                hasScrollBody: false,
+                child: IosEmptyState(
+                  icon: CupertinoIcons.exclamationmark_triangle,
+                  message: toUserFriendlyMessage(error),
+                  actionLabel: '再読み込み',
+                  onAction: () => ref.invalidate(recordsProvider),
                 ),
-              );
-            },
-            loading: () => const SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(child: CupertinoActivityIndicator(radius: 14)),
-            ),
-            error: (error, _) => SliverFillRemaining(
-              hasScrollBody: false,
-              child: IosEmptyState(
-                icon: CupertinoIcons.exclamationmark_triangle,
-                message: toUserFriendlyMessage(error),
-                actionLabel: '再読み込み',
-                onAction: () => ref.invalidate(recordsProvider),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -166,14 +175,19 @@ class InsightsScreen extends HookConsumerWidget {
           showsArtistCount: artist == null,
           onLivesTap: stats.liveCount == 0 ? null : openLives,
         ),
-        if (artist != null) _ArtistMilestones(stats: stats, nextLive: nextLive),
+        // 初めて・最後に行った日は、選んだ年ではなく全期間で数える
+        if (artist != null)
+          _ArtistMilestones(
+            stats: computeStats(records, now: now, artist: artist),
+            nextLive: nextLive,
+          ),
         if (artist == null)
           _MonthlyChart(
             counts: stats.liveCountsByMonth,
             onMonthTap: (m) => openLives(month: m),
           ),
         if (artist == null)
-          _Ranking(
+          RankingSection(
             header: 'よく行ったアーティスト',
             rows: [
               for (final a in stats.topArtists)
@@ -185,7 +199,7 @@ class InsightsScreen extends HookConsumerWidget {
                 ),
             ],
           ),
-        _Ranking(
+        RankingSection(
           header: 'よく聴いた曲',
           rows: [
             for (final s in stats.topSongs)
@@ -204,11 +218,25 @@ class InsightsScreen extends HookConsumerWidget {
               ),
           ],
         ),
-        _Ranking(
+        RankingSection(
           header: 'よく行った会場',
           rows: [
             for (final v in stats.topVenues)
-              (title: v.label, subtitle: null, count: v.count, onTap: null),
+              (
+                title: v.label,
+                subtitle: null,
+                count: v.count,
+                onTap: () => Navigator.push(
+                  context,
+                  CupertinoPageRoute<void>(
+                    builder: (_) => VenueDetailScreen(
+                      venue: v.label,
+                      year: year,
+                      artist: artist,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
         if (artist != null) _History(lives: stats.lives),
@@ -618,50 +646,6 @@ class _MonthlyChart extends StatelessWidget {
             ],
           ),
         ),
-      ],
-    );
-  }
-}
-
-/// ランキングの 1 行。[onTap] が null なら押せない。
-typedef _RankingRow = ({
-  String title,
-  String? subtitle,
-  int count,
-  VoidCallback? onTap,
-});
-
-class _Ranking extends StatelessWidget {
-  const _Ranking({required this.header, required this.rows});
-
-  final String header;
-  final List<_RankingRow> rows;
-
-  @override
-  Widget build(BuildContext context) {
-    if (rows.isEmpty) return const SizedBox.shrink();
-    final colors = context.colors;
-    return InsetGroupedSection(
-      header: header,
-      children: [
-        for (final (i, row) in rows.indexed)
-          GroupedRow(
-            leading: SizedBox(
-              width: 24,
-              child: Text(
-                '${i + 1}',
-                textAlign: TextAlign.center,
-                style: AppFonts.monoStyle(fontSize: 15, color: colors.accent),
-              ),
-            ),
-            title: row.title,
-            subtitle: row.subtitle,
-            additionalInfo: Text(
-              '${row.count}回',
-              style: TextStyle(fontSize: 15, color: colors.textSecondary),
-            ),
-            onTap: row.onTap,
-          ),
       ],
     );
   }

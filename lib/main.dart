@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:recolle/core/auth/auth_reauth_in_progress.dart';
+import 'package:recolle/core/demo/demo_mode.dart';
+import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/router/router.dart';
 import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/core/widgets/app_root_builder.dart';
@@ -16,16 +21,17 @@ Future<void> _ensureAnonymousSession() async {
   if (client.auth.currentSession != null) {
     return;
   }
-  for (var attempt = 0; attempt < 3; attempt++) {
+  for (var attempt = 0; attempt < 2; attempt++) {
     try {
-      await client.auth.signInAnonymously();
+      // runApp の前に待つので、応答がない回線でスプラッシュ画面のまま止まらないよう区切る
+      await client.auth.signInAnonymously().timeout(const Duration(seconds: 6));
       return;
     } catch (e, st) {
       assert(() {
         debugPrint('Anonymous sign-in failed: $e\n$st');
         return true;
       }());
-      if (attempt < 2) {
+      if (attempt < 1) {
         await Future<void>.delayed(Duration(milliseconds: 300 * (attempt + 1)));
       }
     }
@@ -63,7 +69,13 @@ void main() async {
   await _ensureAnonymousSession();
 
   // 1. ProviderScope: Riverpodの状態管理をアプリ全体で使えるようにする
-  runApp(const ProviderScope(child: MyApp()));
+  runApp(
+    ProviderScope(
+      // スクリーンショット撮影用。--dart-define=DEMO_MODE=true のときだけデモデータを出す
+      overrides: kDemoMode ? demoOverrides() : const [],
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends ConsumerWidget {
@@ -71,6 +83,24 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // 圏外で起動して匿名サインインできなかったときは、つながったところでやり直す
+    ref.listen(connectivityProvider, (_, next) {
+      final results = next.asData?.value;
+      if (results == null || !isConnectivityOnline(results)) return;
+      final client = Supabase.instance.client;
+      if (client.auth.currentSession != null ||
+          AuthReauthInProgress.instance.isInProgress) {
+        return;
+      }
+      unawaited(() async {
+        try {
+          await client.auth.signInAnonymously();
+        } catch (e) {
+          debugPrint('Anonymous sign-in retry failed: $e');
+        }
+      }());
+    });
+
     ref.listen(recordsProvider, (_, next) {
       final records = next.asData?.value;
       if (records != null) syncHomeWidget(records);

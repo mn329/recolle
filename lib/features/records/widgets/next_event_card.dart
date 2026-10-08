@@ -60,7 +60,10 @@ class NextEventCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${record.artistOrAuthor}　$details',
+                [
+                  if (record.artistOrAuthor.isNotEmpty) record.artistOrAuthor,
+                  details,
+                ].join('　'),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(fontSize: 13, color: colors.textSecondary),

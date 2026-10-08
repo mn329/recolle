@@ -8,7 +8,6 @@ import 'package:recolle/core/utils/artist_name_match.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
-import 'package:recolle/features/music/providers/music_providers.dart';
 
 /// アーティスト名の横に置く、お気に入り登録・解除の星ボタン。
 class FavoriteArtistToggleButton extends HookConsumerWidget {
@@ -47,20 +46,7 @@ class FavoriteArtistToggleButton extends HookConsumerWidget {
             icon: CupertinoIcons.star_slash,
           );
         } else {
-          String? artworkUrl;
-          try {
-            artworkUrl = await ref
-                .read(itunesClientProvider)
-                .findArtistArtwork(artistName);
-          } catch (e) {
-            // アートワークは任意項目なので、取得失敗でも登録は続ける
-            debugPrint('Artwork lookup failed for $artistName: $e');
-          }
-          await notifier.add(
-            name: artistName,
-            itunesArtistId: itunesArtistId,
-            artworkUrl: artworkUrl,
-          );
+          await notifier.add(name: artistName, itunesArtistId: itunesArtistId);
           AppToast.show(
             '「${artistName.trim()}」をお気に入りに追加しました',
             icon: CupertinoIcons.star_fill,

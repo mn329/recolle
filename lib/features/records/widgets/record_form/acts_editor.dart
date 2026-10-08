@@ -128,6 +128,7 @@ class ActsEditor extends HookWidget {
             order: index + 1,
             autofocus: autofocusId.value == d.id,
             canRemove: drafts.value.length > 1,
+            showRequired: d.id == drafts.value.first.id,
             scrollPadding: scrollPadding,
             onArtistChanged: (name) =>
                 update(d.id, (a) => a.copyWith(artist: name)),
@@ -242,6 +243,7 @@ class _ActCard extends StatefulWidget {
     super.key,
     required this.act,
     required this.order,
+    this.showRequired = false,
     required this.autofocus,
     required this.canRemove,
     required this.scrollPadding,
@@ -255,6 +257,9 @@ class _ActCard extends StatefulWidget {
 
   /// 出演順（1 始まり）。
   final int order;
+
+  /// 最初の出演者（出演者は 1 組以上が必須）。見出しの隣に「＊」を付ける。
+  final bool showRequired;
   final bool autofocus;
   final bool canRemove;
   final EdgeInsets scrollPadding;
@@ -309,7 +314,7 @@ class _ActCardState extends State<_ActCard> {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final act = widget.act;
-    final songCount = act.songs.length;
+    final songCount = act.songTitles.length;
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
@@ -411,7 +416,8 @@ class _ActCardState extends State<_ActCard> {
           child: CupertinoTextField(
             controller: _controller,
             focusNode: _focusNode,
-            placeholder: '${widget.order}組目の出演者',
+            placeholder:
+                '${widget.order}組目の出演者${widget.showRequired ? ' ＊' : ''}',
             maxLength: RecordFieldLimits.artistOrAuthor,
             textInputAction: TextInputAction.done,
             scrollPadding: widget.scrollPadding,

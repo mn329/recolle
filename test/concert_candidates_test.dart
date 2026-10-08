@@ -22,7 +22,6 @@ Record _record(String title, DateTime date, {String artist = 'King Gnu'}) =>
       title: title,
       artistOrAuthor: artist,
       date: date,
-      ticketImageUrl: '',
     );
 
 void main() {

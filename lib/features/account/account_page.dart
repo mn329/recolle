@@ -16,7 +16,9 @@ import 'package:recolle/features/account/services/social_credential.dart';
 import 'package:recolle/features/account/widgets/account_profile_card.dart';
 import 'package:recolle/features/account/widgets/account_signed_in_panel.dart';
 import 'package:recolle/features/account/widgets/social_sign_in_buttons.dart';
+import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:recolle/core/widgets/app_background.dart';
 
 class AccountPage extends HookConsumerWidget {
   const AccountPage({super.key});
@@ -39,24 +41,30 @@ class AccountPage extends HookConsumerWidget {
     void continueWith(SocialProvider provider) {
       runGuarded(() async {
         final wasAnonymous = authService.currentUser?.isAnonymous ?? false;
+        var switched = false;
         try {
           await authService.continueWith(provider);
         } on SocialIdentityInUseException catch (e) {
-          if (!context.mounted) return;
-          final ok = await showConfirmDialog(
-            context,
-            title: '${provider.label} アカウントは登録済みです',
-            message: wasAnonymous
-                ? 'この ${provider.label} アカウントで以前登録した記録に切り替えます。'
-                      'この端末で未登録のまま作った記録は引き継がれません。'
-                : 'この ${provider.label} アカウントに切り替えます。',
-            okText: '切り替える',
-          );
-          if (!ok) return;
+          // 登録済みのアカウントでの再ログインは、そのまま入る。
+          // 未登録のまま作った記録が残っているときだけ、失われることを確認する。
+          final unsavedRecords =
+              wasAnonymous &&
+              (ref.read(recordsProvider).asData?.value.isNotEmpty ?? false);
+          if (unsavedRecords) {
+            if (!context.mounted) return;
+            final ok = await showConfirmDialog(
+              context,
+              title: '${provider.label} アカウントでログインしますか？',
+              message: 'この端末で未登録のまま作った記録は、ログインすると引き継がれません。',
+              okText: 'ログイン',
+            );
+            if (!ok) return;
+          }
           await authService.switchToExistingAccount(e.credential);
+          switched = true;
         }
         AppToast.show(
-          wasAnonymous
+          wasAnonymous && !switched
               ? '${provider.label} と連携しました。機種変更しても記録を引き継げます'
               : '${provider.label} でログインしました',
           icon: CupertinoIcons.checkmark_circle_fill,
@@ -92,6 +100,7 @@ class AccountPage extends HookConsumerWidget {
                   onLink: continueWith,
                 ),
         ),
+        const SliverToBoxAdapter(child: _DataCredits()),
       ];
     }
 
@@ -102,36 +111,38 @@ class AccountPage extends HookConsumerWidget {
       ),
     ];
 
-    return Scaffold(
-      backgroundColor: context.colors.background,
-      body: ListenableBuilder(
-        listenable: AuthReauthInProgress.instance,
-        builder: (context, _) => LargeTitleScrollView(
-          title: 'アカウント',
-          enTitle: 'ACCOUNT',
-          trailing: isBusy.value
-              ? const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: CupertinoActivityIndicator(),
-                )
-              : null,
-          slivers: authUser.when(
-            loading: () => loading,
-            error: (e, _) => [
-              SliverFillRemaining(
-                hasScrollBody: false,
-                child: IosEmptyState(
-                  icon: CupertinoIcons.exclamationmark_triangle,
-                  message: toUserFriendlyMessage(e),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: ListenableBuilder(
+          listenable: AuthReauthInProgress.instance,
+          builder: (context, _) => LargeTitleScrollView(
+            title: 'アカウント',
+            enTitle: 'ACCOUNT',
+            trailing: isBusy.value
+                ? const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: CupertinoActivityIndicator(),
+                  )
+                : null,
+            slivers: authUser.when(
+              loading: () => loading,
+              error: (e, _) => [
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: IosEmptyState(
+                    icon: CupertinoIcons.exclamationmark_triangle,
+                    message: toUserFriendlyMessage(e),
+                  ),
                 ),
-              ),
-            ],
-            // signOut 直後〜 signInAnonymously 完了まで一瞬 user が null になる。
-            // その区間を「未接続」と出すと、ログアウト操作直後に謎の画面になる。
-            data: (user) =>
-                user == null && AuthReauthInProgress.instance.isInProgress
-                ? loading
-                : buildSlivers(user),
+              ],
+              // signOut 直後〜 signInAnonymously 完了まで一瞬 user が null になる。
+              // その区間を「未接続」と出すと、ログアウト操作直後に謎の画面になる。
+              data: (user) =>
+                  user == null && AuthReauthInProgress.instance.isInProgress
+                  ? loading
+                  : buildSlivers(user),
+            ),
           ),
         ),
       ),
@@ -145,6 +156,29 @@ class AccountPage extends HookConsumerWidget {
     if (name is String && name.trim().isNotEmpty) return name.trim();
     final email = user.email;
     return (email != null && email.isNotEmpty) ? email : 'アカウント';
+  }
+}
+
+/// 外部 API の出典。TMDB と楽天ウェブサービスは、利用規約でアプリ内への表示を求めている。
+/// 画面の説明文にはサービス名を出さないので、setlist.fm の出典もここにまとめる。
+class _DataCredits extends StatelessWidget {
+  const _DataCredits();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 28, 32, 24),
+      child: Text(
+        'ライブのセトリは setlist.fm、映画の情報は TMDB、本の情報は楽天ブックスから取得しています。\n'
+        'This product uses the TMDB API but is not endorsed or certified by TMDB.\n'
+        'Supported by Rakuten Developers',
+        style: TextStyle(
+          color: context.colors.textSecondary,
+          fontSize: 12,
+          height: 1.5,
+        ),
+      ),
+    );
   }
 }
 
@@ -172,7 +206,7 @@ class _GuestPanel extends StatelessWidget {
         if (showConnectionRecovery)
           InsetGroupedSection(
             header: '接続',
-            footer: 'Supabase への接続に失敗したか、前回のセッションが切れています。',
+            footer: 'サーバーに接続できなかったか、前回のログインの有効期限が切れています。',
             children: [
               GroupedRow(
                 leading: const RowIcon(

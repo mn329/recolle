@@ -80,10 +80,11 @@ class AppTheme {
       ),
 
       appBarTheme: AppBarTheme(
+        // スクロール前は透かして、画面の地（AppBackground）の光をナビバーの裏まで見せる
         backgroundColor: WidgetStateColor.resolveWith(
           (states) => states.contains(WidgetState.scrolledUnder)
               ? c.card
-              : c.background,
+              : Colors.transparent,
         ),
         surfaceTintColor: Colors.transparent,
         elevation: 0,

@@ -28,7 +28,6 @@ void main() {
                     title: 'ARENA TOUR',
                     artistOrAuthor: 'King Gnu',
                     date: DateTime(2026, 9, 27),
-                    ticketImageUrl: '',
                   ),
                 ),
               ],

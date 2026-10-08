@@ -1,3 +1,4 @@
+import 'package:recolle/core/network/edge_function.dart';
 import 'package:recolle/core/utils/user_facing_exception.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -66,33 +67,28 @@ class SetlistFmClient {
     if (artist.isEmpty) return const [];
     final tour = tourName?.trim() ?? '';
 
-    try {
-      final res = await _functions.invoke(
-        'setlistfm-search',
-        body: {
-          'artistName': artist,
-          if (tour.isNotEmpty) 'tourName': tour,
-          if (includeEmpty) 'includeEmpty': true,
-          if (pages > 1) 'pages': pages,
-        },
-      );
-      final data = res.data;
-      if (data is! Map || data['setlists'] is! List) {
-        throw const UserFacingException('セットリストの形式が想定外でした。');
-      }
-      return [
-        for (final s in data['setlists'] as List)
-          if (s is Map) SetlistSummary.fromJson(Map<String, dynamic>.from(s)),
-      ];
-    } on FunctionException catch (e) {
-      final code = e.details is Map ? (e.details as Map)['error'] : null;
-      throw UserFacingException(switch (code) {
-        'setlistfm_not_configured' =>
-          'setlist.fm 連携が未設定です（サーバーに API キーが登録されていません）。',
-        'setlistfm_rate_limited' => 'setlist.fm が混み合っています。少し待ってからお試しください。',
-        'setlistfm_timeout' => 'setlist.fm の応答がタイムアウトしました。',
-        _ => 'セットリストを取得できませんでした (${e.status})。',
-      });
+    final data = await invokeEdgeFunction(
+      _functions,
+      'setlistfm-search',
+      body: {
+        'artistName': artist,
+        if (tour.isNotEmpty) 'tourName': tour,
+        if (includeEmpty) 'includeEmpty': true,
+        if (pages > 1) 'pages': pages,
+      },
+      messageForError: (code, status) => switch (code) {
+        'setlistfm_not_configured' => 'セットリストの検索は現在ご利用いただけません。',
+        'setlistfm_rate_limited' => 'セットリストの検索が混み合っています。少し待ってからお試しください。',
+        'setlistfm_timeout' => 'セットリストの取得に時間がかかっています。少し待ってからお試しください。',
+        _ => 'セットリストを取得できませんでした ($status)。',
+      },
+    );
+    if (data is! Map || data['setlists'] is! List) {
+      throw const UserFacingException('セットリストの形式が想定外でした。');
     }
+    return [
+      for (final s in data['setlists'] as List)
+        if (s is Map) SetlistSummary.fromJson(Map<String, dynamic>.from(s)),
+    ];
   }
 }

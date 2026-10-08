@@ -18,7 +18,6 @@ Record _record(
     title: title,
     artistOrAuthor: artist,
     date: date ?? DateTime(2024, 1, 1),
-    ticketImageUrl: '',
     setlist: setlist,
     impressions: impressions,
   );

@@ -50,6 +50,10 @@ class FavoriteArtistsRepository {
     }
   }
 
+  Future<void> updateArtwork(String id, String artworkUrl) async {
+    await _client.from(_table).update({'artwork_url': artworkUrl}).eq('id', id);
+  }
+
   Future<void> remove(String id) async {
     await _client.from(_table).delete().eq('id', id);
   }

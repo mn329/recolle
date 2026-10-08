@@ -44,20 +44,12 @@ Iterable<String> _candidates(Record record) {
 /// 記録の保存に付随する処理なので、1 組の追加に失敗しても残りは続け、記録の保存も失敗させない。
 Future<List<String>> addAutoFavorites(
   List<String> names, {
-  required Future<void> Function(String name, String? artworkUrl) add,
-  required Future<String?> Function(String name) findArtwork,
+  required Future<void> Function(String name) add,
 }) async {
   final added = <String>[];
   for (final name in names) {
-    String? artworkUrl;
     try {
-      artworkUrl = await findArtwork(name);
-    } catch (e) {
-      // 画像は任意項目なので、取得に失敗しても登録は続ける
-      debugPrint('Artwork lookup failed for $name: $e');
-    }
-    try {
-      await add(name, artworkUrl);
+      await add(name);
       added.add(name);
     } catch (e) {
       debugPrint('Auto favorite failed for $name: $e');

@@ -30,10 +30,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.tabIndicator,
     required this.tabIndicatorActive,
     required this.ticketBase,
-    required this.ticketScrim,
     required this.ticketText,
     required this.ticketDivider,
-    required this.ticketTextShadow,
   });
 
   final Brightness brightness;
@@ -76,12 +74,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color tabIndicator;
   final Color tabIndicatorActive;
 
-  // チケットの券面。画像の上に [ticketScrim] を重ねて文字を読めるようにする
+  // チケットの券面
   final Color ticketBase;
-  final List<Color> ticketScrim;
   final Color ticketText;
   final Color ticketDivider;
-  final Color ticketTextShadow;
 
   bool get isDark => brightness == Brightness.dark;
 
@@ -91,7 +87,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     card: Color(0xFF1D1B18),
     cardPressed: Color(0xFF2B2824),
     separator: Color(0x99545458),
-    bar: Color(0xCC0B0A09),
+    // 画面の地と同じ不透明な色。半透明だと、その下の色と混ざって地より暗く見える（スクロールで縮んだ見出しの背景）
+    bar: Color(0xFF0B0A09),
     accent: Color(0xFFE6C88F),
     accentLight: Color(0xFFF5E2BC),
     onAccent: Color(0xFF1A1409),
@@ -110,10 +107,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     tabIndicator: Color(0x24FFFFFF),
     tabIndicatorActive: Color(0x3DFFFFFF),
     ticketBase: Color(0xFF141210),
-    ticketScrim: [Color(0xE6000000), Color(0x99000000), Color(0x66000000)],
     ticketText: Color(0xFFFFFFFF),
     ticketDivider: Color(0x4DFFFFFF),
-    ticketTextShadow: Color(0xFF000000),
   );
 
   static const light = AppPalette(
@@ -122,7 +117,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     card: Color(0xFFFFFFFF),
     cardPressed: Color(0xFFE9E6E0),
     separator: Color(0x4A3C3C43),
-    bar: Color(0xCCF8F7F4),
+    // 画面の地と同じ不透明な色。半透明だと、その下の色と混ざって地より暗く見える（スクロールで縮んだ見出しの背景）
+    bar: Color(0xFFF4F2EE),
     accent: Color(0xFF9A7433),
     accentLight: Color(0xFFC9A86A),
     onAccent: Color(0xFFFFFFFF),
@@ -141,10 +137,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
     tabIndicator: Color(0x12000000),
     tabIndicatorActive: Color(0x1F000000),
     ticketBase: Color(0xFFFFFFFF),
-    ticketScrim: [Color(0xF2FFFFFF), Color(0xC7FFFFFF), Color(0x80FFFFFF)],
     ticketText: Color(0xFF1C1C1E),
     ticketDivider: Color(0x33000000),
-    ticketTextShadow: Color(0x00000000),
   );
 
   @override
@@ -179,13 +173,8 @@ class AppPalette extends ThemeExtension<AppPalette> {
       tabIndicator: c(tabIndicator, other.tabIndicator),
       tabIndicatorActive: c(tabIndicatorActive, other.tabIndicatorActive),
       ticketBase: c(ticketBase, other.ticketBase),
-      ticketScrim: [
-        for (var i = 0; i < ticketScrim.length; i++)
-          c(ticketScrim[i], other.ticketScrim[i]),
-      ],
       ticketText: c(ticketText, other.ticketText),
       ticketDivider: c(ticketDivider, other.ticketDivider),
-      ticketTextShadow: c(ticketTextShadow, other.ticketTextShadow),
     );
   }
 }

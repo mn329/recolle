@@ -27,18 +27,31 @@ class FormRowIcon extends StatelessWidget {
 
 /// チケットの半券と同じ、等幅の英字で書いた小さな項目名。
 class FormFieldLabel extends StatelessWidget {
-  const FormFieldLabel(this.text, {super.key});
+  const FormFieldLabel(this.text, {super.key, this.required = false});
 
   final String text;
 
+  /// 必須の項目なら、見出しの隣に「＊」を付ける。
+  final bool required;
+
   @override
   Widget build(BuildContext context) {
-    return Text(
-      text,
-      style: AppFonts.monoStyle(
-        fontSize: 10.5,
-        color: context.colors.accent,
-      ).copyWith(letterSpacing: 1.2),
+    final style = AppFonts.monoStyle(
+      fontSize: 10.5,
+      color: context.colors.accent,
+    ).copyWith(letterSpacing: 1.2);
+    if (!required) return Text(text, style: style);
+    return Text.rich(
+      TextSpan(
+        text: text,
+        children: [
+          TextSpan(
+            text: ' ＊',
+            style: style.copyWith(color: context.colors.destructive),
+          ),
+        ],
+      ),
+      style: style,
     );
   }
 }

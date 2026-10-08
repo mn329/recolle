@@ -82,9 +82,16 @@ class _SliverContentSwitcherState extends State<SliverContentSwitcher>
   @override
   void didUpdateWidget(SliverContentSwitcher oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.contentKey != widget.contentKey &&
-        !MediaQuery.disableAnimationsOf(context)) {
-      _controller.forward(from: 0);
+    if (oldWidget.contentKey != widget.contentKey) {
+      // 別の画面が上に重なっているあいだは Ticker が止まり、アニメーションが進まない。
+      // 0 から始めると中身が見えないまま止まるので、そのときはアニメーションなしで表示する
+      final animate =
+          !MediaQuery.disableAnimationsOf(context) && TickerMode.of(context);
+      if (animate) {
+        _controller.forward(from: 0);
+      } else {
+        _controller.value = 1;
+      }
     }
   }
 

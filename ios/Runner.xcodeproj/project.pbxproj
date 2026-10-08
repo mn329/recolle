@@ -605,6 +605,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-weak_framework",
+					MusicKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishidaminato.recolle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -793,6 +798,11 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-weak_framework",
+					MusicKit,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishidaminato.recolle;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
@@ -816,6 +826,11 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-weak_framework",
+					MusicKit,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.ishidaminato.recolle;
 				PRODUCT_NAME = "$(TARGET_NAME)";

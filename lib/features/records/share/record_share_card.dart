@@ -70,7 +70,7 @@ class RecordShareCard extends StatelessWidget {
       return [
         (
           heading: 'SETLIST',
-          items: splitSetlist(record.setlist),
+          items: setlistSongTitles(splitSetlist(record.setlist)),
           unit: '曲',
           countLabel: 'SONGS',
         ),
@@ -88,10 +88,10 @@ class RecordShareCard extends StatelessWidget {
         countLabel: 'ACTS',
       ),
       for (final a in record.acts)
-        if (a.isMain && a.songs.isNotEmpty)
+        if (a.isMain && a.songTitles.isNotEmpty)
           (
             heading: 'SETLIST · ${a.artist}',
-            items: a.songs,
+            items: a.songTitles,
             unit: '曲',
             countLabel: 'SONGS',
           ),
@@ -207,15 +207,17 @@ class _TicketCard extends StatelessWidget {
             ).copyWith(height: 1.05),
           ),
           const SizedBox(height: 6),
-          Text(
-            record.artistOrAuthor,
-            style: TextStyle(
-              fontFamily: AppFonts.body,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: c.textPrimary,
-            ),
-          ),
+          if (record.artistOrAuthor.isNotEmpty)
+            if (record.artistOrAuthor.isNotEmpty)
+              Text(
+                record.artistOrAuthor,
+                style: TextStyle(
+                  fontFamily: AppFonts.body,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: c.textPrimary,
+                ),
+              ),
           const SizedBox(height: 18),
           _Dashes(color: c.ticketDivider),
           const SizedBox(height: 14),

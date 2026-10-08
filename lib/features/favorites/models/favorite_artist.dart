@@ -23,6 +23,14 @@ class FavoriteArtist {
   final String? artworkUrl;
   final DateTime createdAt;
 
+  FavoriteArtist copyWith({String? artworkUrl}) => FavoriteArtist(
+    id: id,
+    name: name,
+    createdAt: createdAt,
+    itunesArtistId: itunesArtistId,
+    artworkUrl: artworkUrl ?? this.artworkUrl,
+  );
+
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,

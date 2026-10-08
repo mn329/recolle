@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/features/account/providers/auth_providers.dart';
@@ -26,19 +29,28 @@ final recordsProvider = StreamProvider<List<Record>>((ref) async* {
 
   final cache = RecordsLocalCache();
 
+  final cached = await cache.load(userId);
   if (!online) {
-    yield await cache.load(userId);
+    yield cached;
     return;
   }
+
+  // 端末はつながっていてもサーバーに届かないこと（会場の Wi-Fi など）があるので、
+  // 手元の記録を先に出しておく。取得に失敗しても AsyncError が直前の値を持つので、画面は一覧を残せる
+  if (cached.isNotEmpty) yield cached;
 
   yield* Supabase.instance.client
       .from('records')
       .stream(primaryKey: ['id'])
       .eq('user_id', userId)
       .order('date', ascending: false)
-      .asyncMap((maps) async {
+      .map((maps) {
         final records = maps.map((map) => Record.fromJson(map)).toList();
-        await cache.save(userId, records);
+        unawaited(
+          cache.save(userId, records).catchError((Object e) {
+            debugPrint('Records cache save failed: $e');
+          }),
+        );
         return records;
       });
 });

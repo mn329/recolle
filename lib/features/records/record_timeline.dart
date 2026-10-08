@@ -28,6 +28,66 @@ import 'package:recolle/features/records/models/record.dart';
   return (upcoming: upcoming, past: past);
 }
 
+/// ホームの「これから」「これまで」の並べ方。
+enum TimelineSort {
+  dateAscending,
+  dateDescending,
+  eventFormat;
+
+  /// 「これから」の既定は近い順、「これまで」の既定は新しい順。
+  static TimelineSort defaultFor({required bool upcoming}) =>
+      upcoming ? dateAscending : dateDescending;
+
+  String labelFor({required bool upcoming}) => switch (this) {
+    dateAscending => upcoming ? '近い順' : '古い順',
+    dateDescending => upcoming ? '遠い順' : '新しい順',
+    eventFormat => 'ライブ形態順',
+  };
+
+  /// ライブ形態で並べられるのはライブだけ。
+  static List<TimelineSort> optionsFor(RecordType type) => [
+    dateAscending,
+    dateDescending,
+    if (type == RecordType.live) eventFormat,
+  ];
+}
+
+/// [splitByDate] で分けた [records] を [sort] の順に並べ直す。
+///
+/// ライブ形態順はワンマン・対バン・フェスの順にまとめ、同じ形態の中はその区分の既定の日付順にする。
+List<Record> sortTimeline(
+  List<Record> records,
+  TimelineSort sort, {
+  required bool upcoming,
+}) {
+  int byDate(Record a, Record b, {required bool ascending}) => ascending
+      ? a.startsAt.compareTo(b.startsAt)
+      : b.startsAt.compareTo(a.startsAt);
+  final sorted = [...records];
+  switch (sort) {
+    case TimelineSort.dateAscending:
+      sorted.sort((a, b) => byDate(a, b, ascending: true));
+    case TimelineSort.dateDescending:
+      sorted.sort((a, b) => byDate(a, b, ascending: false));
+    case TimelineSort.eventFormat:
+      sorted.sort((a, b) {
+        final byFormat = a.eventFormat.index.compareTo(b.eventFormat.index);
+        return byFormat != 0 ? byFormat : byDate(a, b, ascending: upcoming);
+      });
+  }
+  return sorted;
+}
+
+/// [sortTimeline] でライブ形態順に並べた記録を、形態ごとのまとまりにする。
+List<({EventFormat format, List<Record> records})> groupByEventFormat(
+  List<Record> records,
+) => [
+  for (final format in EventFormat.values)
+    if (records.where((r) => r.eventFormat == format).toList() case final group
+        when group.isNotEmpty)
+      (format: format, records: group),
+];
+
 /// カウントダウンの行き先。
 enum CountdownTarget {
   open,
@@ -58,7 +118,7 @@ sealed class Countdown {
       if (remaining <= Duration.zero) continue;
       return CountdownRemaining(
         target: target,
-        // 開演時刻が未入力なら当日 0 時までを数えているだけで、当日になれば「今日」になる
+        // 開演時刻が未入力なら当日 0 時までを数えているだけで、当日になれば「0日」になる
         hasTime: target != CountdownTarget.start || record.startTime != null,
         days: remaining.inDays,
         clock: _formatClock(remaining - Duration(days: remaining.inDays)),

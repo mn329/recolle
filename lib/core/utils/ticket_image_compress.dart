@@ -6,15 +6,18 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:recolle/core/constants/ticket_image_settings.dart';
 
+var _outputSequence = 0;
+
 /// ギャラリー画像をチケット表示・アップロード向けに JPEG で軽量化する。
 ///
 /// 失敗時は [source] をそのまま返す。
 Future<File> compressTicketImageForUpload(File source) async {
   try {
     final tmp = await getTemporaryDirectory();
+    // 複数枚を同時に圧縮しても出力先が重ならないよう、連番も付ける
     final outPath = p.join(
       tmp.path,
-      'ticket_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      'ticket_${DateTime.now().microsecondsSinceEpoch}_${_outputSequence++}.jpg',
     );
     final result = await FlutterImageCompress.compressAndGetFile(
       source.absolute.path,
@@ -29,5 +32,28 @@ Future<File> compressTicketImageForUpload(File source) async {
   } catch (e, st) {
     debugPrint('compressTicketImageForUpload: $e\n$st');
     return source;
+  }
+}
+
+/// 一覧に出す小さな画像（長辺 [TicketImageSettings.thumbnailMaxEdge] px の JPEG）を作る。失敗したら null。
+Future<File?> compressTicketThumbnailForUpload(File source) async {
+  try {
+    final tmp = await getTemporaryDirectory();
+    final outPath = p.join(
+      tmp.path,
+      'ticket_thumb_${DateTime.now().microsecondsSinceEpoch}_${_outputSequence++}.jpg',
+    );
+    final result = await FlutterImageCompress.compressAndGetFile(
+      source.absolute.path,
+      outPath,
+      quality: TicketImageSettings.thumbnailQuality,
+      minWidth: TicketImageSettings.thumbnailMaxEdge,
+      minHeight: TicketImageSettings.thumbnailMaxEdge,
+      format: CompressFormat.jpeg,
+    );
+    return result == null ? null : File(result.path);
+  } catch (e, st) {
+    debugPrint('compressTicketThumbnailForUpload: $e\n$st');
+    return null;
   }
 }

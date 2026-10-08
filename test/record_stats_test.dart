@@ -9,6 +9,7 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/features/records/screens/insights_screen.dart';
 import 'package:recolle/features/records/screens/live_list_screen.dart';
+import 'package:recolle/features/records/screens/venue_detail_screen.dart';
 
 Record _live(
   String id,
@@ -24,7 +25,6 @@ Record _live(
   title: 'T$id',
   artistOrAuthor: artist,
   date: date,
-  ticketImageUrl: '',
   venue: venue,
   ticketPrice: price,
   setlist: setlist,
@@ -111,7 +111,6 @@ void main() {
       artistOrAuthor: 'Vaundy',
       date: DateTime(2026, 8, 8),
       endDate: DateTime(2026, 8, 9),
-      ticketImageUrl: '',
       eventFormat: EventFormat.festival,
       acts: const [
         RecordAct(artist: 'Vaundy', songs: ['怪獣の花唄'], isMain: true, day: 1),
@@ -169,6 +168,20 @@ void main() {
       (title: 'Lovers', artist: 'A', count: 2),
       (title: 'Lovers', artist: 'B', count: 1),
     ]);
+  });
+
+  test('会場で絞り込むと、その会場で聴いた曲と行ったライブを集計する', () {
+    final atVenue = filterByVenue([
+      _live('1', DateTime(2026, 1, 1), venue: '日本武道館', setlist: '夜に駆ける'),
+      _live('2', DateTime(2026, 2, 1), venue: '日本 武道館', setlist: '夜に駆ける\n群青'),
+      _live('3', DateTime(2026, 3, 1), venue: 'さいたまスーパーアリーナ', setlist: '群青'),
+      _live('4', DateTime(2026, 4, 1)),
+    ], '日本武道館');
+    final stats = computeStats(atVenue, now: now);
+
+    expect(stats.lives.map((r) => r.id), ['2', '1']);
+    expect(stats.topSongs.first, (title: '夜に駆ける', artist: 'YOASOBI', count: 2));
+    expect(stats.topSongs.map((s) => s.title), ['夜に駆ける', '群青']);
   });
 
   test('記録がある年を新しい順に返す', () {
@@ -283,5 +296,43 @@ void main() {
     expect(find.text('T2'), findsOneWidget);
     expect(find.text('T3'), findsNothing);
     semantics.dispose();
+  });
+
+  testWidgets('よく行った会場の行から、その会場で聴いた曲を開ける', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          recordsProvider.overrideWith((ref) => Stream.value(records)),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.darkTheme,
+          home: const InsightsScreen(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('すべての年'));
+    await tester.pumpAndSettle();
+
+    final venueRow = find.widgetWithText(GroupedRow, '東京ドーム');
+    await tester.scrollUntilVisible(
+      venueRow,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(CustomScrollView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(venueRow);
+    await tester.pumpAndSettle();
+
+    expect(find.byType(VenueDetailScreen), findsOneWidget);
+    expect(find.text('2回行きました'), findsOneWidget);
+    expect(find.text('この会場で聴いた曲'), findsOneWidget);
+    expect(find.widgetWithText(GroupedRow, 'アイドル'), findsOneWidget);
+    expect(find.widgetWithText(GroupedRow, '夜に駆ける'), findsOneWidget);
   });
 }
