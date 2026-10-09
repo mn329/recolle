@@ -41,23 +41,15 @@ class FieldSuggestionChips extends HookConsumerWidget {
           : TextFieldTapRegion(
               child: SizedBox(
                 height: 44,
-                // 作成画面はドラッグでキーボードを閉じるため、チップの横スクロールを伝えると
-                // 入力欄のフォーカスが外れて候補ごと消えてしまう
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (_) => true,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    physics: const AlwaysScrollableScrollPhysics(
-                      parent: BouncingScrollPhysics(),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    itemCount: items.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) => CapsuleChip(
-                      label: items[index],
-                      selected: false,
-                      onTap: () => onPick(items[index]),
-                    ),
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) => CapsuleChip(
+                    label: items[index],
+                    selected: false,
+                    onTap: () => onPick(items[index]),
                   ),
                 ),
               ),
