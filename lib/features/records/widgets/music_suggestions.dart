@@ -17,7 +17,10 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/data/setlistfm_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
+import 'package:recolle/features/records/data/venue_search_client.dart';
 import 'package:recolle/features/records/data/work_search_client.dart';
+import 'package:recolle/features/records/field_suggestions.dart';
+import 'package:recolle/features/records/providers/venue_search_provider.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/providers/work_search_provider.dart';
@@ -43,24 +46,32 @@ class FavoriteArtistQuickPick extends ConsumerWidget {
     final current = normalizeArtistName(currentArtist);
     return SizedBox(
       height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        itemCount: favorites.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final artist = favorites[index];
-          return CapsuleChip(
-            label: artist.name,
-            selected: normalizeArtistName(artist.name) == current,
-            avatar: ArtistAvatar(
-              name: artist.name,
-              artworkUrl: artist.artworkUrl,
-              size: 22,
-            ),
-            onTap: () => onPick(artist),
-          );
-        },
+      // 作成画面はドラッグでキーボードを閉じるため、スクロールを伝えない
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (_) => true,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          // 数が少なくても同じようにスワイプでき、下の画面のスクロールに流れない
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+          itemCount: favorites.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final artist = favorites[index];
+            return CapsuleChip(
+              label: artist.name,
+              selected: normalizeArtistName(artist.name) == current,
+              avatar: ArtistAvatar(
+                name: artist.name,
+                artworkUrl: artist.artworkUrl,
+                size: 22,
+              ),
+              onTap: () => onPick(artist),
+            );
+          },
+        ),
       ),
     );
   }
@@ -252,6 +263,71 @@ class WorkSuggestions extends HookConsumerWidget {
   }
 }
 
+/// 会場欄の候補。過去の記録・定番の会場に、地図（Google Places）で引いた会場を足して縦に並べる。
+///
+/// 地図の候補は住所つきで、名前が Places の表記に揃う。地図の検索が使えないとき（未設定・圏外・失敗）は
+/// 入力は続けられるので、エラーは出さず、過去の記録と定番だけを出す。
+class VenueSuggestions extends HookConsumerWidget {
+  const VenueSuggestions({
+    super.key,
+    required this.type,
+    required this.query,
+    required this.sessionToken,
+    required this.onPick,
+  });
+
+  final RecordType type;
+  final String query;
+
+  /// 「入力しながら 1 つ選ぶ」までを Google に 1 回として数えさせるトークン。
+  final String sessionToken;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(venueSearchClientProvider);
+    final records =
+        ref.watch(recordsProvider).asData?.value ?? const <Record>[];
+    final map = useDebouncedSearch<VenueSuggestion>(
+      kVenueMapSearchEnabled ? query : '',
+      (q) => client.search(q, sessionToken: sessionToken),
+      minLength: VenueSearchClient.minQueryLength,
+    );
+    final local = venueSuggestions(records: records, type: type, query: query);
+    final localKeys = {for (final v in local) v.trim()};
+    final mapped = [
+      for (final v in map.data ?? const <VenueSuggestion>[])
+        if (!localKeys.contains(v.name)) v,
+    ];
+    final typed = query.trim();
+
+    return _SuggestionPanel(
+      // 地図の検索の失敗は出さない（履歴だけで入力できる）
+      snapshot: map.hasError
+          ? const AsyncSnapshot<List<VenueSuggestion>>.nothing()
+          : map,
+      isEmpty: local.isEmpty && mapped.isEmpty,
+      children: [
+        for (final v in local)
+          if (v != typed)
+            _SuggestionRow(
+              icon: CupertinoIcons.location,
+              title: v,
+              onTap: () => onPick(v),
+            ),
+        for (final v in mapped)
+          if (v.name != typed)
+            _SuggestionRow(
+              icon: CupertinoIcons.map_pin_ellipse,
+              title: v.name,
+              subtitle: v.address,
+              onTap: () => onPick(v.name),
+            ),
+      ],
+    );
+  }
+}
+
 class _SuggestionPanel extends StatelessWidget {
   const _SuggestionPanel({
     required this.snapshot,
@@ -282,6 +358,9 @@ class _SuggestionPanel extends StatelessWidget {
         child: NotificationListener<ScrollNotification>(
           onNotification: (_) => true,
           child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             padding: EdgeInsets.zero,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -512,6 +591,9 @@ class ConcertSuggestions extends HookConsumerWidget {
                   controller: scrollController,
                   child: ListView.separated(
                     controller: scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     shrinkWrap: true,
                     padding: EdgeInsets.zero,
                     itemCount: candidates.length,

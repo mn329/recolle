@@ -129,7 +129,15 @@ class _FakeVenueSearchClient extends VenueSearchClient {
   Future<List<VenueSuggestion>> search(
     String term, {
     String? sessionToken,
-  }) async => const [];
+  }) async => term.toLowerCase().contains('haneda')
+      ? const [
+          VenueSuggestion(
+            placeId: 'p1',
+            name: 'Haneda Test Hall',
+            address: '東京都大田区',
+          ),
+        ]
+      : const [];
 }
 
 class _FakeRecordsRepository implements RecordsRepository {
@@ -284,7 +292,7 @@ void main() {
     final venue = _field('会場');
     await tester.enterText(venue, 'zepp');
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(CapsuleChip, 'Zepp Shinjuku'));
+    await tester.tap(find.text('Zepp Shinjuku'));
     await tester.pumpAndSettle();
     expect(
       tester.widget<CupertinoTextField>(venue).controller!.text,
@@ -307,6 +315,25 @@ void main() {
     await tester.tap(find.text('完了'));
     await tester.pumpAndSettle();
     expect(find.text('ローチケ'), findsOneWidget);
+  });
+
+  testWidgets('会場に入力すると、地図の候補が住所つきで縦に並び、押すと会場に入る', (tester) async {
+    await _pumpScreen(tester);
+
+    final venue = _field('会場');
+    await tester.enterText(venue, 'haneda');
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('東京都大田区'), findsOneWidget);
+
+    await tester.tap(find.text('Haneda Test Hall'));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<CupertinoTextField>(venue).controller!.text,
+      'Haneda Test Hall',
+    );
+    // 選んだあとは同じ候補を出し直さない
+    expect(find.text('東京都大田区'), findsNothing);
   });
 
   testWidgets('追加を押すと記録を登録し、登録した記録を返して閉じる', (tester) async {
