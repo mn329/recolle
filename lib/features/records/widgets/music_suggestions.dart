@@ -43,24 +43,32 @@ class FavoriteArtistQuickPick extends ConsumerWidget {
     final current = normalizeArtistName(currentArtist);
     return SizedBox(
       height: 44,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
-        itemCount: favorites.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final artist = favorites[index];
-          return CapsuleChip(
-            label: artist.name,
-            selected: normalizeArtistName(artist.name) == current,
-            avatar: ArtistAvatar(
-              name: artist.name,
-              artworkUrl: artist.artworkUrl,
-              size: 22,
-            ),
-            onTap: () => onPick(artist),
-          );
-        },
+      // 作成画面はドラッグでキーボードを閉じるため、スクロールを伝えない
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (_) => true,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          // 数が少なくても同じようにスワイプでき、下の画面のスクロールに流れない
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+          itemCount: favorites.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 8),
+          itemBuilder: (context, index) {
+            final artist = favorites[index];
+            return CapsuleChip(
+              label: artist.name,
+              selected: normalizeArtistName(artist.name) == current,
+              avatar: ArtistAvatar(
+                name: artist.name,
+                artworkUrl: artist.artworkUrl,
+                size: 22,
+              ),
+              onTap: () => onPick(artist),
+            );
+          },
+        ),
       ),
     );
   }
@@ -282,6 +290,9 @@ class _SuggestionPanel extends StatelessWidget {
         child: NotificationListener<ScrollNotification>(
           onNotification: (_) => true,
           child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(
+              parent: BouncingScrollPhysics(),
+            ),
             padding: EdgeInsets.zero,
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -512,6 +523,9 @@ class ConcertSuggestions extends HookConsumerWidget {
                   controller: scrollController,
                   child: ListView.separated(
                     controller: scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     shrinkWrap: true,
                     padding: EdgeInsets.zero,
                     itemCount: candidates.length,

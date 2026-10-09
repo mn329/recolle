@@ -47,6 +47,9 @@ class FieldSuggestionChips extends HookConsumerWidget {
                   onNotification: (_) => true,
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: BouncingScrollPhysics(),
+                    ),
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                     itemCount: items.length,
                     separatorBuilder: (_, _) => const SizedBox(width: 8),
