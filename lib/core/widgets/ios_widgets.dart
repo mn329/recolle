@@ -495,7 +495,11 @@ class RowIcon extends StatelessWidget {
   }
 }
 
-/// iOS のセグメントコントロール。切り替え時に軽い触覚フィードバックを返す。
+/// iOS のセグメントコントロール風の切り替え。切り替え時に軽い触覚フィードバックを返す。
+///
+/// [CupertinoSlidingSegmentedControl] は、押している途中で別の画面が重なるなどしてタッチが
+/// 途切れると、内部の「押し始めた」状態が残り、以降のほかのセグメントのタップを無視してしまう
+/// （選択中のセグメントを押すまで直らない）。状態を持たないタップだけの作りにして避ける。
 class IosSegmentedControl<T extends Object> extends StatelessWidget {
   const IosSegmentedControl({
     super.key,
@@ -504,39 +508,92 @@ class IosSegmentedControl<T extends Object> extends StatelessWidget {
     required this.onChanged,
   });
 
+  static const _padding = 2.0;
+  static const _animation = Duration(milliseconds: 220);
+
   final T value;
   final Map<T, String> segments;
   final ValueChanged<T> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
+    final colors = context.colors;
+    final keys = segments.keys.toList();
+    final count = keys.length;
+    final selected = keys.indexOf(value);
+
+    return Container(
       width: double.infinity,
-      child: CupertinoSlidingSegmentedControl<T>(
-        groupValue: value,
-        backgroundColor: context.colors.fill,
-        thumbColor: context.colors.segmentThumb,
-        padding: const EdgeInsets.all(2),
-        onValueChanged: (next) {
-          if (next == null || next == value) return;
-          HapticFeedback.selectionClick();
-          onChanged(next);
-        },
-        children: {
-          for (final MapEntry(:key, value: label) in segments.entries)
-            key: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Text(
-                label,
-                maxLines: 1,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: context.colors.textPrimary,
-                  fontWeight: key == value ? FontWeight.w700 : FontWeight.w500,
+      padding: const EdgeInsets.all(_padding),
+      decoration: BoxDecoration(
+        color: colors.fill,
+        borderRadius: BorderRadius.circular(9),
+      ),
+      child: Stack(
+        children: [
+          if (selected >= 0)
+            Positioned.fill(
+              child: AnimatedAlign(
+                duration: _animation,
+                curve: Curves.easeOutCubic,
+                alignment: Alignment(
+                  count == 1 ? 0 : -1 + 2 * selected / (count - 1),
+                  0,
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: 1 / count,
+                  heightFactor: 1,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: colors.segmentThumb,
+                      borderRadius: BorderRadius.circular(7),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color(0x1F000000),
+                          blurRadius: 4,
+                          offset: Offset(0, 1),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-        },
+          Row(
+            children: [
+              for (final key in keys)
+                Expanded(
+                  child: Semantics(
+                    button: true,
+                    selected: key == value,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () {
+                        if (key == value) return;
+                        HapticFeedback.selectionClick();
+                        onChanged(key);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 6),
+                        child: Text(
+                          segments[key]!,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.textPrimary,
+                            fontWeight: key == value
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }
