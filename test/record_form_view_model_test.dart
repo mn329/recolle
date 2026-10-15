@@ -11,6 +11,7 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 import 'package:recolle/features/music/providers/music_providers.dart';
 import 'package:recolle/features/records/concert_candidates.dart';
 import 'package:recolle/features/records/data/records_repository.dart';
+import 'package:recolle/features/records/data/work_search_client.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/record_form_view_model.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -547,6 +548,120 @@ void main() {
         PickedTicketImage(File('b.jpg')),
       ]);
       expect(h.vm.isDirty, isTrue);
+    });
+  });
+
+  group('映画・本の候補の画像', () {
+    const posterUrl = 'https://image.tmdb.org/t/p/w185/a.jpg';
+    const otherPosterUrl = 'https://image.tmdb.org/t/p/w185/b.jpg';
+    const work = WorkSuggestion(
+      title: '君の名は。',
+      creator: '新海誠',
+      artworkUrl: posterUrl,
+    );
+    const otherWork = WorkSuggestion(
+      title: '天気の子',
+      creator: '新海誠',
+      artworkUrl: otherPosterUrl,
+    );
+    final poster = SavedTicketImage(work.coverUrl!);
+    final otherPoster = SavedTicketImage(otherWork.coverUrl!);
+
+    test('候補を選ぶと、その画像をチケット画像に足す（先頭が表紙になる）', () async {
+      final h = await _harness();
+
+      h.vm.pickWork(work);
+
+      expect(h.vm.state.title, '君の名は。');
+      expect(h.vm.state.images, [poster]);
+    });
+
+    test('すでに画像があれば、その後ろに足して表紙は変えない', () async {
+      final h = await _harness();
+      h.vm.addImages([File('mine.jpg')]);
+
+      h.vm.pickWork(work);
+
+      expect(h.vm.state.images, [PickedTicketImage(File('mine.jpg')), poster]);
+    });
+
+    test('上限まで画像があれば足さず、題名と作者だけ入れる', () async {
+      final h = await _harness();
+      h.vm.addImages([
+        for (var i = 0; i < TicketImageSettings.maxCount; i++) File('$i.jpg'),
+      ]);
+
+      h.vm.pickWork(work);
+
+      expect(h.vm.state.title, '君の名は。');
+      expect(h.vm.state.images, hasLength(TicketImageSettings.maxCount));
+      expect(h.vm.state.images, isNot(contains(poster)));
+    });
+
+    test('選び直したら、前の候補の画像だけを差し替える（自分の画像は残す）', () async {
+      final h = await _harness();
+      h.vm.addImages([File('mine.jpg')]);
+      h.vm.pickWork(work);
+      h.vm.addImages([File('later.jpg')]);
+
+      h.vm.pickWork(otherWork);
+
+      expect(h.vm.state.images, [
+        PickedTicketImage(File('mine.jpg')),
+        otherPoster,
+        PickedTicketImage(File('later.jpg')),
+      ]);
+    });
+
+    test('画像のない候補に選び直したら、前の候補の画像を外す', () async {
+      final h = await _harness();
+      h.vm.pickWork(work);
+
+      h.vm.pickWork(const WorkSuggestion(title: '画像なし'));
+
+      expect(h.vm.state.title, '画像なし');
+      expect(h.vm.state.images, isEmpty);
+    });
+
+    test('手で外した画像は、同じ候補を選び直せば足し直す', () async {
+      final h = await _harness();
+      h.vm.pickWork(work);
+      h.vm.removeImageAt(0);
+
+      h.vm.pickWork(work);
+
+      expect(h.vm.state.images, [poster]);
+    });
+
+    test('すでにある同じ画像は重ねて足さず、選び直しでも消さない', () async {
+      final saved = Record(
+        id: 'r1',
+        type: RecordType.movie,
+        title: '旧題名',
+        artistOrAuthor: '',
+        date: DateTime(2026, 1, 1),
+        ticketImageUrls: [poster.url],
+      );
+      final h = await _harness(args: RecordFormArgs(recordToEdit: saved));
+
+      h.vm.pickWork(work);
+      h.vm.pickWork(const WorkSuggestion(title: '画像なし'));
+
+      expect(h.vm.state.images, [poster]);
+    });
+
+    test('候補の画像は外部の URL のまま保存し、アップロードも削除もしない', () async {
+      final h = await _harness(
+        args: const RecordFormArgs(initialType: RecordType.movie),
+      );
+      h.vm.pickWork(work);
+
+      final result = await h.vm.save();
+
+      expect(result, isA<RecordSaveSucceeded>());
+      expect(h.repository.uploaded, isEmpty);
+      expect(h.repository.inserted.single['ticket_image_urls'], [poster.url]);
+      expect(h.repository.deletedImages, isEmpty);
     });
   });
 

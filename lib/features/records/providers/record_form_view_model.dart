@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:recolle/core/constants/field_limits.dart';
+import 'package:recolle/core/constants/ticket_image_settings.dart';
 import 'package:recolle/core/utils/error_messages.dart';
 import 'package:recolle/features/account/providers/auth_providers.dart';
 import 'package:recolle/features/favorites/auto_favorite.dart';
@@ -148,7 +149,11 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
   void pickArtist(String name) =>
       state = state.withTexts({RecordTextField.artist: name});
 
-  /// 映画・本の候補から、題名と監督・著者を入れる。
+  /// 最後に選んだ映画・本の候補から、自動で足した画像の URL。
+  /// 選び直したとき、自分で足した画像まで消さないよう、足した画像を見分けるために持つ。
+  String? _workCoverUrl;
+
+  /// 映画・本の候補から、題名と監督・著者と画像を入れる。
   void pickWork(WorkSuggestion work) {
     final creator = work.creator;
     state = state.withTexts({
@@ -156,6 +161,32 @@ class RecordFormViewModel extends Notifier<RecordFormState> {
       if (creator != null && creator.length <= RecordFieldLimits.artistOrAuthor)
         RecordTextField.artist: creator,
     });
+    _applyWorkCover(work.coverUrl);
+  }
+
+  /// 前の候補の画像を [url] の画像に差し替える（同じ位置に入れる）。
+  /// 画像が上限まで入っているときや、すでに同じ画像があるときは足さない。
+  void _applyWorkCover(String? url) {
+    final images = [...state.images];
+    final previous = _workCoverUrl;
+    final previousIndex = previous == null
+        ? -1
+        : images.indexOf(SavedTicketImage(previous));
+    if (previousIndex >= 0) images.removeAt(previousIndex);
+
+    _workCoverUrl = null;
+    if (url != null) {
+      final cover = SavedTicketImage(url);
+      if (!images.contains(cover) &&
+          images.length < TicketImageSettings.maxCount) {
+        images.insert(
+          previousIndex >= 0 ? previousIndex : images.length,
+          cover,
+        );
+        _workCoverUrl = url;
+      }
+    }
+    state = state.copyWith(images: images);
   }
 
   /// 公演の候補を取り込み、入力した項目名を返す。
