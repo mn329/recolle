@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,12 +12,45 @@ import 'package:recolle/core/widgets/app_toast.dart';
 import 'package:recolle/core/widgets/confirm_dialog.dart';
 import 'package:recolle/core/widgets/ios_widgets.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
+import 'package:recolle/features/favorites/pick_artist_image.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/favorites/widgets/add_favorite_artist_sheet.dart';
 import 'package:recolle/features/favorites/widgets/artist_avatar.dart';
 import 'package:recolle/features/music/screens/artist_detail_screen.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/core/widgets/app_background.dart';
+
+/// 進行中の表示を見分けるためのキー（テスト用）。
+@visibleForTesting
+const blockingProgressKey = ValueKey('favorites-blocking-progress');
+
+enum _ArtistAction { changeImage, resetImage, remove }
+
+/// [task] が終わるまで、操作を受け付けない進行中の表示を出す。失敗した例外は呼び出し元に渡す。
+Future<T> _withBlockingProgress<T>(
+  BuildContext context,
+  Future<T> Function() task,
+) async {
+  final navigator = Navigator.of(context, rootNavigator: true);
+  unawaited(
+    showCupertinoDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const PopScope(
+        canPop: false,
+        child: Center(
+          key: blockingProgressKey,
+          child: CupertinoActivityIndicator(radius: 14),
+        ),
+      ),
+    ),
+  );
+  try {
+    return await task();
+  } finally {
+    navigator.pop();
+  }
+}
 
 class FavoritesScreen extends ConsumerWidget {
   const FavoritesScreen({super.key});
@@ -28,17 +63,7 @@ class FavoritesScreen extends ConsumerWidget {
 
     void openAddSheet() => showAddFavoriteArtistSheet(context);
 
-    Future<void> showArtistActions(FavoriteArtist artist) async {
-      HapticFeedback.mediumImpact();
-      final remove = await showActionSheet<bool>(
-        context,
-        title: artist.name,
-        message: 'お気に入りから外しても、記録は削除されません。',
-        actions: const [
-          SheetAction(label: 'お気に入りから外す', value: true, isDestructive: true),
-        ],
-      );
-      if (remove != true) return;
+    Future<void> removeFavorite(FavoriteArtist artist) async {
       try {
         await ref.read(favoriteArtistsProvider.notifier).remove(artist.id);
         AppToast.show(
@@ -50,6 +75,66 @@ class FavoritesScreen extends ConsumerWidget {
       }
     }
 
+    Future<void> changeImage(FavoriteArtist artist) async {
+      final notifier = ref.read(favoriteArtistsProvider.notifier);
+      final pickImage = ref.read(artistImagePickerProvider);
+      try {
+        final file = await pickImage(context);
+        if (file == null || !context.mounted) return;
+        await _withBlockingProgress(
+          context,
+          () => notifier.changeImage(artist.id, file),
+        );
+        AppToast.show('画像を変更しました', icon: CupertinoIcons.checkmark_circle_fill);
+      } catch (e) {
+        AppToast.error(toUserFriendlyMessage(e));
+      }
+    }
+
+    Future<void> resetImage(FavoriteArtist artist) async {
+      final notifier = ref.read(favoriteArtistsProvider.notifier);
+      try {
+        await _withBlockingProgress(
+          context,
+          () => notifier.resetImage(artist.id),
+        );
+        AppToast.show('元の写真に戻しました', icon: CupertinoIcons.checkmark_circle_fill);
+      } catch (e) {
+        AppToast.error(toUserFriendlyMessage(e));
+      }
+    }
+
+    Future<void> showArtistActions(FavoriteArtist artist) async {
+      HapticFeedback.mediumImpact();
+      final action = await showActionSheet<_ArtistAction>(
+        context,
+        title: artist.name,
+        message: 'お気に入りから外しても、記録は削除されません。',
+        actions: [
+          const SheetAction(label: '画像を変更', value: _ArtistAction.changeImage),
+          if (artist.customImageUrl != null)
+            const SheetAction(
+              label: '元の写真に戻す',
+              value: _ArtistAction.resetImage,
+            ),
+          const SheetAction(
+            label: 'お気に入りから外す',
+            value: _ArtistAction.remove,
+            isDestructive: true,
+          ),
+        ],
+      );
+      if (action == null) return;
+      switch (action) {
+        case _ArtistAction.changeImage:
+          await changeImage(artist);
+        case _ArtistAction.resetImage:
+          await resetImage(artist);
+        case _ArtistAction.remove:
+          await removeFavorite(artist);
+      }
+    }
+
     void openArtist(FavoriteArtist artist) {
       Navigator.push(
         context,
@@ -57,7 +142,7 @@ class FavoritesScreen extends ConsumerWidget {
           builder: (_) => ArtistDetailScreen(
             artistName: artist.name,
             itunesArtistId: artist.itunesArtistId,
-            artworkUrl: artist.artworkUrl,
+            artworkUrl: artist.displayArtworkUrl,
             heroTag: 'favorite-artist-${artist.id}',
           ),
         ),
@@ -112,7 +197,7 @@ class FavoritesScreen extends ConsumerWidget {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(20, 16, 20, 0),
                 child: Text(
-                  '長押しでお気に入りから外せます',
+                  '長押しで画像の変更・お気に入りから外せます',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
@@ -211,7 +296,7 @@ class _FavoriteArtistCardState extends State<_FavoriteArtistCard> {
                   builder: (context, constraints) => ArtistArtworkHero(
                     tag: 'favorite-artist-${artist.id}',
                     name: artist.name,
-                    artworkUrl: artist.artworkUrl,
+                    artworkUrl: artist.displayArtworkUrl,
                     size: constraints.maxWidth,
                     // カードの上辺の角丸と揃える
                     borderRadius: const BorderRadius.vertical(

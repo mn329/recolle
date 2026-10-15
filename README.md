@@ -73,7 +73,7 @@ Dart SDK: `^3.9.2`（`pubspec.yaml` 参照）。Flutter はこの SDK に対応�
 
 - **お気に入りアーティスト**: `favorite_artists` テーブルに保存。記録の `artist_or_author` とは名前で照合します（大文字小文字・スペース・「A × B」などのコラボ表記を吸収、`core/utils/artist_name_match.dart`）。追加シートで候補を選ぶとアーティスト詳細を開くだけで、登録は詳細の ☆ で行います（見たいだけのアーティストが登録されないように）。ライブを記録すると、そのアーティスト（対バン・フェスはお目当ての 1 組）を自動でお気に入りに追加します。編集では新しく加わったアーティストだけを追加し、自分で外したお気に入りは戻しません（`features/favorites/auto_favorite.dart`）。
 - **曲・アーティスト情報**: [iTunes Search API](https://performance-partners.apple.com/search-api)（キー不要）でアーティスト名・曲名の補完とアートワークを取得。レート制限（約 20 回/分）があるため入力はデバウンスし、結果はメモリにキャッシュします。
-- **アーティスト画像**: iTunes にはアーティスト画像がないため、[Deezer API](https://developers.deezer.com/api)（キー不要）の画像を優先し、見つからなければ iTunes の代表アルバムのジャケットで代用します。以前ジャケットで保存したお気に入りは、起動時に順次アーティスト画像へ置き換えます。
+- **アーティスト画像**: iTunes にはアーティスト画像がないため、[Deezer API](https://developers.deezer.com/api)（キー不要）の画像を優先し、見つからなければ iTunes の代表アルバムのジャケットで代用します。以前ジャケットで保存したお気に入りは、起動時に順次アーティスト画像へ置き換えます。お気に入り画面でカードを長押しすると、写真ライブラリの画像に変更できます（正方形に切り抜き、一辺 800px 以内の JPEG にして `ticket-images` バケットの `<user_id>/artist_*` へ保存、`favorite_artists.custom_image_url`）。独自画像は自動取得の `artwork_url` とは別に持つので上書きされず、「元の写真に戻す」で外せます。お気に入りを外すと独自画像も消えます。
 - **アーティスト / 曲詳細**: iTunes の人気曲・収録情報と、Apple Music・Spotify・YouTube Music へのリンク。Apple Music は iTunes が返す正規 URL、Spotify / YouTube Music は無料の検索 API がないため検索結果ページを開きます（アプリがあればアプリで開く）。
 - **メールから入力**: 作成画面の「メールから入力」に e+・ローチケ・チケットぴあなどの購入／当選メール本文を貼ると、公演名・出演者・公演日・取得元を入力欄に入れます（`features/records/ticket_mail_parser.dart`）。各社とも公開 API がなく、サイトの自動取得は利用規約に抵触しうるため、本文を端末内で読み取る方式にしています。
 - **setlist.fm 連携**: [setlist.fm API](https://api.setlist.fm/docs/1.0/index.html) を Edge Function `setlistfm-search` 経由で検索し、下の「公演名の候補」に使います（下記の設定が必要）。画面の説明文やエラーには外部サービス名を出さず、出典は TMDB・楽天ブックスと合わせてアカウント画面の下部に表示します。
