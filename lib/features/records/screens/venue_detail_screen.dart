@@ -12,7 +12,7 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/features/records/widgets/ranking_section.dart';
 
-/// 振り返りの「よく行った会場」から開く、その会場で聴いた曲と行ったライブ。
+/// 振り返りの「よく行った会場」から開く、その会場で聴いた曲とライブ。
 ///
 /// 振り返りで選んでいた年・アーティストの絞り込みを引き継ぐ。
 class VenueDetailScreen extends ConsumerWidget {
@@ -66,7 +66,7 @@ class VenueDetailScreen extends ConsumerWidget {
                     child: Text(
                       [
                         if (_scope.isNotEmpty) _scope,
-                        '${stats.liveCount}回行きました',
+                        '${stats.liveCount}回',
                       ].join('・'),
                       style: TextStyle(
                         fontSize: 14,
@@ -111,13 +111,13 @@ class VenueDetailScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: SectionTitle(
                     'LIVES',
-                    'この会場で行ったライブ・${stats.liveCount}回',
+                    'この会場のライブ・${stats.liveCount}回',
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                   ),
                 ),
                 SliverRecordTicketList(
                   records: stats.lives,
-                  emptyMessage: 'この会場で行ったライブの記録はありません',
+                  emptyMessage: 'この会場のライブの記録はありません',
                 ),
                 SliverToBoxAdapter(
                   child: SizedBox(
