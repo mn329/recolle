@@ -30,6 +30,12 @@ Record _live(
   setlist: setlist,
 );
 
+/// ジャンルの切り替えのセグメント。「本」などは集計の単位と同じ文字なので、切り替えの中から探す。
+Finder genreSegment(String label) => find.descendant(
+  of: find.byType(IosSegmentedControl<InsightsGenre>),
+  matching: find.text(label),
+);
+
 void main() {
   final now = DateTime(2026, 9, 27);
   final records = [
@@ -49,36 +55,37 @@ void main() {
     ),
     _live('3', DateTime(2026, 8, 5), artist: 'Vaundy', price: 8000),
     _live('4', DateTime(2025, 12, 31), artist: 'Vaundy', price: 9000),
-    _live('future', DateTime(2026, 12, 24), price: 99999),
+    _live('future', DateTime(2026, 12, 24), price: 5000),
     _live('movie', DateTime(2026, 5, 5), type: RecordType.movie),
   ];
 
-  test('年を指定すると、その年の過去の記録だけを集計する', () {
+  test('年を指定すると、その年の記録を集計する。これからの予定も数える', () {
     final stats = computeStats(records, now: now, year: 2026);
 
-    expect(stats.liveCount, 3);
+    expect(stats.liveCount, 4);
     expect(stats.countsByType[RecordType.movie], 1);
-    expect(stats.totalTicketPrice, 18000);
-    expect(stats.averageTicketPrice, 9000);
+    expect(stats.totalTicketPrice, 23000);
+    expect(stats.averageTicketPrice, 7667);
     expect(stats.liveCountsByMonth[2], 2);
     expect(stats.liveCountsByMonth[7], 1);
+    expect(stats.liveCountsByMonth[11], 1);
   });
 
   test('表記ゆれをまとめてランキングし、同じ公演で重複した曲は 1 回と数える', () {
     final stats = computeStats(records, now: now, year: 2026);
 
-    expect(stats.topArtists.first, (label: 'YOASOBI', count: 2));
+    expect(stats.topArtists.first, (label: 'YOASOBI', count: 3));
     expect(stats.topVenues, [(label: '東京ドーム', count: 2)]);
     expect(stats.topSongs.first, (title: 'アイドル', artist: 'YOASOBI', count: 2));
     expect(stats.topSongs[1], (title: '夜に駆ける', artist: 'YOASOBI', count: 1));
   });
 
-  test('年を指定しなければ全期間、未来の公演は含めない', () {
+  test('年を指定しなければ全期間を集計する', () {
     final stats = computeStats(records, now: now);
 
-    expect(stats.liveCount, 4);
-    expect(stats.topArtists.map((a) => a.label), ['Vaundy', 'YOASOBI']);
-    expect(stats.totalTicketPrice, 27000);
+    expect(stats.liveCount, 5);
+    expect(stats.topArtists.map((a) => a.label), ['YOASOBI', 'Vaundy']);
+    expect(stats.totalTicketPrice, 32000);
   });
 
   test('アーティストで絞り込み、コラボ表記の記録も含める', () {
@@ -95,7 +102,16 @@ void main() {
     expect(filterByArtist(withCollab, null), hasLength(withCollab.length));
   });
 
-  test('初めて・最後に行った日と、行ったライブを新しい順に返す', () {
+  test('初めて・最後に行った日には、これからの予定を含めない', () {
+    final stats = computeStats(filterByArtist(records, 'YOASOBI'), now: now);
+
+    expect(stats.firstLiveDate, DateTime(2026, 3, 1));
+    expect(stats.lastLiveDate, DateTime(2026, 3, 20));
+    // 一覧には予定も並ぶ（新しい順）
+    expect(stats.lives.map((r) => r.id), ['future', '2', '1']);
+  });
+
+  test('初めて・最後に行った日と、ライブを新しい順に返す', () {
     final stats = computeStats(filterByArtist(records, 'Vaundy'), now: now);
 
     expect(stats.firstLiveDate, DateTime(2025, 12, 31));
@@ -123,12 +139,12 @@ void main() {
     test('形式ごとの回数と、出演者全員を含めた観たアーティスト数を数える', () {
       final stats = computeStats(withFes, now: now, year: 2026);
 
-      expect(stats.liveCount, 4);
-      expect(stats.liveCountsByFormat[EventFormat.oneman], 3);
+      expect(stats.liveCount, 5);
+      expect(stats.liveCountsByFormat[EventFormat.oneman], 4);
       expect(stats.liveCountsByFormat[EventFormat.festival], 1);
       // YOASOBI・Vaundy・sumika・back number
       expect(stats.artistCount, 4);
-      expect(stats.topArtists.first, (label: 'Vaundy', count: 2));
+      expect(stats.topArtists.first, (label: 'YOASOBI', count: 3));
       expect(
         stats.topSongs,
         contains((title: '水平線', artist: 'back number', count: 1)),
@@ -139,8 +155,8 @@ void main() {
       final stats = computeStats(withFes, now: now, year: 2026);
 
       expect(stats.topArtists.map((a) => a.label), [
-        'Vaundy',
         'YOASOBI',
+        'Vaundy',
         'back number',
         'sumika',
       ]);
@@ -185,7 +201,7 @@ void main() {
   });
 
   test('記録がある年を新しい順に返す', () {
-    expect(yearsWithRecords(records, now), [2026, 2025]);
+    expect(yearsWithRecords(records), [2026, 2025]);
   });
 
   test('チケット代が 1 件もなければ平均は null', () {
@@ -209,7 +225,9 @@ void main() {
 
     await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();
-    expect(find.text('4'), findsWidgets);
+    await tester.tap(genreSegment('ライブ'));
+    await tester.pumpAndSettle();
+    expect(find.text('5'), findsWidgets);
     expect(find.text('よく行ったアーティスト'), findsOneWidget);
 
     // よく聴いた曲の行から曲の詳細へ移れる
@@ -247,11 +265,7 @@ void main() {
           matching: find.byType(Scrollable),
         )
         .first;
-    await tester.scrollUntilVisible(
-      find.text('行ったライブ・2回'),
-      200,
-      scrollable: page,
-    );
+    await tester.scrollUntilVisible(find.text('ライブ・2回'), 200, scrollable: page);
     expect(find.text('T3'), findsOneWidget);
     expect(find.text('T4'), findsOneWidget);
 
@@ -278,11 +292,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();
+    await tester.tap(genreSegment('ライブ'));
+    await tester.pumpAndSettle();
 
-    await tester.tap(find.text('ライブ'));
+    // ジャンルの切り替えにも同じ「ライブ」があるので、後ろ（集計のタイル）を押す
+    await tester.tap(find.text('ライブ').last);
     await tester.pumpAndSettle();
     expect(find.byType(LiveListScreen), findsOneWidget);
-    expect(find.text('これまでのライブ・4回'), findsOneWidget);
+    expect(find.text('すべてのライブ・5回'), findsOneWidget);
     Navigator.of(tester.element(find.byType(LiveListScreen))).pop();
     await tester.pumpAndSettle();
 
@@ -313,6 +330,8 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('すべての年'));
     await tester.pumpAndSettle();
+    await tester.tap(genreSegment('ライブ'));
+    await tester.pumpAndSettle();
 
     final venueRow = find.widgetWithText(GroupedRow, '東京ドーム');
     await tester.scrollUntilVisible(
@@ -330,9 +349,171 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(VenueDetailScreen), findsOneWidget);
-    expect(find.text('2回行きました'), findsOneWidget);
+    expect(find.text('この会場のライブ・2回'), findsOneWidget);
     expect(find.text('この会場で聴いた曲'), findsOneWidget);
     expect(find.widgetWithText(GroupedRow, 'アイドル'), findsOneWidget);
     expect(find.widgetWithText(GroupedRow, '夜に駆ける'), findsOneWidget);
+  });
+
+  group('ジャンル別', () {
+    final genreRecords = [
+      _live('1', DateTime(2026, 3, 1), venue: '東京ドーム'),
+      _live('4', DateTime(2025, 12, 31), artist: 'Vaundy'),
+      _live(
+        'm1',
+        DateTime(2026, 5, 5),
+        type: RecordType.movie,
+        venue: 'TOHOシネマズ',
+        price: 1900,
+      ),
+      _live(
+        'm2',
+        DateTime(2026, 6, 6),
+        type: RecordType.movie,
+        venue: 'tohoシネマズ ',
+        price: 2100,
+      ),
+      _live('m3', DateTime(2025, 1, 10), type: RecordType.movie),
+      _live('m-future', DateTime(2026, 12, 1), type: RecordType.movie),
+      _live(
+        'b1',
+        DateTime(2026, 2, 3),
+        type: RecordType.book,
+        venue: '本屋',
+        price: 1500,
+      ),
+    ];
+
+    test('ジャンルで絞り込む。null なら絞らない', () {
+      expect(filterByType(genreRecords, RecordType.book).map((r) => r.id), [
+        'b1',
+      ]);
+      expect(filterByType(genreRecords, null), genreRecords);
+    });
+
+    test('映画の件数・金額・月別・会場を、これからの予定も含めて集計する', () {
+      final stats = computeGenreStats(genreRecords, type: RecordType.movie);
+
+      expect(stats.count, 4);
+      expect(stats.records.map((r) => r.id), ['m-future', 'm2', 'm1', 'm3']);
+      expect(stats.totalPrice, 4000);
+      expect(stats.averagePrice, 2000);
+      expect(stats.countsByMonth[4], 1);
+      expect(stats.countsByMonth[5], 1);
+      expect(stats.countsByMonth[0], 1);
+      expect(stats.countsByMonth[11], 1);
+      // 表記ゆれはまとめて数える
+      expect(stats.topVenues, [(label: 'TOHOシネマズ', count: 2)]);
+    });
+
+    test('年を指定すると、その年の記録だけを集計する', () {
+      final stats = computeGenreStats(
+        genreRecords,
+        type: RecordType.movie,
+        year: 2025,
+      );
+
+      expect(stats.count, 1);
+      expect(stats.averagePrice, isNull);
+      expect(stats.topVenues, isEmpty);
+    });
+
+    test('場所の入力欄がない本は、会場を集計しない', () {
+      final stats = computeGenreStats(genreRecords, type: RecordType.book);
+
+      expect(stats.count, 1);
+      expect(stats.totalPrice, 1500);
+      expect(stats.topVenues, isEmpty);
+    });
+
+    test('登録した記録は、これからの予定も保存した日のうちから数える', () {
+      final today = DateTime(2026, 9, 27, 12);
+      final records = [
+        _live('book', today, type: RecordType.book, price: 1200),
+        // 先に取ったチケット代も、家計簿として数える
+        _live('live', DateTime(2026, 11, 3), price: 8800),
+        _live(
+          'movie',
+          DateTime(2027, 1, 5),
+          type: RecordType.movie,
+          price: 1900,
+        ),
+      ];
+
+      final stats = computeOverviewStats(records);
+
+      expect(stats.count, 3);
+      expect(stats.totalPrice, 11900);
+      expect(yearsWithRecords(records), [2027, 2026]);
+    });
+
+    test('全ジャンルをまとめて集計する', () {
+      final stats = computeOverviewStats(genreRecords);
+
+      expect(stats.count, 7);
+      expect(stats.byType.map((g) => g.count), [2, 4, 1, 0]);
+      expect(stats.totalPrice, 5500);
+      expect(stats.averagePrice, 1833);
+      expect(stats.countsByMonth, [1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 2]);
+
+      final y2025 = computeOverviewStats(genreRecords, year: 2025);
+      expect(y2025.count, 2);
+      expect(y2025.averagePrice, isNull);
+      expect(computeOverviewStats(const []).isEmpty, isTrue);
+    });
+
+    testWidgets('ジャンルを切り替えると、そのジャンルの集計だけを出す', (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            recordsProvider.overrideWith((ref) => Stream.value(genreRecords)),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const InsightsScreen(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('すべての年'));
+      await tester.pumpAndSettle();
+      // 「すべて」はジャンルをまたいだ集計だけ。ランキングは各ジャンルで見る
+      expect(find.text('ジャンル別'), findsOneWidget);
+      expect(find.text('月別の記録'), findsOneWidget);
+      expect(find.text('よく行ったアーティスト'), findsNothing);
+      expect(find.text('よく聴いた曲'), findsNothing);
+      expect(find.text('よく行った会場'), findsNothing);
+
+      // 内訳の行を押すと、そのジャンルの集計へ移る
+      await tester.tap(find.widgetWithText(GroupedRow, '映画'));
+      await tester.pumpAndSettle();
+      expect(find.text('よく行ったアーティスト'), findsNothing);
+      expect(find.text('月別の映画'), findsOneWidget);
+      expect(find.text('映画の記録・4本'), findsOneWidget);
+      expect(find.text('よく行った映画館'), findsOneWidget);
+      expect(find.text('チケット代の合計'), findsOneWidget);
+      expect(find.text('Tm1'), findsOneWidget);
+      expect(find.text('Tb1'), findsNothing);
+      expect(find.text('T1'), findsNothing);
+
+      await tester.tap(genreSegment('本'));
+      await tester.pumpAndSettle();
+      expect(find.text('月別の本'), findsOneWidget);
+      expect(find.text('価格の合計'), findsOneWidget);
+      expect(find.text('よく行った映画館'), findsNothing);
+      expect(find.text('Tb1'), findsOneWidget);
+
+      await tester.tap(genreSegment('その他'));
+      await tester.pumpAndSettle();
+      expect(find.text('その他を記録すると、ここに集計が表示されます。'), findsOneWidget);
+
+      await tester.tap(genreSegment('ライブ'));
+      await tester.pumpAndSettle();
+      expect(find.text('よく行ったアーティスト'), findsOneWidget);
+
+      await tester.tap(genreSegment('すべて'));
+      await tester.pumpAndSettle();
+      expect(find.text('ジャンル別'), findsOneWidget);
+    });
   });
 }
