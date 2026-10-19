@@ -9,6 +9,7 @@ import 'package:recolle/features/favorites/widgets/favorite_artist_chips.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/screens/home_screen.dart';
+import 'package:recolle/features/records/widgets/next_event_card.dart';
 
 class _Favorites extends FavoriteArtistsNotifier {
   @override
@@ -55,6 +56,55 @@ void main() {
     expect(find.byType(FavoriteArtistChips), findsNothing);
     // ライブで選んだアーティストで映画を絞り込まない
     expect(find.text('ラストマイル'), findsWidgets);
+  });
+
+  group('「次の予定まで」のカード', () {
+    final future = DateTime.now().add(const Duration(days: 30));
+
+    Future<void> pumpHome(WidgetTester tester, List<Record> records) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            favoriteArtistsProvider.overrideWith(_Favorites.new),
+            isOfflineReadOnlyProvider.overrideWithValue(false),
+            recordsProvider.overrideWith((ref) => Stream.value(records)),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: const HomeScreen(),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    Record upcoming(RecordType type, String title) => Record(
+      id: title,
+      type: type,
+      title: title,
+      artistOrAuthor: '作者',
+      date: future,
+    );
+
+    testWidgets('本は日時の決まった催しではないので、これからの日付でも出さない', (tester) async {
+      await pumpHome(tester, [upcoming(RecordType.book, '来月の本')]);
+      await tester.tap(find.text('本'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      // 「これから」の一覧には載るが、カウントダウンのカードは出ない
+      expect(find.text('来月の本'), findsWidgets);
+      expect(find.byType(NextEventCard), findsNothing);
+      expect(find.textContaining('まで'), findsNothing);
+    });
+
+    testWidgets('映画は、これからの日付ならカードを出す', (tester) async {
+      await pumpHome(tester, [upcoming(RecordType.movie, '来月の映画')]);
+      await tester.tap(find.text('映画'));
+      await tester.pump(const Duration(milliseconds: 600));
+
+      expect(find.byType(NextEventCard), findsOneWidget);
+      expect(find.text('次の予定まで'), findsOneWidget);
+    });
   });
 
   testWidgets('「これまで」を古い順やライブ形態ごとに並べ替えられる', (tester) async {

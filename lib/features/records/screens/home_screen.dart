@@ -145,9 +145,11 @@ class HomeScreen extends HookConsumerWidget {
                     return SliverMainAxisGroup(
                       slivers: [
                         if (upcoming.isNotEmpty) ...[
-                          SliverToBoxAdapter(
-                            child: NextEventCard(record: upcoming.first),
-                          ),
+                          // 本は日時の決まった催しではないので、カウントダウンのカードは出さない
+                          if (selectedType.value.hasSchedule)
+                            SliverToBoxAdapter(
+                              child: NextEventCard(record: upcoming.first),
+                            ),
                           ..._timelineSection(
                             title: 'これから',
                             records: upcoming,

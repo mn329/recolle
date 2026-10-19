@@ -38,11 +38,11 @@ void main() {
     ]);
   });
 
-  test('ライブが多くても、映画・本の記録も渡す', () {
+  test('ライブが多くても、映画・その他の記録も渡す', () {
     final records = [
       for (var i = 1; i <= 7; i++) _record('$i', DateTime(2026, 10, i)),
       _record('movie', DateTime(2026, 11, 1), type: RecordType.movie),
-      _record('book', DateTime(2026, 12, 1), type: RecordType.book),
+      _record('other', DateTime(2026, 12, 1), type: RecordType.other),
     ];
 
     final payload = upcomingEventsPayload(records, now);
@@ -54,9 +54,20 @@ void main() {
       'LIVE 4',
       'LIVE 5',
       'LIVE movie',
-      'LIVE book',
+      'LIVE other',
     ]);
-    expect(payload.map((e) => e['type']).skip(5), ['movie', 'book']);
+    expect(payload.map((e) => e['type']).skip(5), ['movie', 'other']);
+  });
+
+  test('本は日時の決まった催しではないので、これからの日付でも渡さない', () {
+    final payload = upcomingEventsPayload([
+      _record('book', DateTime(2026, 10, 1), type: RecordType.book),
+      _record('live', DateTime(2026, 10, 5)),
+    ], now);
+
+    // 本のほうが近い日付でも、「次の予定」に本は出ない
+    expect(payload.map((e) => e['title']), ['LIVE live']);
+    expect(payload.map((e) => e['type']), isNot(contains('book')));
   });
 
   test('複数日の公演は、最終日の翌日 0 時まで表示する時刻を渡す', () {
