@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -113,13 +114,83 @@ class FavoriteArtistsNotifier extends AsyncNotifier<List<FavoriteArtist>> {
   }
 
   Future<void> remove(String id) async {
-    await ref.read(favoriteArtistsRepositoryProvider).remove(id);
+    final current = state.asData?.value ?? const <FavoriteArtist>[];
+    final customImageUrl = current
+        .where((f) => f.id == id)
+        .firstOrNull
+        ?.customImageUrl;
+    final repository = ref.read(favoriteArtistsRepositoryProvider);
+    await repository.remove(id);
     final next = [
-      for (final f in state.asData?.value ?? const <FavoriteArtist>[])
+      for (final f in current)
         if (f.id != id) f,
     ];
     state = AsyncData(next);
     await _saveCache(next);
+    await _deleteImagesQuietly(repository, [?customImageUrl]);
+  }
+
+  /// [id] のお気に入りの画像を、[file] に変更する。
+  ///
+  /// 画像を上げてから保存し、保存できなかったら上げた画像は消す。
+  /// 表示が変わるのは保存できたあとだけで、失敗したら今の画像のまま例外を投げる。
+  Future<void> changeImage(String id, File file) async {
+    final userId = _userId;
+    if (userId == null) {
+      throw StateError('ログインしていないので、画像を変更できません。');
+    }
+    final previous = _byId(id)?.customImageUrl;
+    final repository = ref.read(favoriteArtistsRepositoryProvider);
+    final imageUrl = await repository.uploadCustomImage(
+      userId: userId,
+      favoriteId: id,
+      file: file,
+    );
+    try {
+      await repository.setCustomImage(id, imageUrl);
+    } catch (_) {
+      await _deleteImagesQuietly(repository, [imageUrl]);
+      rethrow;
+    }
+    await _applyCustomImage(id, imageUrl);
+    await _deleteImagesQuietly(repository, [?previous]);
+  }
+
+  /// 独自画像を外して、自動取得のアーティスト写真に戻す。独自画像がなければ何もしない。
+  Future<void> resetImage(String id) async {
+    final previous = _byId(id)?.customImageUrl;
+    if (previous == null) return;
+    final repository = ref.read(favoriteArtistsRepositoryProvider);
+    await repository.setCustomImage(id, null);
+    await _applyCustomImage(id, null);
+    await _deleteImagesQuietly(repository, [previous]);
+  }
+
+  FavoriteArtist? _byId(String id) =>
+      state.asData?.value.where((f) => f.id == id).firstOrNull;
+
+  Future<void> _applyCustomImage(String id, String? imageUrl) async {
+    final current = state.asData?.value;
+    if (current == null || !ref.mounted) return;
+    final next = [
+      for (final f in current)
+        f.id == id ? f.copyWith(customImageUrl: imageUrl) : f,
+    ];
+    state = AsyncData(next);
+    await _saveCache(next);
+  }
+
+  /// 使わなくなった画像の削除。失敗しても操作自体は成功なので、ログだけ残す（残った画像は害にならない）。
+  Future<void> _deleteImagesQuietly(
+    FavoriteArtistsRepository repository,
+    List<String> urls,
+  ) async {
+    if (urls.isEmpty) return;
+    try {
+      await repository.deleteCustomImages(urls);
+    } catch (e) {
+      debugPrint('Custom image delete failed: $e');
+    }
   }
 
   Future<void> _saveCache(List<FavoriteArtist> favorites) async {

@@ -34,7 +34,8 @@ class FavoriteArtistChips extends StatelessWidget {
       if (selected != null &&
           !favorites.any((f) => _sameArtist(f.name, selected)))
         (name: selected, artworkUrl: null as String?),
-      for (final f in favorites) (name: f.name, artworkUrl: f.artworkUrl),
+      for (final f in favorites)
+        (name: f.name, artworkUrl: f.displayArtworkUrl),
     ];
     return SizedBox(
       height: height,

@@ -1,117 +1,29 @@
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'dart:io';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:recolle/core/data/json_list_file_cache.dart';
-import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/features/account/providers/auth_providers.dart';
-import 'package:recolle/features/favorites/data/favorite_artists_repository.dart';
 import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
-import 'package:recolle/features/music/data/artist_artwork_finder.dart';
-import 'package:recolle/features/music/data/deezer_client.dart';
-import 'package:recolle/features/music/data/itunes_client.dart';
-import 'package:recolle/features/music/providers/music_providers.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show User;
+import 'support/favorite_artists_fakes.dart';
 
 const _albumArtwork = 'https://is1-ssl.mzstatic.com/image/a/400x400bb.jpg';
 const _deezerImage = 'https://cdn-images.dzcdn.net/images/artist/x/500x500.jpg';
 
-FavoriteArtist _favorite(String id, String name, {String? artworkUrl}) =>
-    FavoriteArtist(
-      id: id,
-      name: name,
-      artworkUrl: artworkUrl,
-      createdAt: DateTime(2026),
-    );
-
-class _FakeRepository implements FavoriteArtistsRepository {
-  _FakeRepository(this.favorites);
-
-  final List<FavoriteArtist> favorites;
-  final artworkUpdates = <(String, String)>[];
-  final addedArtworks = <String?>[];
-
-  @override
-  Future<List<FavoriteArtist>> fetchAll() async => favorites;
-
-  @override
-  Future<FavoriteArtist> add({
-    required String name,
-    int? itunesArtistId,
-    String? artworkUrl,
-  }) async {
-    addedArtworks.add(artworkUrl);
-    return _favorite('new', name, artworkUrl: artworkUrl);
-  }
-
-  @override
-  Future<void> updateArtwork(String id, String artworkUrl) async =>
-      artworkUpdates.add((id, artworkUrl));
-
-  @override
-  Future<void> remove(String id) async {}
-}
-
-class _MemoryCache implements JsonListFileCache {
-  @override
-  String get fileNamePrefix => 'test';
-
-  final saved = <String, List<Map<String, dynamic>>>{};
-
-  @override
-  Future<void> save(String userId, List<Map<String, dynamic>> items) async =>
-      saved[userId] = items;
-
-  @override
-  Future<void> delete(String userId) async => saved.remove(userId);
-
-  @override
-  Future<List<Map<String, dynamic>>> load(String userId) async =>
-      saved[userId] ?? const [];
-}
-
-class _FakeFinder extends ArtistArtworkFinder {
-  _FakeFinder(this.images)
-    : super(deezer: DeezerClient(), itunes: ItunesClient());
-
-  final Map<String, String> images;
-  final imageQueries = <String>[];
-
-  @override
-  Future<String?> findArtistImage(String artistName) async {
-    imageQueries.add(artistName);
-    return images[artistName];
-  }
-
-  @override
-  Future<String?> find(String artistName) async => images[artistName];
-}
+const _customImage = fakeUploadedImageUrl;
+const _oldCustomImage = 'https://img/custom-old';
 
 ProviderContainer _container({
-  required _FakeRepository repository,
-  required _FakeFinder finder,
-  _MemoryCache? cache,
+  required FakeFavoriteArtistsRepository repository,
+  required FakeArtistArtworkFinder finder,
+  MemoryFavoriteArtistsCache? cache,
 }) {
   final container = ProviderContainer(
-    overrides: [
-      authUserProvider.overrideWith(
-        (ref) => Stream.value(
-          User(
-            id: 'u1',
-            appMetadata: const {},
-            userMetadata: const {},
-            aud: 'authenticated',
-            createdAt: '2026-01-01T00:00:00Z',
-          ),
-        ),
-      ),
-      connectivityProvider.overrideWith(
-        (ref) => Stream.value(const [ConnectivityResult.wifi]),
-      ),
-      favoriteArtistsRepositoryProvider.overrideWithValue(repository),
-      favoriteArtistsCacheProvider.overrideWithValue(cache ?? _MemoryCache()),
-      artistArtworkFinderProvider.overrideWithValue(finder),
-    ],
+    overrides: favoriteArtistsOverrides(
+      repository: repository,
+      finder: finder,
+      cache: cache,
+    ),
   );
   addTearDown(container.dispose);
   container.listen(favoriteArtistsProvider, (_, _) {});
@@ -128,16 +40,16 @@ Future<List<FavoriteArtist>> _loaded(ProviderContainer container) async {
 void main() {
   group('画像の置き換え', () {
     test('画像なし・ジャケットのお気に入りだけを、アーティスト画像に置き換える', () async {
-      final repository = _FakeRepository([
-        _favorite('1', 'Aimer', artworkUrl: _albumArtwork),
-        _favorite('2', 'YOASOBI'),
-        _favorite('3', 'King Gnu', artworkUrl: _deezerImage),
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', artworkUrl: _albumArtwork),
+        favoriteArtist('2', 'YOASOBI'),
+        favoriteArtist('3', 'King Gnu', artworkUrl: _deezerImage),
       ]);
-      final finder = _FakeFinder({
+      final finder = FakeArtistArtworkFinder({
         'Aimer': 'https://img/aimer',
         'YOASOBI': 'https://img/yoasobi',
       });
-      final cache = _MemoryCache();
+      final cache = MemoryFavoriteArtistsCache();
       final container = _container(
         repository: repository,
         finder: finder,
@@ -160,10 +72,10 @@ void main() {
     });
 
     test('見つからなかったお気に入りは、再取得しても問い合わせ直さない', () async {
-      final repository = _FakeRepository([
-        _favorite('1', 'Aimer', artworkUrl: _albumArtwork),
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', artworkUrl: _albumArtwork),
       ]);
-      final finder = _FakeFinder(const {});
+      final finder = FakeArtistArtworkFinder(const {});
       final container = _container(repository: repository, finder: finder);
 
       await _loaded(container);
@@ -176,10 +88,10 @@ void main() {
   });
 
   test('追加するときは、見つけた画像を付けて登録する', () async {
-    final repository = _FakeRepository(const []);
+    final repository = FakeFavoriteArtistsRepository(const []);
     final container = _container(
       repository: repository,
-      finder: _FakeFinder({'Vaundy': 'https://img/vaundy'}),
+      finder: FakeArtistArtworkFinder({'Vaundy': 'https://img/vaundy'}),
     );
     await _loaded(container);
 
@@ -190,5 +102,213 @@ void main() {
     expect(repository.addedArtworks, ['https://img/vaundy']);
     expect(added.artworkUrl, 'https://img/vaundy');
     expect(container.read(favoriteArtistsProvider).requireValue, [added]);
+  });
+
+  group('独自画像', () {
+    test('画像を変更すると、アップロードして保存し、自動取得の写真は残す', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', artworkUrl: _deezerImage),
+      ]);
+      final cache = MemoryFavoriteArtistsCache();
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+        cache: cache,
+      );
+      await _loaded(container);
+
+      await container
+          .read(favoriteArtistsProvider.notifier)
+          .changeImage('1', File('/tmp/picked.jpg'));
+
+      expect(repository.uploads, [
+        (userId: 'u1', favoriteId: '1', path: '/tmp/picked.jpg'),
+      ]);
+      expect(repository.customImageUpdates, [('1', _customImage)]);
+      final artist = container
+          .read(favoriteArtistsProvider)
+          .requireValue
+          .single;
+      expect(artist.customImageUrl, _customImage);
+      expect(artist.artworkUrl, _deezerImage);
+      expect(artist.displayArtworkUrl, _customImage);
+      expect(cache.saved['u1']!.single['custom_image_url'], _customImage);
+      expect(repository.deletedImages, isEmpty);
+    });
+
+    test('すでに独自画像があるときは、保存できたあとに古い画像を消す', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist(
+          '1',
+          'Aimer',
+          artworkUrl: _deezerImage,
+          customImageUrl: _oldCustomImage,
+        ),
+      ]);
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+      );
+      await _loaded(container);
+
+      await container
+          .read(favoriteArtistsProvider.notifier)
+          .changeImage('1', File('/tmp/picked.jpg'));
+
+      expect(repository.deletedImages, [_oldCustomImage]);
+      expect(
+        container
+            .read(favoriteArtistsProvider)
+            .requireValue
+            .single
+            .customImageUrl,
+        _customImage,
+      );
+    });
+
+    test('古い画像を消せなくても、変更は成功として扱う', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', customImageUrl: _oldCustomImage),
+      ])..failDeleteImages = true;
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+      );
+      await _loaded(container);
+
+      await container
+          .read(favoriteArtistsProvider.notifier)
+          .changeImage('1', File('/tmp/picked.jpg'));
+
+      expect(
+        container
+            .read(favoriteArtistsProvider)
+            .requireValue
+            .single
+            .customImageUrl,
+        _customImage,
+      );
+    });
+
+    test('保存に失敗したら、上げた画像を消して、表示は変えずにエラーを返す', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', customImageUrl: _oldCustomImage),
+      ])..failSetCustomImage = true;
+      final cache = MemoryFavoriteArtistsCache();
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+        cache: cache,
+      );
+      await _loaded(container);
+      cache.saved.clear();
+
+      await expectLater(
+        container
+            .read(favoriteArtistsProvider.notifier)
+            .changeImage('1', File('/tmp/picked.jpg')),
+        throwsException,
+      );
+
+      expect(repository.deletedImages, [_customImage]);
+      expect(
+        container
+            .read(favoriteArtistsProvider)
+            .requireValue
+            .single
+            .customImageUrl,
+        _oldCustomImage,
+      );
+      expect(cache.saved, isEmpty);
+    });
+
+    test('元の写真に戻すと、独自画像を外して Storage の画像を消す', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist(
+          '1',
+          'Aimer',
+          artworkUrl: _deezerImage,
+          customImageUrl: _oldCustomImage,
+        ),
+      ]);
+      final cache = MemoryFavoriteArtistsCache();
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+        cache: cache,
+      );
+      await _loaded(container);
+
+      await container.read(favoriteArtistsProvider.notifier).resetImage('1');
+
+      expect(repository.customImageUpdates, [('1', null)]);
+      expect(repository.deletedImages, [_oldCustomImage]);
+      final artist = container
+          .read(favoriteArtistsProvider)
+          .requireValue
+          .single;
+      expect(artist.customImageUrl, isNull);
+      expect(artist.displayArtworkUrl, _deezerImage);
+      expect(cache.saved['u1']!.single['custom_image_url'], isNull);
+    });
+
+    test('独自画像がないお気に入りを戻そうとしても、何もしない', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', artworkUrl: _deezerImage),
+      ]);
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+      );
+      await _loaded(container);
+
+      await container.read(favoriteArtistsProvider.notifier).resetImage('1');
+
+      expect(repository.customImageUpdates, isEmpty);
+      expect(repository.deletedImages, isEmpty);
+    });
+
+    test('お気に入りから外すと、独自画像も消す', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', customImageUrl: _oldCustomImage),
+        favoriteArtist('2', 'YOASOBI', artworkUrl: _deezerImage),
+      ]);
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder(const {}),
+      );
+      await _loaded(container);
+
+      await container.read(favoriteArtistsProvider.notifier).remove('1');
+
+      expect(repository.deletedImages, [_oldCustomImage]);
+      expect(
+        [
+          for (final f in container.read(favoriteArtistsProvider).requireValue)
+            f.id,
+        ],
+        ['2'],
+      );
+    });
+
+    test('自動の画像の置き換えが、独自画像を上書きしない', () async {
+      final repository = FakeFavoriteArtistsRepository([
+        favoriteArtist('1', 'Aimer', customImageUrl: _oldCustomImage),
+      ]);
+      final container = _container(
+        repository: repository,
+        finder: FakeArtistArtworkFinder({'Aimer': 'https://img/aimer'}),
+      );
+
+      await _loaded(container);
+
+      final artist = container
+          .read(favoriteArtistsProvider)
+          .requireValue
+          .single;
+      expect(artist.artworkUrl, 'https://img/aimer');
+      expect(artist.customImageUrl, _oldCustomImage);
+      expect(artist.displayArtworkUrl, _oldCustomImage);
+    });
   });
 }

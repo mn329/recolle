@@ -215,7 +215,7 @@ class _ArtistResults extends HookConsumerWidget {
             MediaListTile(
               leading: ArtistAvatar(
                 name: a.name,
-                artworkUrl: a.favorite?.artworkUrl,
+                artworkUrl: a.favorite?.displayArtworkUrl,
                 size: 46,
               ),
               title: a.name,
@@ -230,7 +230,7 @@ class _ArtistResults extends HookConsumerWidget {
               onTap: () => open(
                 a.name,
                 itunesArtistId: a.favorite?.itunesArtistId,
-                artworkUrl: a.favorite?.artworkUrl,
+                artworkUrl: a.favorite?.displayArtworkUrl,
               ),
             ),
         ],

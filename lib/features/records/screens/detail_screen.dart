@@ -189,7 +189,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         ?.value
         .where((f) => artistMatches(record.artistOrAuthor, f.name))
         .firstOrNull
-        ?.artworkUrl;
+        ?.displayArtworkUrl;
 
     return AppBackground(
       child: Scaffold(
