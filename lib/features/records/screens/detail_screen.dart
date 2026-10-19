@@ -170,9 +170,10 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final record = _record;
     final readOnlyOffline = ref.watch(isOfflineReadOnlyProvider);
     final isLive = record.type == RecordType.live;
-    final isUpcoming = splitByDate([
-      record,
-    ], DateTime.now()).upcoming.isNotEmpty;
+    // 本は日時の決まった催しではないので、これからの日付でもカウントダウンは出さない
+    final showCountdown =
+        record.type.hasSchedule &&
+        splitByDate([record], DateTime.now()).upcoming.isNotEmpty;
     final songs = splitSetlist(record.setlist);
     final acts = record.acts;
     final mcMemo = record.mcMemo?.trim() ?? '';
@@ -188,7 +189,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
         ?.value
         .where((f) => artistMatches(record.artistOrAuthor, f.name))
         .firstOrNull
-        ?.artworkUrl;
+        ?.displayArtworkUrl;
 
     return AppBackground(
       child: Scaffold(
@@ -224,7 +225,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
               // 対バン・フェスは出演者ごとの欄から各アーティストへ飛ぶ
               onArtistTap: isLive && acts.isEmpty ? _openArtist : null,
             ),
-            if (isUpcoming)
+            if (showCountdown)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
                 child: Container(

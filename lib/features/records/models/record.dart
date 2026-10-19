@@ -117,6 +117,14 @@ extension RecordTypeUi on RecordType {
     }
   }
 
+  /// 記録の数え方（「3回」「2本」「5冊」「1件」の単位）。
+  String get countUnit => switch (this) {
+    RecordType.live => '回',
+    RecordType.movie => '本',
+    RecordType.book => '冊',
+    RecordType.other => '件',
+  };
+
   /// 入力フォームでの [Record.title] の呼び方。
   String get titleFieldLabel => switch (this) {
     RecordType.live => '公演名・ツアー名',

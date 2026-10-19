@@ -39,6 +39,7 @@ dependencies:
   webview_flutter: ^4.13.1
   uuid: ^4.5.1
   flutter_cache_manager: ^3.4.5
+  crop_your_image: ^2.0.1
 
 dev_dependencies:
   flutter_test:

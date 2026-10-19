@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:recolle/core/theme/app_colors.dart';
 import 'package:recolle/core/theme/app_fonts.dart';
 import 'package:recolle/core/widgets/decoded_network_image.dart';
+import 'package:recolle/features/records/data/records_repository.dart';
 
 /// アーティストのアートワーク。画像がない・読めないときは頭文字を表示する。
 class ArtistAvatar extends StatelessWidget {
@@ -20,18 +21,27 @@ class ArtistAvatar extends StatelessWidget {
   /// null なら円形。
   final BorderRadius? borderRadius;
 
+  /// ユーザーが選んだ画像は非公開のバケットにあるので、認証つきの取得先を使う。
+  /// iTunes などの URL は、そのまま取得する。
+  Widget _networkImage(String url, Widget fallback) {
+    final sources = RecordsRepository.ticketImageSources(url);
+    return DecodedNetworkImage(
+      url: sources.primary.url,
+      headers: sources.primary.headers,
+      alternatives: sources.alternatives,
+      logicalWidth: size,
+      logicalHeight: size,
+      errorBuilder: (context, error, stackTrace) => fallback,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final url = artworkUrl;
     final fallback = _InitialFallback(name: name, size: size);
     final image = url == null || url.isEmpty
         ? fallback
-        : DecodedNetworkImage(
-            url: url,
-            logicalWidth: size,
-            logicalHeight: size,
-            errorBuilder: (context, error, stackTrace) => fallback,
-          );
+        : _networkImage(url, fallback);
 
     return SizedBox.square(
       dimension: size,

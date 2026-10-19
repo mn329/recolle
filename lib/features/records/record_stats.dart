@@ -8,7 +8,7 @@ typedef RankedItem = ({String label, int count});
 /// 曲のランキングの 1 行。同じ曲名でもアーティストが違えば別の曲として数える。
 typedef RankedSong = ({String title, String artist, int count});
 
-/// 振り返りの集計結果。対象は今日より前の記録（実際に行った・観たもの）だけ。
+/// 振り返りの集計結果。登録した記録はこれからの予定も含めてすべて数える（チケット代などの家計簿を兼ねるため）。
 class RecordStats {
   const RecordStats({
     required this.liveCount,
@@ -22,6 +22,8 @@ class RecordStats {
     required this.topVenues,
     required this.topSongs,
     required this.lives,
+    required this.firstLiveDate,
+    required this.lastLiveDate,
   });
 
   final int liveCount;
@@ -52,11 +54,11 @@ class RecordStats {
   /// 集計対象のライブ（新しい順）。
   final List<Record> lives;
 
-  /// 最初に行ったライブの日。
-  DateTime? get firstLiveDate => lives.isEmpty ? null : lives.last.date;
+  /// 最初に行ったライブの日。これからの予定は含めない。
+  final DateTime? firstLiveDate;
 
-  /// 最後に行ったライブの日。
-  DateTime? get lastLiveDate => lives.isEmpty ? null : lives.first.date;
+  /// 最後に行ったライブの日。これからの予定は含めない。
+  final DateTime? lastLiveDate;
 
   int? get averageTicketPrice => pricedLiveCount == 0
       ? null
@@ -65,11 +67,23 @@ class RecordStats {
   bool get isEmpty => countsByType.values.every((c) => c == 0);
 }
 
-/// 記録がある年を新しい順に返す（今日より前の記録のみ）。
-List<int> yearsWithRecords(Iterable<Record> records, DateTime now) {
-  final years = {for (final r in splitByDate(records, now).past) r.date.year};
+/// 記録がある年を新しい順に返す（これからの予定の年も含む）。
+List<int> yearsWithRecords(Iterable<Record> records) {
+  final years = {for (final r in records) r.date.year};
   return years.toList()..sort((a, b) => b.compareTo(a));
 }
+
+/// [year] が null なら全期間。日付の新しい順に並べる。
+List<Record> _inYear(Iterable<Record> records, int? year) => [
+  for (final r in records)
+    if (year == null || r.date.year == year) r,
+]..sort((a, b) => b.startsAt.compareTo(a.startsAt));
+
+/// ジャンル（[type]）の記録だけに絞る。null なら絞らない。
+List<Record> filterByType(Iterable<Record> records, RecordType? type) => [
+  for (final r in records)
+    if (type == null || r.type == type) r,
+];
 
 /// [artist] の記録だけに絞る。対バン・フェスやコラボ表記（「A × B」など）の記録も含める。
 /// null なら絞らない。
@@ -87,7 +101,7 @@ List<Record> filterByVenue(Iterable<Record> records, String venue) {
   ];
 }
 
-/// [year] が null なら全期間を集計する。ランキングは各 [rankingLimit] 件まで。
+/// [year] が null なら全期間を集計する。[now] は、行ったライブとこれからの予定を分けるのに使う。ランキングは各 [rankingLimit] 件まで。
 /// [artist] を渡すと、曲のランキングは対バン・フェスでもその出演者の曲だけを数える。
 RecordStats computeStats(
   Iterable<Record> records, {
@@ -96,14 +110,12 @@ RecordStats computeStats(
   String? artist,
   int rankingLimit = 5,
 }) {
-  final past = splitByDate(
-    records,
-    now,
-  ).past.where((r) => year == null || r.date.year == year);
-  final lives = past.where((r) => r.type == RecordType.live).toList();
+  final counted = _inYear(records, year);
+  final lives = counted.where((r) => r.type == RecordType.live).toList();
+  final pastLives = splitByDate(lives, now).past;
 
   final countsByType = {for (final t in RecordType.values) t: 0};
-  for (final r in past) {
+  for (final r in counted) {
     countsByType[r.type] = countsByType[r.type]! + 1;
   }
 
@@ -152,8 +164,116 @@ RecordStats computeStats(
     topVenues: venues.top(rankingLimit),
     topSongs: songs.topSongs(rankingLimit),
     lives: lives,
+    firstLiveDate: pastLives.lastOrNull?.date,
+    lastLiveDate: pastLives.firstOrNull?.date,
   );
 }
+
+/// 1 ジャンルの件数・金額・月別・会場・一覧の集計。対象は登録したすべての記録（これからの予定も含む）。
+///
+/// ライブ以外のジャンル（映画・本・その他）の振り返りは、出演者やセトリがないのでこれだけを出す。
+class GenreStats {
+  const GenreStats({
+    required this.type,
+    required this.totalPrice,
+    required this.pricedCount,
+    required this.countsByMonth,
+    required this.topVenues,
+    required this.records,
+  });
+
+  final RecordType type;
+
+  /// 価格（チケット代・本の価格）を入力した記録の合計（円）。
+  final int totalPrice;
+
+  /// 価格を入力した記録の数。平均の分母に使う。
+  final int pricedCount;
+
+  /// 1〜12 月の件数（添字 0 が 1 月）。年を指定しないときは全期間の月別合計。
+  final List<int> countsByMonth;
+
+  /// 場所の入力欄がないジャンル（本）では常に空。
+  final List<RankedItem> topVenues;
+
+  /// 集計対象の記録（新しい順）。
+  final List<Record> records;
+
+  int get count => records.length;
+
+  int? get averagePrice =>
+      pricedCount == 0 ? null : (totalPrice / pricedCount).round();
+
+  bool get isEmpty => records.isEmpty;
+}
+
+/// [type] の記録を集計する（これからの予定も含む）。[year] が null なら全期間。会場のランキングは [rankingLimit] 件まで。
+GenreStats computeGenreStats(
+  Iterable<Record> records, {
+  required RecordType type,
+  int? year,
+  int rankingLimit = 5,
+}) {
+  final list = [
+    for (final r in _inYear(records, year))
+      if (r.type == type) r,
+  ];
+
+  final byMonth = List.filled(12, 0);
+  var total = 0;
+  var priced = 0;
+  final venues = _Counter();
+  for (final r in list) {
+    byMonth[r.date.month - 1]++;
+    if (r.ticketPrice != null) {
+      total += r.ticketPrice!;
+      priced++;
+    }
+    if (type.venueLabel != null && r.venue != null) venues.add(r.venue!);
+  }
+
+  return GenreStats(
+    type: type,
+    totalPrice: total,
+    pricedCount: priced,
+    countsByMonth: byMonth,
+    topVenues: venues.top(rankingLimit),
+    records: list,
+  );
+}
+
+/// 全ジャンルをまとめた集計。ジャンルごとの [GenreStats] を並べて持つ。
+class OverviewStats {
+  const OverviewStats(this.byType);
+
+  /// [RecordType.values] の順。
+  final List<GenreStats> byType;
+
+  int get count => byType.fold(0, (sum, g) => sum + g.count);
+
+  /// 価格（チケット代・本の価格）を入力した記録の合計（円）。
+  int get totalPrice => byType.fold(0, (sum, g) => sum + g.totalPrice);
+
+  int get pricedCount => byType.fold(0, (sum, g) => sum + g.pricedCount);
+
+  int? get averagePrice =>
+      pricedCount == 0 ? null : (totalPrice / pricedCount).round();
+
+  /// 1〜12 月の件数（添字 0 が 1 月）。
+  List<int> get countsByMonth => [
+    for (var m = 0; m < 12; m++)
+      byType.fold(0, (sum, g) => sum + g.countsByMonth[m]),
+  ];
+
+  bool get isEmpty => count == 0;
+}
+
+/// 全ジャンルの記録を集計する。[year] が null なら全期間。
+OverviewStats computeOverviewStats(Iterable<Record> records, {int? year}) =>
+    OverviewStats([
+      for (final type in RecordType.values)
+        computeGenreStats(records, type: type, year: year),
+    ]);
 
 /// 大文字小文字・空白の違いをまとめて数え、いちばん多い表記で表示する。
 /// [add] に scope（曲ならアーティスト）を渡すと、scope ごとに別の項目として数える。

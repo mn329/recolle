@@ -65,7 +65,7 @@ class FavoriteArtistQuickPick extends ConsumerWidget {
               selected: normalizeArtistName(artist.name) == current,
               avatar: ArtistAvatar(
                 name: artist.name,
-                artworkUrl: artist.artworkUrl,
+                artworkUrl: artist.displayArtworkUrl,
                 size: 22,
               ),
               onTap: () => onPick(artist),
