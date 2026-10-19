@@ -29,7 +29,9 @@ List<Map<String, Object?>> upcomingEventsPayload(
 ) {
   final counts = <RecordType, int>{};
   final selected = <Record>[];
-  for (final r in splitByDate(records, now).upcoming) {
+  // 本は日時の決まった催しではないので、「次の予定」のカウントダウンには載せない
+  final scheduled = records.where((r) => r.type.hasSchedule);
+  for (final r in splitByDate(scheduled, now).upcoming) {
     final count = (counts[r.type] ?? 0) + 1;
     counts[r.type] = count;
     if (count <= _maxEventsPerType) selected.add(r);
