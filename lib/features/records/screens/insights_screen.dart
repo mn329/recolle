@@ -33,8 +33,27 @@ enum InsightsView {
   final String label;
 }
 
+/// 振り返りで絞り込むジャンル。[type] が null なら全ジャンル（「すべて」）。
+enum InsightsGenre {
+  all(null),
+  live(RecordType.live),
+  movie(RecordType.movie),
+  book(RecordType.book),
+  other(RecordType.other);
+
+  const InsightsGenre(this.type);
+
+  final RecordType? type;
+
+  String get label => type?.japaneseLabel ?? 'すべて';
+
+  /// お気に入りのアーティストで絞れるか。アーティストはライブの出演者なので、ライブだけ。
+  bool get supportsArtist => this == live;
+}
+
 /// 「振り返り」タブ。年ごとの参戦回数・チケット代・ランキング（最初に出す）とカレンダーを切り替える。
 ///
+/// ジャンル（すべて・ライブ・映画・本・その他）で、カレンダーも集計もそのジャンルの記録だけになる。
 /// ホームと同じお気に入りアーティストのチップ（または集計のランキング）でアーティストを選ぶと、
 /// カレンダーも集計もそのアーティストの記録だけになる。
 class InsightsScreen extends HookConsumerWidget {
@@ -44,11 +63,19 @@ class InsightsScreen extends HookConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final recordsAsync = ref.watch(recordsProvider);
     final view = useState(InsightsView.stats);
+    final genre = useState(InsightsGenre.all);
     final selectedYear = useState<int?>(DateTime.now().year);
-    final selectedArtist = useState<String?>(null);
-    final favorites =
+    final selectedArtistState = useState<String?>(null);
+    // アーティストで絞れないジャンルでは、選んでいても無視する（ホームのお気に入りと同じ）
+    final selectedArtist = genre.value.supportsArtist
+        ? selectedArtistState.value
+        : null;
+    final allFavorites =
         ref.watch(favoriteArtistsProvider).asData?.value ??
         const <FavoriteArtist>[];
+    final favorites = genre.value.supportsArtist
+        ? allFavorites
+        : const <FavoriteArtist>[];
 
     return AppBackground(
       child: Scaffold(
@@ -59,12 +86,14 @@ class InsightsScreen extends HookConsumerWidget {
           bottom: _InsightsFilterBar(
             view: view.value,
             onViewChanged: (v) => view.value = v,
+            genre: genre.value,
+            onGenreChanged: (g) => genre.value = g,
             favorites: favorites,
-            selectedArtist: selectedArtist.value,
-            onArtistSelected: (a) => selectedArtist.value = a,
+            selectedArtist: selectedArtist,
+            onArtistSelected: (a) => selectedArtistState.value = a,
           ),
           onRefresh: () => ref.refresh(recordsProvider.future),
-          contentKey: (view.value, selectedArtist.value),
+          contentKey: (view.value, genre.value, selectedArtist),
           slivers: [
             // 読み込みに失敗しても、表示中（または手元のキャッシュ）の内容は消さない
             recordsAsync.when(
@@ -72,25 +101,46 @@ class InsightsScreen extends HookConsumerWidget {
               skipLoadingOnReload: true,
               skipError: true,
               data: (records) {
-                final artist = selectedArtist.value;
-                final filtered = filterByArtist(records, artist);
+                final artist = selectedArtist;
+                final filtered = filterByArtist(
+                  filterByType(records, genre.value.type),
+                  artist,
+                );
                 final isCalendar = view.value == InsightsView.calendar;
                 return SliverToBoxAdapter(
                   child: ContentSwitcher(
-                    // カレンダーは選んだ月を保つため、アーティストを変えても作り直さない
-                    contentKey: isCalendar ? view.value : (view.value, artist),
+                    // カレンダーは選んだ月を保つため、ジャンルやアーティストを変えても作り直さない
+                    contentKey: isCalendar
+                        ? view.value
+                        : (view.value, genre.value, artist),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         if (isCalendar)
                           RecordCalendarView(records: filtered)
+                        else if (genre.value == InsightsGenre.all)
+                          ..._overviewChildren(
+                            context,
+                            filtered,
+                            selectedYear,
+                            onGenreSelected: (g) => genre.value = g,
+                          )
+                        else if (genre.value.type case final type?
+                            when type != RecordType.live)
+                          ..._genreChildren(
+                            context,
+                            filtered,
+                            selectedYear,
+                            type: type,
+                          )
                         else
                           ..._statsChildren(
                             context,
                             filtered,
                             selectedYear,
                             artist: artist,
-                            onArtistSelected: (a) => selectedArtist.value = a,
+                            onArtistSelected: (a) =>
+                                selectedArtistState.value = a,
                           ),
                         SizedBox(
                           height: 24 + MediaQuery.paddingOf(context).bottom,
@@ -128,7 +178,7 @@ class InsightsScreen extends HookConsumerWidget {
     required ValueChanged<String> onArtistSelected,
   }) {
     final now = DateTime.now();
-    final years = yearsWithRecords(records, now);
+    final years = yearsWithRecords(records);
     // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
     final year = years.contains(selectedYear.value) ? selectedYear.value : null;
     final stats = computeStats(
@@ -165,7 +215,7 @@ class InsightsScreen extends HookConsumerWidget {
           child: IosEmptyState(
             icon: CupertinoIcons.chart_bar,
             message: artist == null
-                ? '行ったライブを記録すると、ここに集計が表示されます。'
+                ? 'ライブを記録すると、ここに集計が表示されます。'
                 : '$artistのライブの記録はまだありません。',
           ),
         )
@@ -239,18 +289,113 @@ class InsightsScreen extends HookConsumerWidget {
               ),
           ],
         ),
-        if (artist != null) _History(lives: stats.lives),
+        if (artist != null)
+          _History(header: 'ライブ・${stats.lives.length}回', records: stats.lives),
+      ],
+    ];
+  }
+
+  /// 「すべて」の集計。ジャンルをまたいだ件数・金額・月別と、ジャンルごとの内訳だけを出す。
+  /// アーティスト・曲・会場のランキングはジャンルごとに意味が違うので、各ジャンルで見る。
+  List<Widget> _overviewChildren(
+    BuildContext context,
+    List<Record> records,
+    ValueNotifier<int?> selectedYear, {
+    required ValueChanged<InsightsGenre> onGenreSelected,
+  }) {
+    final years = yearsWithRecords(records);
+    // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
+    final year = years.contains(selectedYear.value) ? selectedYear.value : null;
+    final stats = computeOverviewStats(records, year: year);
+    return [
+      if (years.length > 1)
+        _ChipRow<int>(
+          allLabel: 'すべての年',
+          items: [for (final y in years) ('$y年', y)],
+          selected: year,
+          onSelected: (y) => selectedYear.value = y,
+        ),
+      if (stats.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 80),
+          child: IosEmptyState(
+            icon: CupertinoIcons.chart_bar,
+            message: '記録を追加すると、ここに集計が表示されます。',
+          ),
+        )
+      else ...[
+        _OverviewSummary(stats: stats),
+        _GenreBreakdown(
+          stats: stats,
+          onGenreSelected: (type) => onGenreSelected(
+            InsightsGenre.values.firstWhere((g) => g.type == type),
+          ),
+        ),
+        _MonthlyChart(header: '月別の記録', unit: '件', counts: stats.countsByMonth),
+      ],
+    ];
+  }
+
+  /// ライブ以外のジャンル（映画・本・その他）の集計。出演者やセトリがないので、
+  /// 件数・金額・月別・会場・一覧だけを出す。
+  List<Widget> _genreChildren(
+    BuildContext context,
+    List<Record> records,
+    ValueNotifier<int?> selectedYear, {
+    required RecordType type,
+  }) {
+    final years = yearsWithRecords(records);
+    // 選択中の年に記録がなければ（年が明けた直後など）全期間にする
+    final year = years.contains(selectedYear.value) ? selectedYear.value : null;
+    final stats = computeGenreStats(records, type: type, year: year);
+    return [
+      if (years.length > 1)
+        _ChipRow<int>(
+          allLabel: 'すべての年',
+          items: [for (final y in years) ('$y年', y)],
+          selected: year,
+          onSelected: (y) => selectedYear.value = y,
+        ),
+      if (stats.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 80),
+          child: IosEmptyState(
+            icon: CupertinoIcons.chart_bar,
+            message: '${type.japaneseLabel}を記録すると、ここに集計が表示されます。',
+          ),
+        )
+      else ...[
+        _GenreSummary(stats: stats),
+        _MonthlyChart(
+          header: '月別の${type.japaneseLabel}',
+          unit: type.countUnit,
+          counts: stats.countsByMonth,
+        ),
+        if (type.venueLabel case final venueLabel?)
+          RankingSection(
+            header: 'よく行った$venueLabel',
+            rows: [
+              for (final v in stats.topVenues)
+                (title: v.label, subtitle: null, count: v.count, onTap: null),
+            ],
+          ),
+        _History(
+          header: '${type.japaneseLabel}の記録・${stats.count}${type.countUnit}',
+          records: stats.records,
+        ),
       ],
     ];
   }
 }
 
-/// ナビゲーションバーの下に固定する、表示の切り替えとアーティストの絞り込み（ホームと同じチップ）。
+/// ナビゲーションバーの下に固定する、表示とジャンルの切り替え、アーティストの絞り込み（ホームと同じチップ）。
 class _InsightsFilterBar extends StatelessWidget
     implements PreferredSizeWidget {
   const _InsightsFilterBar({
     required this.view,
     required this.onViewChanged,
+    required this.genre,
+    required this.onGenreChanged,
     required this.favorites,
     required this.selectedArtist,
     required this.onArtistSelected,
@@ -258,6 +403,8 @@ class _InsightsFilterBar extends StatelessWidget
 
   final InsightsView view;
   final ValueChanged<InsightsView> onViewChanged;
+  final InsightsGenre genre;
+  final ValueChanged<InsightsGenre> onGenreChanged;
   final List<FavoriteArtist> favorites;
   final String? selectedArtist;
   final ValueChanged<String?> onArtistSelected;
@@ -269,7 +416,7 @@ class _InsightsFilterBar extends StatelessWidget
 
   @override
   Size get preferredSize => Size.fromHeight(
-    _segmentHeight + (_showsChips ? FavoriteArtistChips.height : 0),
+    _segmentHeight * 2 + (_showsChips ? FavoriteArtistChips.height : 0),
   );
 
   @override
@@ -285,6 +432,17 @@ class _InsightsFilterBar extends StatelessWidget
               value: view,
               segments: {for (final v in InsightsView.values) v: v.label},
               onChanged: onViewChanged,
+            ),
+          ),
+        ),
+        SizedBox(
+          height: _segmentHeight,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: IosSegmentedControl<InsightsGenre>(
+              value: genre,
+              segments: {for (final g in InsightsGenre.values) g: g.label},
+              onChanged: onGenreChanged,
             ),
           ),
         ),
@@ -379,20 +537,21 @@ class _ArtistMilestones extends StatelessWidget {
   }
 }
 
-/// アーティストを選んだときの、行ったライブの一覧（新しい順）。
+/// 振り返りの記録の一覧（新しい順）。アーティストを選んだときのライブや、ライブ以外のジャンルで出す。
 class _History extends StatelessWidget {
-  const _History({required this.lives});
+  const _History({required this.header, required this.records});
 
-  final List<Record> lives;
+  final String header;
+  final List<Record> records;
 
   @override
   Widget build(BuildContext context) {
-    if (lives.isEmpty) return const SizedBox.shrink();
+    if (records.isEmpty) return const SizedBox.shrink();
     return InsetGroupedSection(
-      header: '行ったライブ・${lives.length}回',
+      header: header,
       hasLeading: false,
       children: [
-        for (final r in lives)
+        for (final r in records)
           MediaListTile(
             title: r.title,
             subtitle: [
@@ -431,9 +590,6 @@ class _Summary extends StatelessWidget {
     final others = [
       if (showsArtistCount && stats.artistCount > 0)
         '観たアーティスト ${stats.artistCount}組',
-      for (final t in RecordType.values)
-        if (t != RecordType.live && stats.countsByType[t]! > 0)
-          '${t.japaneseLabel} ${stats.countsByType[t]}',
     ];
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
@@ -474,6 +630,106 @@ class _Summary extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「すべて」の、記録の件数と金額の合計。
+class _OverviewSummary extends StatelessWidget {
+  const _OverviewSummary({required this.stats});
+
+  final OverviewStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final average = stats.averagePrice;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatTile(label: '記録', value: '${stats.count}', unit: '件'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatTile(
+              label: '金額の合計',
+              value: formatYen(stats.totalPrice),
+              caption: average == null
+                  ? 'チケット代・価格を入力すると集計されます'
+                  : '平均 ${formatYen(average)}',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 「すべて」の、ジャンルごとの件数。押すとそのジャンルの集計へ移る。
+class _GenreBreakdown extends StatelessWidget {
+  const _GenreBreakdown({required this.stats, required this.onGenreSelected});
+
+  final OverviewStats stats;
+  final ValueChanged<RecordType> onGenreSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return InsetGroupedSection(
+      header: 'ジャンル別',
+      footer: 'ジャンルを押すと、そのジャンルの集計を見られます',
+      hasLeading: false,
+      children: [
+        for (final g in stats.byType)
+          if (g.count > 0)
+            GroupedRow(
+              title: g.type.japaneseLabel,
+              subtitle: g.totalPrice > 0 ? formatYen(g.totalPrice) : null,
+              additionalInfo: Text(
+                '${g.count}${g.type.countUnit}',
+                style: TextStyle(fontSize: 15, color: colors.textSecondary),
+              ),
+              onTap: () => onGenreSelected(g.type),
+            ),
+      ],
+    );
+  }
+}
+
+/// ライブ以外のジャンルの、件数と金額の合計。
+class _GenreSummary extends StatelessWidget {
+  const _GenreSummary({required this.stats});
+
+  final GenreStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = stats.type;
+    final average = stats.averagePrice;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatTile(
+              label: type.japaneseLabel,
+              value: '${stats.count}',
+              unit: type.countUnit,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatTile(
+              label: '${type.priceLabel}の合計',
+              value: formatYen(stats.totalPrice),
+              caption: average == null
+                  ? '${type.priceLabel}を入力すると集計されます'
+                  : '平均 ${formatYen(average)}',
+            ),
+          ),
         ],
       ),
     );
@@ -575,14 +831,23 @@ class _StatTile extends StatelessWidget {
   }
 }
 
-/// 月別のライブ数の棒グラフ。ライブのある月を押すと、その月のライブの一覧を開く。
+/// 月別の件数の棒グラフ。[onMonthTap] があれば、記録のある月を押してその月の一覧を開ける。
 class _MonthlyChart extends StatelessWidget {
-  const _MonthlyChart({required this.counts, required this.onMonthTap});
+  const _MonthlyChart({
+    required this.counts,
+    this.header = '月別のライブ',
+    this.unit = '回',
+    this.onMonthTap,
+  });
 
   final List<int> counts;
+  final String header;
 
-  /// 押された月（1〜12）。
-  final ValueChanged<int> onMonthTap;
+  /// 件数の単位（「3月 2回」の「回」）。
+  final String unit;
+
+  /// 押された月（1〜12）。null なら棒は押せない。
+  final ValueChanged<int>? onMonthTap;
 
   static const double _barAreaHeight = 96;
 
@@ -590,9 +855,12 @@ class _MonthlyChart extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.colors;
     final max = counts.fold(0, (a, b) => a > b ? a : b);
+    final onMonthTap = this.onMonthTap;
     return InsetGroupedSection(
-      header: '月別のライブ',
-      footer: counts.any((c) => c > 0) ? '棒を押すと、その月のライブを一覧できます' : null,
+      header: header,
+      footer: onMonthTap != null && counts.any((c) => c > 0)
+          ? '棒を押すと、その月のライブを一覧できます'
+          : null,
       hasLeading: false,
       children: [
         Padding(
@@ -603,12 +871,14 @@ class _MonthlyChart extends StatelessWidget {
               for (final (i, c) in counts.indexed)
                 Expanded(
                   child: Semantics(
-                    button: c > 0,
-                    label: '${i + 1}月 $c回',
+                    button: c > 0 && onMonthTap != null,
+                    label: '${i + 1}月 $c$unit',
                     excludeSemantics: true,
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: c == 0 ? null : () => onMonthTap(i + 1),
+                      onTap: c == 0 || onMonthTap == null
+                          ? null
+                          : () => onMonthTap(i + 1),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [

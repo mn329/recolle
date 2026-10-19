@@ -9,7 +9,7 @@ import 'package:recolle/features/records/providers/records_provider.dart';
 import 'package:recolle/features/records/record_stats.dart';
 import 'package:recolle/core/widgets/app_background.dart';
 
-/// 振り返りの集計から開く、行ったライブの一覧（新しい順）。
+/// 振り返りの集計から開く、ライブの一覧（これからの予定も含む。新しい順）。
 ///
 /// 集計と同じ条件で数え直すので、ここから記録を編集して戻っても一覧が食い違わない。
 class LiveListScreen extends ConsumerWidget {
@@ -29,7 +29,7 @@ class LiveListScreen extends ConsumerWidget {
       (final y?, final m?) => '$y年$m月',
       (final y?, null) => '$y年',
       (null, final m?) => '$m月（全期間）',
-      (null, null) => 'これまで',
+      (null, null) => 'すべて',
     };
     return [?artist, '$periodのライブ'].join('・');
   }
@@ -67,7 +67,7 @@ class LiveListScreen extends ConsumerWidget {
                 ),
                 SliverRecordTicketList(
                   records: lives,
-                  emptyMessage: 'この期間に行ったライブの記録はありません',
+                  emptyMessage: 'この期間のライブの記録はありません',
                 ),
                 SliverToBoxAdapter(
                   child: SizedBox(

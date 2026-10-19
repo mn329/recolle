@@ -7,6 +7,7 @@ import 'package:recolle/features/favorites/models/favorite_artist.dart';
 import 'package:recolle/features/favorites/providers/favorite_artists_provider.dart';
 import 'package:recolle/features/records/models/record.dart';
 import 'package:recolle/features/records/screens/detail_screen.dart';
+import 'package:recolle/features/records/widgets/event_countdown.dart';
 import 'package:recolle/features/records/widgets/ticket_stub_card.dart';
 
 class _NoFavorites extends FavoriteArtistsNotifier {
@@ -88,6 +89,47 @@ void main() {
     expect(find.text('白日'), findsOneWidget);
     expect(find.text('未入力'), findsNothing);
     expect(find.text('感想は右上の「編集」から追加できます'), findsOneWidget);
+  });
+
+  group('これからの記録のカウントダウン', () {
+    final future = DateTime.now().add(const Duration(days: 30));
+
+    Record upcoming(RecordType type) => Record(
+      id: 'u1',
+      type: type,
+      title: 'これから',
+      artistOrAuthor: '作者',
+      date: future,
+    );
+
+    // カウントダウンは 1 秒ごとに描き直すので、pumpAndSettle は使えない
+    Future<void> pumpUpcoming(WidgetTester tester, Record record) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            isOfflineReadOnlyProvider.overrideWithValue(false),
+            favoriteArtistsProvider.overrideWith(_NoFavorites.new),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.darkTheme,
+            home: DetailScreen(record: record),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    testWidgets('本は日時の決まった催しではないので、これからの日付でも出さない', (tester) async {
+      await pumpUpcoming(tester, upcoming(RecordType.book));
+
+      expect(find.byType(EventCountdown), findsNothing);
+    });
+
+    testWidgets('映画は、これからの日付ならカウントダウンを出す', (tester) async {
+      await pumpUpcoming(tester, upcoming(RecordType.movie));
+
+      expect(find.byType(EventCountdown), findsOneWidget);
+    });
   });
 
   testWidgets('本は会場・座席・時刻を持たないので、券面は日付と価格だけ', (tester) async {
