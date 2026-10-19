@@ -60,6 +60,25 @@ void main() {
     expect(movies.last.description, isNull);
   });
 
+  group('coverUrl（チケット画像にする大きさ）', () {
+    String? coverOf(String? artworkUrl) =>
+        WorkSuggestion(title: 't', artworkUrl: artworkUrl).coverUrl;
+
+    test('TMDB のポスターは一覧用の小さい画像から大きい画像に替える', () {
+      expect(
+        coverOf('https://image.tmdb.org/t/p/w185/a.jpg'),
+        'https://image.tmdb.org/t/p/w500/a.jpg',
+      );
+    });
+
+    test('それ以外の URL と画像なしはそのまま', () {
+      const rakuten =
+          'https://thumbnail.image.rakuten.co.jp/@0_mall/book/cabinet/1/2.jpg?_ex=200x200';
+      expect(coverOf(rakuten), rakuten);
+      expect(coverOf(null), isNull);
+    });
+  });
+
   test('同じ検索はキャッシュを使い、同時に走っても問い合わせは 1 回にまとめる', () async {
     var calls = 0;
     final client = _client((req) async {

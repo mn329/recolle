@@ -42,6 +42,18 @@ class WorkSuggestion {
   /// 同名の作品を見分けるための短い説明（映画の原題など）。
   final String? description;
 
+  /// チケット画像にする大きさの画像。[artworkUrl] は一覧に出す小さな画像なので、
+  /// 取得先が大きさを URL で選べる TMDB のポスターは大きいものに替える。
+  /// 候補の画像はコピーせず、この外部の URL を記録にそのまま持たせる。
+  String? get coverUrl => artworkUrl?.replaceFirst(
+    '$_tmdbPosterPrefix$_tmdbListSize/',
+    '$_tmdbPosterPrefix$_tmdbCoverSize/',
+  );
+
+  static const _tmdbPosterPrefix = 'https://image.tmdb.org/t/p/';
+  static const _tmdbListSize = 'w185';
+  static const _tmdbCoverSize = 'w500';
+
   static String? _text(Object? value) {
     if (value is! String) return null;
     final text = value.trim();
