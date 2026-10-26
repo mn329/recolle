@@ -248,9 +248,8 @@ class SetlistEditor extends HookWidget {
                 hoveredId.value = null;
               },
               onReorderEnd: (_) => draggingId.value = null,
-              onReorder: (oldIndex, newIndex) {
+              onReorderItem: (oldIndex, newIndex) {
                 final items = [...lines.value];
-                if (newIndex > oldIndex) newIndex--;
                 items.insert(newIndex, items.removeAt(oldIndex));
                 HapticFeedback.lightImpact();
                 commit(items);

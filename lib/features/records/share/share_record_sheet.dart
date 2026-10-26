@@ -17,7 +17,7 @@ import 'package:share_plus/share_plus.dart';
 Future<void> showShareRecordSheet(BuildContext context, Record record) {
   return showCupertinoSheet<void>(
     context: context,
-    builder: (_) => _ShareRecordSheet(record: record),
+    scrollableBuilder: (_, _) => _ShareRecordSheet(record: record),
   );
 }
 
