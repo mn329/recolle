@@ -24,7 +24,7 @@ Future<void> showAddFavoriteArtistSheet(
 }) async {
   final picked = await showCupertinoSheet<ItunesArtist>(
     context: context,
-    builder: (_) => _AddFavoriteArtistSheet(initialQuery: initialQuery),
+    scrollableBuilder: (_, _) => _AddFavoriteArtistSheet(initialQuery: initialQuery),
   );
   if (picked == null || !context.mounted) return;
   await Navigator.push(

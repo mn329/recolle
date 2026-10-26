@@ -15,6 +15,11 @@ String toUserFriendlyMessage(dynamic error) {
     return error.userMessage;
   }
 
+  // Edge Functions に接続できないときは、元の通信エラー（ClientException など）に包まれて届くので中身で判定する
+  if (error is FunctionsFetchException && error.details != null) {
+    return toUserFriendlyMessage(error.details);
+  }
+
   // error が Supabase の認証例外（AuthException）型かどうかを判定する
   if (error is AuthException) {
     final fromCode = _authMessageFromCode(error.code);

@@ -56,8 +56,7 @@ void main() async {
 
   await Supabase.initialize(
     url: _requireEnv('SUPABASE_URL'),
-    // supabase_flutter 2.x は publishable キーも anonKey 引数で受け取る。
-    anonKey: _requireEnv('SUPABASE_PUBLISHABLE_KEY'),
+    publishableKey: _requireEnv('SUPABASE_PUBLISHABLE_KEY'),
     authOptions: const FlutterAuthClientOptions(
       authFlowType: AuthFlowType.pkce,
       // ログインは ID トークン方式のみで、URL 経由のセッション受け取りは使わない。

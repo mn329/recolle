@@ -1,16 +1,14 @@
-// Deno/Edge 用（https URL インポート、Deno グローバル）。本番の Supabase Edge では正しく解決される。
-// エディタが Node 向け tsserver の場合、ここに赤線が出ることがある。実行・デプロイ内容には影響しない。
-// 代替: Deno 拡張 + https://deno.land/manual/getting_started/setup_your_environment
+// アカウント削除。呼び出し元のユーザー本人のチケット画像・記録・認証ユーザーを消す。
 // @ts-nocheck
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import "jsr:@supabase/functions-js/edge-runtime.d.ts"
+import { createClient } from "jsr:@supabase/supabase-js@2"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders })
   }
