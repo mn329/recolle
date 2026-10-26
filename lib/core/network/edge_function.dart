@@ -19,13 +19,17 @@ Future<Object?> invokeEdgeFunction(
   try {
     final res = await functions.invoke(name, body: body).timeout(timeout);
     return res.data;
+  } on FunctionsFetchException catch (e) {
+    // 接続できない（SocketException / ClientException）。functions_client 2.7 からはこの例外に包まれて届く
+    debugPrint('Edge Function $name failed: ${e.details}');
+    throw UserFacingException(toUserFriendlyMessage(e));
   } on FunctionException catch (e) {
     final code = e.details is Map ? (e.details as Map)['error'] : null;
     throw UserFacingException(messageForError(code, e.status));
   } on TimeoutException {
     throw const UserFacingException('サーバーの応答がありませんでした。電波の良い場所でもう一度お試しください。');
   } catch (e) {
-    // 接続できない（SocketException / ClientException）、応答が JSON でない など
+    // 応答が JSON でない など
     debugPrint('Edge Function $name failed: $e');
     throw UserFacingException(toUserFriendlyMessage(e));
   }
