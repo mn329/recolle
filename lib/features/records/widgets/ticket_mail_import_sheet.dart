@@ -7,7 +7,7 @@ import 'package:recolle/features/records/ticket_mail_parser.dart';
 Future<TicketMailInfo?> showTicketMailImportSheet(BuildContext context) {
   return showCupertinoSheet<TicketMailInfo>(
     context: context,
-    builder: (_) => const _TicketMailImportSheet(),
+    scrollableBuilder: (_, _) => const _TicketMailImportSheet(),
   );
 }
 

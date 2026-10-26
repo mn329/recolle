@@ -36,7 +36,7 @@ Future<Record?> openRecordEditor(
     context: context,
     // 入力途中の内容をスワイプ一つで失わないよう、閉じるのはボタン（破棄確認つき）に限る
     enableDrag: false,
-    builder: (_) => CreateRecordScreen(
+    scrollableBuilder: (_, _) => CreateRecordScreen(
       recordToEdit: recordToEdit,
       initialArtist: initialArtist,
       initialType: initialType,

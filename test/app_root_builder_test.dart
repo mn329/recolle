@@ -18,7 +18,7 @@ Future<TextStyle> _sheetTextStyle(
             child: CupertinoButton(
               onPressed: () => showCupertinoSheet<void>(
                 context: context,
-                builder: (_) => const CupertinoPageScaffold(
+                scrollableBuilder: (_, _) => const CupertinoPageScaffold(
                   child: Center(child: Text('シートの本文')),
                 ),
               ),
