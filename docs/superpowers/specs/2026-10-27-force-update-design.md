@@ -73,5 +73,5 @@ insert into public.app_config (min_ios_version) values ('1.0.0');
 1. PR #15 → #16 → この機能の PR の順に `main` へマージ
 2. Supabase にマイグレーションを適用（本番）
 3. `pubspec.yaml` を `1.1.4+29` にする
-4. `flutter build ipa` → App Store Connect にアップロード → TestFlight で配信
-5. 審査への提出は TestFlight で確認したあとに手動で行う
+4. `flutter build ipa` → `asc builds upload` で App Store Connect にアップロード → TestFlight の外部グループに配信
+5. TestFlight で動作確認してもらい、OK が出たら `asc release stage` でバージョン 1.1.4 を作り、新機能の文言を入れて `asc review submit` で審査に提出する
