@@ -110,11 +110,8 @@ Uri? _httpsUri(Object? raw) {
 /// Apple は目安として 1 分あたり約 20 リクエストに制限しているため、
 /// 同じ URL の結果はメモリにキャッシュし、呼び出し側でも入力をデバウンスする。
 class ItunesClient {
-  ItunesClient({
-    http.Client? httpClient,
-    JapaneseTitleSuggester? japaneseTitleSuggester,
-  }) : _http = httpClient ?? http.Client(),
-       _japaneseTitleSuggester = japaneseTitleSuggester;
+  ItunesClient({http.Client? httpClient, this._japaneseTitleSuggester})
+    : _http = httpClient ?? http.Client();
 
   static const _timeout = Duration(seconds: 8);
   static const _maxCacheEntries = 100;

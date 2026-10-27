@@ -6,11 +6,7 @@ import 'package:recolle/features/music/data/itunes_client.dart';
 ///
 /// Deezer のアーティスト画像を優先し、なければ iTunes の代表アルバムのジャケットで代用する。
 class ArtistArtworkFinder {
-  const ArtistArtworkFinder({
-    required DeezerClient deezer,
-    required ItunesClient itunes,
-  }) : _deezer = deezer,
-       _itunes = itunes;
+  const ArtistArtworkFinder({required this._deezer, required this._itunes});
 
   final DeezerClient _deezer;
   final ItunesClient _itunes;
