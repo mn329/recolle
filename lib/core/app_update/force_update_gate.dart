@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 /// 最低バージョンより古いアプリを、全画面で止めて App Store へ誘導する。
 ///
-/// [MaterialApp.builder] で全画面の一番外側に置く。止めているあいだは下の画面に操作も読み上げも届かない。
+/// [MaterialApp.builder] で全画面の一番外側に置く。止めているあいだは下の画面に操作・読み上げ・キーボード入力が届かない。
 class ForceUpdateGate extends HookConsumerWidget {
   const ForceUpdateGate({super.key, required this.child});
 
@@ -31,7 +31,11 @@ class ForceUpdateGate extends HookConsumerWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
-        ExcludeSemantics(excluding: updateRequired, child: child),
+        // 入力中に止めたときもキーボードを閉じ、見えない入力欄に文字が入らないようにする
+        ExcludeFocus(
+          excluding: updateRequired,
+          child: ExcludeSemantics(excluding: updateRequired, child: child),
+        ),
         if (updateRequired) const _ForceUpdateScreen(),
       ],
     );

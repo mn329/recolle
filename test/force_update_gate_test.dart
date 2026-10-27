@@ -70,6 +70,34 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('入力中に止めたら、キーボードを閉じて入力も受け付けない', (tester) async {
+    final source = _FakeSource('1.1.3', null);
+    final focusNode = FocusNode();
+    addTearDown(focusNode.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [forceUpdateSourceProvider.overrideWithValue(source)],
+        child: MaterialApp(
+          builder: (context, child) => ForceUpdateGate(child: child!),
+          home: Scaffold(
+            body: TextField(focusNode: focusNode, autofocus: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(focusNode.hasFocus, isTrue);
+
+    // 入力中に最低バージョンが上がり、アプリに戻ってきた
+    source.minimum = '1.1.4';
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    expect(find.text('アップデートが必要です'), findsOneWidget);
+    expect(focusNode.hasFocus, isFalse);
+  });
+
   testWidgets('新しいバージョンでは何も出さない', (tester) async {
     await _pump(tester, _FakeSource('1.1.4', '1.1.4'));
 
