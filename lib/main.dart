@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:recolle/core/app_update/force_update_gate.dart';
 import 'package:recolle/core/auth/auth_reauth_in_progress.dart';
 import 'package:recolle/core/demo/demo_mode.dart';
 import 'package:recolle/core/network/connectivity_provider.dart';
@@ -117,7 +118,9 @@ class MyApp extends ConsumerWidget {
 
       // 4. ルーティング設定: router.dart で定義した画面遷移ルールを適用
       routerConfig: router,
-      builder: buildAppRoot,
+      // 古いバージョンは全画面で止めて App Store へ誘導する（最低バージョンは Supabase の app_config）
+      builder: (context, child) =>
+          ForceUpdateGate(child: buildAppRoot(context, child)),
 
       // 5. 日本語化設定: カレンダーや戻るボタンなどの標準UIを日本語にする
       localizationsDelegates: const [

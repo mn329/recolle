@@ -3,16 +3,18 @@ import MusicKit
 import UIKit
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    GeneratedPluginRegistrant.register(with: self)
-    if let registrar = registrar(forPlugin: "AppleMusicPlaylistChannel") {
-      AppleMusicPlaylistChannel.register(with: registrar.messenger())
-    }
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+
+  // UIScene ライフサイクルでは、エンジンができたこの時点でプラグインとチャンネルを登録する
+  func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+    GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    AppleMusicPlaylistChannel.register(with: engineBridge.applicationRegistrar.messenger())
   }
 }
 
