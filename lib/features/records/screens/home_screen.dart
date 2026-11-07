@@ -394,7 +394,7 @@ class _NoticeBanner extends StatelessWidget {
   const _NoticeBanner.offline()
     : this(
         icon: CupertinoIcons.wifi_slash,
-        message: 'オフラインです。キャッシュがある記録は閲覧のみできます。',
+        message: 'オフラインのため、閲覧のみ可能です。',
       );
 
   final IconData icon;
