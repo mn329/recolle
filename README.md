@@ -2,6 +2,8 @@
 
 ライブ・映画・本などの体験を記録する Flutter アプリです。チケット画像・セットリスト・MC メモ・感想などをまとめて残せるデータモデルを中心に、Supabase 認証と連携した構成になっています。アプリ表示名（`MaterialApp` の `title`）は **recolle** です。
 
+[App Store でダウンロード](https://apps.apple.com/jp/app/id6762868760)
+
 ## 技術スタック
 
 | 領域               | 利用パッケージ                                                                                                                                                                              |
