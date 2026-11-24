@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -11,6 +12,7 @@ import 'package:recolle/core/network/connectivity_provider.dart';
 import 'package:recolle/core/router/router.dart';
 import 'package:recolle/core/theme/app_theme.dart';
 import 'package:recolle/core/widgets/app_root_builder.dart';
+import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:recolle/features/records/home_widget_sync.dart';
 import 'package:recolle/features/records/providers/records_provider.dart';
@@ -52,6 +54,18 @@ void main() async {
 
   // .envファイルをロード
   await dotenv.load(fileName: ".env");
+
+  // クラッシュとエラーを Sentry に送る。開発中のエラーで無料枠を使わないよう、リリースビルドだけ。
+  // SENTRY_DSN が空なら何もしない
+  final sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
+  if (kReleaseMode && sentryDsn.isNotEmpty) {
+    await SentryFlutter.init((options) {
+      options.dsn = sentryDsn;
+      // 送るのはエラーだけ。IP アドレスなどの個人情報、パフォーマンス計測、画面の録画は送らない
+      options.sendDefaultPii = false;
+      options.tracesSampleRate = null;
+    });
+  }
 
   // Supabaseの初期化
 

@@ -43,6 +43,7 @@ dependencies:
   flutter_cache_manager: ^3.4.5
   crop_your_image: ^2.0.1
   package_info_plus: ^9.0.1
+  sentry_flutter: ^10.6.0
 
 dev_dependencies:
   flutter_test:
